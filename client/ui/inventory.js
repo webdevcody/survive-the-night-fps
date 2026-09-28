@@ -16,6 +16,79 @@ const GROUPS = [
   { title: 'Ammunition', cats: ['ammo'] },
 ];
 const STATION_GLYPH = { fire: 'campfire', bench: 'wrench' };
+// the default crafting view: recipes grouped by what they make, in display order
+const RECIPE_GROUPS = GROUPS.map((g) => ({ title: g.title, recs: RECIPES.filter((r) => g.cats.includes(ITEM_DEFS[r.out]?.cat)) })).filter((g) => g.recs.length);
+const SHOWN_RECIPES = RECIPE_GROUPS.flatMap((g) => g.recs);
+
+// ---------------------------------------------------------------- recipe search
+// An item answers to its display name and its ITEM key, so "wood" finds Planks and "pipebomb" finds Pipe Bomb.
+const ITEM_KEY = Object.fromEntries(Object.entries(ITEM).map(([k, v]) => [v, k]));
+const norm = (s) => String(s).toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+
+// 5 exact · 4 whole word · 3 prefix · 2 word prefix · 1 substring (or every word somewhere) · 0 none
+function termScore(text, q) {
+  const t = norm(text);
+  if (t === q) return 5;
+  const padded = ' ' + t + ' ';
+  if (padded.includes(' ' + q + ' ')) return 4;
+  if (t.startsWith(q)) return 3;
+  if (padded.includes(' ' + q)) return 2;
+  if (t.includes(q) || (q.includes(' ') && q.split(' ').every((w) => t.includes(w)))) return 1;
+  return 0;
+}
+
+const itemScore = (id, q) => Math.max(termScore(ITEM_DEFS[id]?.name || '', q), termScore(ITEM_KEY[id] || '', q));
+
+// Recipes relevant to a search, as titled sections: recipes whose output matches by name (ranked above
+// category / station matches), the recipes for their craftable ingredients all the way down, ammo for
+// matching guns, then recipes that consume (or are unlocked by) a matching item.
+function searchRecipes(query) {
+  const q = norm(query);
+  if (!q) return [];
+  const items = new Map(); // matching item id -> score
+  for (const id of Object.keys(ITEM_DEFS)) {
+    const s = itemScore(+id, q);
+    if (s) items.set(+id, s);
+  }
+  const score = new Map();
+  for (const g of RECIPE_GROUPS) {
+    for (const r of g.recs) {
+      const n = items.get(r.out) || 0;
+      const s = n ? 5 + n : Math.max(termScore(g.title, q), termScore(CAT_LABEL[ITEM_DEFS[r.out].cat], q), r.station ? termScore(STATION_NAMES[r.station], q) : 0);
+      if (s) score.set(r, s);
+    }
+  }
+  const results = SHOWN_RECIPES.filter((r) => score.has(r)).sort((a, b) => score.get(b) - score.get(a));
+  const shown = new Set(results);
+  const take = (pred) => SHOWN_RECIPES.filter((r) => !shown.has(r) && pred(r)).map((r) => (shown.add(r), r));
+
+  const parts = [];
+  const queue = results.filter((r) => items.has(r.out));
+  while (queue.length) {
+    const need = Object.keys(queue.shift().cost).map(Number);
+    const more = take((r) => need.includes(r.out));
+    parts.push(...more);
+    queue.push(...more);
+  }
+
+  const calibers = new Set([...items.keys()].map((id) => WEAPONS[id]).filter((w) => w && !w.melee && w.ammo != null).map((w) => w.ammo));
+  const ammo = take((r) => calibers.has(ITEM_DEFS[r.out].ammo));
+
+  const via = new Set();
+  const uses = take((r) => {
+    const hit = [...Object.keys(r.cost).map(Number), r.schem].filter((id) => items.has(id));
+    hit.forEach((id) => via.add(id));
+    return hit.length > 0;
+  });
+  const names = [...via].map((id) => ITEM_DEFS[id].name);
+
+  return [
+    { title: 'Results', recs: results },
+    { title: 'Ingredients', recs: parts },
+    { title: 'Ammunition', recs: ammo },
+    { title: names.length <= 2 ? 'Uses ' + names.join(' & ') : 'Uses matching items', recs: uses },
+  ].filter((s) => s.recs.length);
+}
 
 function statLines(id) {
   const d = ITEM_DEFS[id];
@@ -206,14 +279,28 @@ export class Inventory {
     this.stationEl = el('span', 'station', ch);
     this.stationIco = svgEl('i', 'st-ico', this.stationEl, glyph('campfire'));
     this.stationTxt = el('span', '', this.stationEl, '');
-    const list = el('div', 'craft-list', right);
+    const find = (this.findEl = el('label', 'craft-find', right));
+    svgEl('i', 'cf-ico', find, glyph('search'));
+    const field = (this.findInput = el('input', 'cf-field', find));
+    field.type = 'text';
+    field.maxLength = 40;
+    field.autocomplete = 'off';
+    field.spellcheck = false;
+    field.placeholder = 'Search items & materials';
+    field.setAttribute('aria-label', 'Search recipes');
+    const clr = (this.findClear = svgEl('button', 'cf-clear', find, glyph('xmark')));
+    clr.type = 'button';
+    clr.hidden = true;
+    clr.title = 'Clear search (Esc)';
+    clr.setAttribute('aria-label', 'Clear search');
+    const list = (this.craftList = el('div', 'craft-list', right));
     this.recipeEls = [];
-    for (const g of GROUPS) {
-      const recs = RECIPES.filter((r) => g.cats.includes(ITEM_DEFS[r.out]?.cat));
-      if (!recs.length) continue;
-      el('div', 'craft-group', list, g.title);
+    this.craftGroups = [];
+    for (const g of RECIPE_GROUPS) {
+      const head = el('div', 'craft-group', list, g.title);
       const gg = el('div', 'craft-grid', list);
-      for (const r of recs) {
+      this.craftGroups.push({ head, grid: gg, recs: [] });
+      for (const r of g.recs) {
         const b = el('button', 'rc', gg);
         b.type = 'button';
         b.dataset.id = r.id;
@@ -239,9 +326,14 @@ export class Inventory {
           lock = svgEl('i', 'rc-lock', b, glyph('lock'));
           lock.title = `Needs the ${ITEM_DEFS[r.schem].name}`;
         }
-        this.recipeEls.push({ r, b, ings, st, lock, key: '' });
+        const rec = { r, b, ings, st, lock, key: '' };
+        this.recipeEls.push(rec);
+        this.craftGroups.at(-1).recs.push(rec);
       }
     }
+    // search results: the same recipe buttons, moved into relevance sections while a search is active
+    this.findView = el('div', 'craft-found', list);
+    this.findView.hidden = true;
 
     this._bind(root, wrap);
     this._renderAll();
@@ -360,8 +452,33 @@ export class Inventory {
       }
     });
 
+    // crafting search. Keydown is consumed so the game never sees keys typed here - except Tab, which
+    // drops focus and falls through so it still closes the inventory.
+    const field = this.findInput;
+    field.addEventListener('input', () => this._applySearch());
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        return field.blur();
+      }
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (field.value) this.clearSearch();
+        else field.blur();
+      }
+    });
+    this.findClear.addEventListener('click', () => {
+      this.ui.sound('ui_click');
+      this.clearSearch();
+      field.focus({ preventScroll: true });
+    });
+    this.findView.addEventListener('click', (e) => {
+      if (e.target.closest('.cf-reset')) this.clearSearch();
+    });
+
     // crafting
-    root.querySelector('.craft-list').addEventListener('click', (e) => {
+    this.craftList.addEventListener('click', (e) => {
       const b = e.target.closest('.rc');
       if (!b) return;
       const rec = this.recipeEls.find((x) => x.b === b);
@@ -611,6 +728,51 @@ export class Inventory {
     this.stationTxt.textContent = f && bn ? 'Campfire + workbench' : f ? 'At a campfire' : bn ? 'At a workbench' : 'No station nearby';
   }
 
+  // Swap the crafting list between the default groups and relevance sections for the current search.
+  _applySearch() {
+    const text = this.findInput.value;
+    const sections = searchRecipes(text);
+    const on = !!norm(text);
+    this.findClear.hidden = !text;
+    this.findEl.classList.toggle('on', on);
+    // hold the list at its full height while filtering; the screen is vertically centred, so a
+    // shrinking list would shift everything (including this field) on every keystroke
+    const list = this.craftList;
+    if (on && !this.listPinned) {
+      this.listPinned = true;
+      list.style.minHeight = `min(${list.offsetHeight}px, calc(100vh - 214 * var(--u)))`;
+    } else if (!on) {
+      this.listPinned = false;
+      list.style.minHeight = '';
+    }
+    for (const g of this.craftGroups) {
+      for (const rec of g.recs) g.grid.appendChild(rec.b);
+      g.head.hidden = g.grid.hidden = on;
+    }
+    const view = this.findView;
+    view.textContent = '';
+    view.hidden = !on;
+    list.scrollTop = 0;
+    if (!on) return;
+    for (const s of sections) {
+      el('div', 'craft-group', view, s.title);
+      const grid = el('div', 'craft-grid', view);
+      for (const r of s.recs) grid.appendChild(this.recipeEls.find((x) => x.r === r).b);
+    }
+    if (!sections.length) {
+      const none = el('div', 'craft-none', view);
+      el('span', '', none, `Nothing craftable matches "${text.trim()}"`);
+      const b = el('button', 'btn cf-reset', none, 'Clear search');
+      b.type = 'button';
+    }
+  }
+
+  clearSearch() {
+    if (!this.findInput.value) return;
+    this.findInput.value = '';
+    this._applySearch();
+  }
+
   // ctx = { fire, bench, unlocked }
   setCraftContext(ctx) {
     const near = { fire: !!ctx?.fire, bench: !!ctx?.bench };
@@ -683,6 +845,8 @@ export class Inventory {
       void this.root.offsetWidth;
       this.root.classList.add('in');
     } else {
+      // a focused search field would keep ui.isTyping() true and swallow gameplay keys
+      if (document.activeElement === this.findInput) this.findInput.blur();
       this.tip.hide();
       this.tipTarget = null;
       if (this.drag) {
