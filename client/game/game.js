@@ -15,6 +15,7 @@ import {
   WATER_LEVEL,
   MAX_PLAYERS,
   DUSK_WARNING,
+  EYE_HEIGHT,
 } from '../../shared/constants.js';
 import {
   ITEM,
@@ -653,14 +654,7 @@ export class Game {
     const s = this.prediction.state;
     const ui = this.ui;
     if (code === 'Tab') {
-      if (ui.mapOpen) this.toggleMap(false);
-      const open = !ui.inventoryOpen;
-      ui.setCraftContext(this.craftContext());
-      ui.setInventoryOpen(open);
-      this.input.enabled = !open;
-      if (open) this.input.exitLock();
-      else this.input.requestLock();
-      this.audio.playLocal('ui_click', { volume: 0.5 });
+      this.toggleInventory(!ui.inventoryOpen);
       return;
     }
     if (code === 'KeyM') {
@@ -738,6 +732,18 @@ export class Game {
         else this.voice.setTransmit(!this.voice.transmitting);
         break;
     }
+  }
+
+  toggleInventory(open) {
+    const ui = this.ui;
+    if (open === ui.inventoryOpen) return;
+    if (ui.mapOpen) this.toggleMap(false);
+    ui.setCraftContext(this.craftContext());
+    ui.setInventoryOpen(open);
+    this.input.enabled = !open;
+    if (open) this.input.exitLock();
+    else this.input.requestLock();
+    this.audio.playLocal('ui_click', { volume: 0.5 });
   }
 
   toggleMap(open) {
@@ -867,6 +873,7 @@ export class Game {
       onDropWeapon: (slot) => this.conn.action(ACT.DROP_WEAPON, slot),
       onSelectStructure: (t) => (this.buildType = t),
       onSelectThrowable: (item) => this.conn.action(ACT.SELECT_THROWABLE, item),
+      onCloseInventory: () => this.state === 'playing' && this.toggleInventory(false),
       onChatSend: (text) => this.conn.chat(text),
     };
   }
@@ -1154,7 +1161,7 @@ export class Game {
     const ox = cam.position.x;
     const oy = cam.position.y;
     const oz = cam.position.z;
-    const e = this.entities.pick(ox, oy, oz, _v.x, _v.y, _v.z, 3.3);
+    const e = this.entities.pick(ox, oy, oz, _v.x, _v.y, _v.z, 3.3, this.renderPos.y + EYE_HEIGHT);
     const counts = this.invCounts();
     const g = this.global;
     if (e) {
