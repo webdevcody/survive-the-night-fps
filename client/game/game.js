@@ -72,6 +72,8 @@ import { deerHitbox } from '../../shared/deer.js';
 import { readHeader, readGlobal, readSelf, readEntities, readEvents } from '../net/decode.js';
 import { Connection } from '../net/connection.js';
 import { playerId, adminKey, setAdminKey } from '../net/identity.js';
+import { accountState } from '../net/account.js';
+import { achievementEvent, joinedGame } from '../net/achievements.js';
 import { Prediction } from './prediction.js';
 import { InputBuffer } from './inputbuffer.js';
 import { harvestPrompt, strippedKey, needLines } from './harvest.js';
@@ -403,8 +405,8 @@ export class Game {
   }
 
   // The first-person arms and weapons. Baking their two 1024 px atlases holds the main thread for ~0.3 s, so it is
-  // done with the first world build (behind the splash, or on the join if that comes first) instead of in the
-  // constructor, where it kept the splash from painting. Nothing uses the view model before a world is loaded.
+  // done in the shader warm-up behind the splash (warmViews), after the backdrop is on screen, or on the join if
+  // that comes first - not in the constructor or the world build, where it held the splash's first picture back.
   ensureViewModel() {
     if (this.vm) return;
     this.vm = new ViewModel();
@@ -413,7 +415,6 @@ export class Game {
 
   // ---------------------------------------------------------------- world
   loadWorld(seed) {
-    this.ensureViewModel();
     if (this.seed === seed && this.world) return;
     const t0 = performance.now();
     if (this.world) this.unloadWorld();
@@ -541,6 +542,7 @@ export class Game {
     while (!w.sync && !R.programsReady()) yield 16;
     w.hold = false;
     if (!this.warmTodo.length) return;
+    if (!w.sync) yield 50; // (the backdrop's first frames go out before the views' build holds the thread again)
     while (this.warmTodo.length) {
       this.warmTodo.shift()();
       if (!w.sync) yield 0;
@@ -559,7 +561,7 @@ export class Game {
     const set = (this.warmSet = new THREE.Group());
     set.visible = false;
     const chars = (set.userData.chars = []); // these cast shadows on the presets where characters do
-    const steps = [];
+    const steps = [() => this.ensureViewModel()];
     // every zombie rig. createZombie picks the variant from its seed, so go through seeds until a rig turns up that
     // has not been built yet; one view is kept, they all share a material
     for (const t of Object.values(ZTYPE)) {
@@ -728,6 +730,7 @@ export class Game {
     this.room = info.room; // { code, name, inviteOnly }: what the invite link points at
     this.myId = info.id;
     this.voice.setMyId(info.id);
+    this.ensureViewModel();
     this.loadWorld(info.seed);
     this.entities.clear();
     this.rockets.clear();
@@ -750,6 +753,7 @@ export class Game {
     // the admin password this browser was given (`/admin <password>`): said again, so the admin commands work here too
     const admin = adminKey();
     if (admin) this.conn.chat(`/admin ${admin}`);
+    joinedGame(!!accountState().user); // (a guest's achievements count the days played on here; an account's, the server)
     return info;
   }
 
@@ -1100,6 +1104,9 @@ export class Game {
       },
       grave(i) {
         g.graves?.stir(i);
+      },
+      achieve(flags, add, ids) {
+        achievementEvent(flags, add, ids);
       },
       ping(pid, kind, x, y, z) {
         g.pings = g.pings.filter((p) => p.pid !== pid);
@@ -2569,7 +2576,7 @@ export class Game {
   updateMenu(dt) {
     if (!this.world) return;
     const cam = this.camera;
-    if (this.tour?.world !== this.world) this.tour = new MenuTour(this.world);
+    if (this.tour?.world !== this.world) this.tour = new MenuTour(this.world, !this.tour);
     let cut = 0;
     if (this.tour.ready) cut = this.tour.update(dt, cam);
     else {
@@ -2590,7 +2597,7 @@ export class Game {
     this.effects.update(dt, cam, this.renderer.renderer.domElement.height);
     this.atmosphere.update(dt, this.time, cam, this.env, false, this.world.heightAt, weather);
     this.weatherFx.update(dt, this.time, cam, weather, this.env, false, this.renderer.renderer.domElement.height);
-    this.vm.setVisible(false);
+    this.vm?.setVisible(false);
     // (the state is set before the engine is ready too, so it fetches intro.mp3 first and opens on the splash's mix)
     this.audio.setAmbience({ night: 0.6, horde: false, boss: false, danger: 0, lowHealth: 0, nearFire: 0, dead: false, menu: true });
     if (this.audio.ready) this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, cam.rotation.y, 0);

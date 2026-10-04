@@ -206,6 +206,11 @@ export class Splash {
     this.perksBadge.hidden = true;
     pb.addEventListener('click', () => this.ui.progress.show());
     onProgress((v) => this._syncPerks(v));
+    const ab = el('button', 'btn btn-ghost', btns);
+    ab.type = 'button';
+    svgEl('i', 'btn-ico', ab, glyph('trophy'));
+    el('span', '', ab, 'Achievements');
+    ab.addEventListener('click', () => this.ui.achPanel.show());
     const cb = el('button', 'btn btn-ghost', btns);
     cb.type = 'button';
     svgEl('i', 'btn-ico', cb, glyph('keyboard'));
@@ -531,6 +536,14 @@ export class Pause {
     pb.addEventListener('click', (e) => {
       e.stopPropagation();
       this.ui.progress.show();
+    });
+    const ab = el('button', 'btn btn-ghost', btns);
+    ab.type = 'button';
+    svgEl('i', 'btn-ico', ab, glyph('trophy'));
+    el('span', '', ab, 'Achievements');
+    ab.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.ui.achPanel.show();
     });
     const lb = el('button', 'btn btn-ghost btn-danger', btns);
     lb.type = 'button';

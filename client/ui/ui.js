@@ -16,7 +16,9 @@ import { Roster } from './roster.js';
 import { FriendsPanel } from './friends.js';
 import { AccountPanel } from './account.js';
 import { ProgressPanel } from './progress.js';
+import { AchievementsPanel, AchievementToasts } from './achievements.js';
 import { isFriendName } from '../net/friends.js';
+import { onUnlock } from '../net/achievements.js';
 import { Summary } from './hud2.js';
 
 const NOOP = () => {};
@@ -92,6 +94,7 @@ export class UI {
     this.map = new MapScreen(this, ovL);
     this.banner = new Banner(topL);
     this.notifier = new Notifier(topL);
+    this.achToasts = new AchievementToasts(this, topL);
     this.summary = new Summary(topL);
     this.death = new Death(this, ovL);
     this.end = new EndScreen(this, ovL);
@@ -104,6 +107,8 @@ export class UI {
     this.friends = new FriendsPanel(this, modalL);
     this.accountPanel = new AccountPanel(this, modalL);
     this.progress = new ProgressPanel(this, modalL);
+    this.achPanel = new AchievementsPanel(this, modalL);
+    onUnlock((list) => this.achToasts.show(list));
 
     this._bindSounds();
     this._voice = { enabled: false, transmitting: false };
@@ -167,6 +172,7 @@ export class UI {
     if (this.friends.visible) this.friends.hide();
     if (this.accountPanel.visible) this.accountPanel.hide();
     if (this.progress.visible) this.progress.hide();
+    if (this.achPanel.visible) this.achPanel.hide();
     this._menuState();
   }
 
