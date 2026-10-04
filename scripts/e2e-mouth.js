@@ -26,9 +26,9 @@ async function client() {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto(url, { waitUntil: 'load' });
-  await sleep(3000);
-  await page.evaluate(() => [...document.querySelectorAll('button')].find((x) => /join/i.test(x.textContent)).click());
-  await sleep(4500);
+  await page.waitForSelector('.sp-joinbtn', { visible: true, timeout: 15000 });
+  await page.click('.sp-joinbtn');
+  await page.waitForFunction(() => window.__game?.myId && window.__game?.prediction?.state, { timeout: 15000 });
   await page.evaluate(() => {
     const g = window.__game;
     g.input.locked = true;
