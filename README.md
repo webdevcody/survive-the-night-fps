@@ -16,7 +16,8 @@ A co-op multiplayer horror survival FPS in the browser. Your car broke down on R
 a dead valley. By day, scavenge the valley's farms, motels, trailer parks and roadside wrecks for the
 supplies the car needs. By night, the horde comes to wherever you are, so you board up on the spot and
 hold. Every night there are more of them. Install every supply, start the engine, survive the final
-stand and drive away. Die, and you rise as one of them until the sun comes up.
+stand and drive away - over a half-broken bridge to the mainland, where a wrecked plane on an old
+airfield is the only way out. Die, and you rise as one of them until the sun comes up.
 
 - **Client:** three.js (Vite), procedural art; procedural audio layered with ~16 MB of CC0 recordings
   (the score and stingers, ambience beds, weather, wildlife, footsteps, foley, gunshots, explosions, creature and survivor voices -
@@ -105,7 +106,7 @@ stops it, `/fair wheel` / `/fair carousel` seats you on a ride, `/fair shed` to 
 | `node scripts/test-flaregun.js [seed]` | the flare gun against the real server in-process and decoded as a client does: its recipes, that it takes the pistol's slot, that a shot straight up climbs to the top of its arc, opens its chute, drifts down at its fall speed where the shared closed-form flight puts it and burns out at its minute still in the air, that its shell re-loads from the backpack by itself, that a shot fired flat comes down and burns on the ground, that a survivor 300 m away has it while the area of interest still holds for everything else, and that at night it pins a Shade 30 m out from under it and not one 55 m out (part of `npm test`) |
 | `node scripts/test-power.js [seed]` | the generator and its floodlights against the real server in-process and decoded as a client does, on the flattest open strip of the valley: what they cost, [E] pouring fuel and holding it for the switch, which lamps a generator feeds, the hum and the idle dead it draws (from a random stream of its own), the dead breaking it - and a Shade walking at a survivor that freezes as it enters a powered cone, moves again when the generator runs dry, walks free behind a wall inside the cone and freezes again when it steps out of the wall's shadow (part of `npm test`) |
 | `npm run bench:net` | network traffic benchmark: the real server against simulated clients (real encoder, prediction and decoder) through a seeded session - idle, roaming, a night's fight. Reports packets and bytes per client per second in both directions and where the snapshot bytes go (`--players 8`, `--seed n`, `--day n`, `--json out.json`) |
-| `node scripts/sim-smoke.js [seed]` | in-process server run with fake clients: the cat, zombie dog packs (forest dens, pack hunting, lunge bites, head hitbox), the wandering herd (slow walk together, roused by sight and by noise, losing a survivor), containers, chopping (and the client's harvest prompt: same reach and yields as the server), stations, schematic locks, door boards, pings, downed/revive, night waves, night themes, dawn summary, supplies, final stand, victory |
+| `node scripts/sim-smoke.js [seed]` | in-process server run with fake clients: the cat, zombie dog packs (forest dens, pack hunting, lunge bites, head hitbox), the wandering herd (slow walk together, roused by sight and by noise, losing a survivor), containers, chopping (and the client's harvest prompt: same reach and yields as the server), stations, schematic locks, door boards, pings, downed/revive, night waves, night themes, dawn summary, supplies, final stand, the crossing to the mainland (the team at the airfield with what they carried, the plane parts hidden), the plane's final stand and victory |
 | `node scripts/test-accounts.js` | accounts, friends, messages and match records against a real server on a PGlite database of its own: registering (and what it turns down), signing in by email or name, the wrong password, signing out; friend requests by name, accepting, taking back and removing, the `/social` socket hearing each; messages between friends only, unread and read, slowed down when flooded; a signed-in player playing under the account's name and the others told so; a friend's presence and the game to join them in, an invite-only one's code going to friends and nobody else; requests and sockets from another site turned away; a guest's stats moving onto the account; the board from the database; every match written with its players and events, and one cut short by the server going down ended as `interrupted` (part of `npm test`) |
 | `node scripts/test-binds.js` | keybinds (`shared/binds.js`, `client/game/binds.js`) and holding the drop key: the defaults, rebinding, a key another action has (swap / use here), resets, an action left without a key, labels, what the browser keeps and anything unreadable there falling back to the defaults; a key rebound while it is held leaving nothing stuck; a tap of the drop key not dropping and a hold dropping. Against a real server on a PGlite database: a guest told to sign in, binds saved to an account and back on another browser, junk refused, the newer copy winning, saves held back when flooded; without a database, no accounts (part of `npm test`) |
 | `node scripts/test-feedback.js` | the end screen's "how hard was it?" vote (`server/feedback.js`) on a PGlite database: filed against the run the voter just finished (by account, or a guest's browser id), voting again changes it, what is kept with it, no vote on an abandoned, old or walked-out-of run; then over HTTP on a real server after a `/kill` wipe, a stranger and another site turned away, a server without a database a 503 (part of `npm test`) |
@@ -131,7 +132,7 @@ stops it, `/fair wheel` / `/fair carousel` seats you on a ride, `/fair shed` to 
 | `node scripts/test-clinic.js [seed ...]` | Mercy Clinic on the first five valleys that have it: daylight in reception and outside, the wards wholly dark and the passage between going dark with no step in it, the one drug locker in the dark, the valley's flow fields leading into the deepest ward and out again; and in a running game the dead of the wards keep to them and go back when led out, a Shade moves in there at noon and is pinned in reception, the sunrise spares what stands in the wards, the drug locker's contents come once, and `/clinic` works. `VERBOSE=1` prints the passes too |
 | `node scripts/test-cemetery.js [seed ...]` | St. Agnes Cemetery on six valleys (every grave is open ground a body can stand up on, the casket and the crypt's doorway) and in a running game: a restless grave by day (the warning, the climb, a head shot while it climbs and a shot that the ground stops), the dead of the graves getting out through the railings to the chapel's door, a wave's share of the horde, and a scripted night inside a ring of walls round the chapel: the dead come up inside it and reach the survivors, and the horde is no bigger for it (part of `npm test`) |
 | `node scripts/test-rail.js [seed ...]` | the railway on six valleys: a line from rim to rim and a depot on it, crossing Route 9 once, off the water and every other place's ground, never steeper than 3% or tighter than a gentle curve; its bed level and open (a survivor walks it from either tunnel to the train, the nav grid has it as open ground); every road over it on planks and on the level; each tunnel shut by its cave-in; the open boxcars walked into from the bank, searched from inside, boarded up, and found by the dead's flow field; and in a running game a zombie comes into a boxcar after a survivor and has to break the door boards down once they are up. `--sweep 300` checks the plan alone on seeds 1..300 |
-| `node scripts/test-world.js [seed ...]` | the authored places of four valleys (every place at least once), as a survivor meets them: every doorway can be walked through (the real player simulation), every container, floor-loot point and supply spot can be reached on foot from the place's front gate and is not inside something solid, no road runs into a building. A failure names the place, the spot in the place's own frame and a `/tp` to go and look |
+| `node scripts/test-world.js [seed ...]` | the authored places of four valleys (every place at least once) and two mainlands (Kessler Airfield), as a survivor meets them: every doorway can be walked through (the real player simulation), every container, floor-loot point and supply spot can be reached on foot from the place's front gate and is not inside something solid, no road runs into a building. A failure names the place, the spot in the place's own frame and a `/tp` to go and look |
 | `npm run test:bots` | headless bots join a running server, play, and report bandwidth + prediction error |
 | `npm run test:e2e` | two headless Chrome clients: see each other, search a container, build, pick up, chat, drop weapon |
 | `node scripts/test-handoff-state.js` | a game saved for a deploy and restored into a new one (`server/gamestate.js`), in-process: a run played into its first night comes back with its clock, waves, players (where they stood, health, armour, weapons, backpack, kit), what was built, dropped, searched, felled and stripped, the dead where they were, the boss, the gun, the fair and the handcars; then both games are walked whole and any field that came back different and is not listed as transient fails it (a field added without being saved); players come back into their own bodies, one who does not is let go as a leaver, and saves this build cannot read are refused (part of `npm test`) |
@@ -262,7 +263,7 @@ hints and controls lists name whatever the keys are now.
 | 1 2 3 4 5 6 | Primary · Pistol · Melee · Throwable (press again to cycle) · Build (hammer) · Walkie-talkie |
 | Q / wheel | Last weapon / cycle weapons (build mode: Q / E cycle structure) |
 | R | Reload |
-| E | Interact: pick up, install supplies, feed a campfire, pour fuel into a generator, repair, man the mounted gun. **Hold** to search containers, revive a downed teammate, start the engine, drive away once it is warm, switch a generator off or on, lift the mounted gun. Carrying the mounted gun: set it up where you face |
+| E | Interact: pick up, install supplies, feed a campfire, pour fuel into a generator, repair, man the mounted gun. **Hold** to search containers, revive a downed teammate, start the engine, drive away (or take off, in the plane) once it is warm, switch a generator off or on, lift the mounted gun. Carrying the mounted gun: set it up where you face |
 | Melee | Hit trees for sticks & planks, wrecks for scrap |
 | Z / middle mouse | Ping: go here / danger (aim at a zombie) / loot (aim at an item or container) |
 | L | Leaderboard: every player's kills, nights survived, wins and revives over all their games, and yours. Click a column to sort by it |
@@ -295,12 +296,20 @@ them off.
   needs 90 seconds to warm up and every corpse in the valley hears it - the **final stand**. The engine
   only warms up while a survivor on their feet is within 14 m of the car: with nobody there it stalls
   (the count stops where it is, it does not start over) and the HUD says so. Once it is warm, nothing
-  ends by itself: a survivor at the car holds [E] for 3 seconds to get in and drive, and that wins the
-  run for the team. Until then the dead keep coming, so it is the team's call when to go: survivors
-  within 14 m of the car leave with it, anyone further off is left behind (the end screen says which).
-  The day/night clock stops during the final stand, so the team chooses when to start it - fortify the
-  car first. The stand is sized to the survivors still alive, the way a night's horde is: more of you,
-  more of them.
+  ends by itself: a survivor at the car holds [E] for 3 seconds to get in and drive. Until then the dead
+  keep coming, so it is the team's call when to go. The day/night clock stops during the final stand, so
+  the team chooses when to start it - fortify the car first. The stand is sized to the survivors still
+  alive, the way a night's horde is: more of you, more of them.
+- **Act 2, the mainland:** driving off is not the end. The car crosses an old, half-broken bridge (a
+  short cutscene) and gives out at **Kessler Airfield** on the mainland: a new map with fresh loot, at
+  dawn of the next day. Everyone comes along: the living keep everything they carry, the dead are
+  survivors again with a pistol magazine and a bandage, and schematics stay learnt. Nothing can hurt you
+  for the first 12 seconds there. A wrecked plane on the airfield's apron is the way out: it needs a
+  magneto, a propeller, a fuel pump, control cables and three cans of avgas, hidden around the mainland
+  the way the car's supplies were. Install them, start its engine, survive its final stand (the same
+  rules as the car's), then hold [E] at the plane to take off: that wins the run for the team. Survivors
+  within 14 m of the plane fly out with it, anyone further off is left behind (the end screen says which).
+  The mainland has no railway, and its later nights bring the bosses the valley rarely lives to see.
 - **Day: scavenge & rebuild.** A clock shows the time until nightfall. The first day is long - 6:00, to find
   your feet and stock up before the first boss - and the second 4:30, to find somewhere to hold. After that each
   day is 15 s shorter than the last, down to 3:00 from day 8: a dash to one place or two, a look round each, and
@@ -581,7 +590,10 @@ them off.
 
 **Every playthrough is a new valley.** When a game ends (or the last survivor leaves) the server rolls a
 new seed and every client rebuilds the map from it; nothing but the seed crosses the wire. For a seed,
-`shared/layout.js` plans the valley and `shared/world.js` builds it:
+`shared/layout.js` plans the valley and `shared/world.js` builds it. The mainland a run crosses to is built
+the same way, from the valley's seed with its top bit set (`shared/acts.js`): Kessler Airfield (a runway, a
+hangar, the airfield office and the wrecked plane) where the valley has The Breakdown, beside Route 40 rather
+than on it, and no railway; the rest is drawn as a valley's is.
 
 - **Route 9** crosses the map at a random heading - straight, on a bend or in an S - with The Breakdown
   (your car, a rest area) on it near the middle and the roadside places strung along it.

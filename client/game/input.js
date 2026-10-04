@@ -47,6 +47,7 @@ export class Input {
     this.skipMove = false; // drop the first delta after locking
     this.locked = false;
     this.enabled = false; // gameplay input enabled (not typing / not in menus)
+    this.frozen = false; // no buttons for now, whatever is open or held (the crossing to the mainland plays)
     this.down = new Map(); // code held -> the actions it went down as (what letting it go lets go of, rebound since or not)
     this.wheel = 0;
     this.handlers = {}; // onKey(code, actions) for discrete actions, onKeyUp(code, actions, cancelled)
@@ -207,7 +208,7 @@ export class Input {
 
   // gameplay button mask for the next command
   sample() {
-    if (!this.enabled || this.held) {
+    if (!this.enabled || this.frozen) {
       this.latched = 0;
       return 0;
     }

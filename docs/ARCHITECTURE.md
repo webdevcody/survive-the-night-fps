@@ -18,6 +18,8 @@ shared/      code used by BOTH server and client (pure JS, no DOM, no three.js)
   world.js       deterministic world generation from a seed: builds the plan - terrain, A*-routed roads,
                  roadside/woodland sites, buildings, props, containers, supply spots, doorways,
                  vegetation, colliders. A new playthrough is a new seed (S2C.WORLD_RESET); SEED pins it
+  acts.js        a run's two maps: the valley (act 1) and the mainland (act 2), told apart by the seed's top bit,
+                 and what the way out of each is called (see The escape below)
   mine.js        the workings under Blackrock Mine: a second level under the heightfield (see The mine below)
   clinic.js      Mercy Clinic and the rule that its wards are dark at noon (see Dark interiors below)
   rail.js        the railway: its heights, the cut and fill, Whitlock Depot, the stalled train (see The railway)
@@ -823,10 +825,29 @@ A single track across the valley from a tunnel in one rim to a tunnel in the oth
   The warm-up (`Game.updateEscape`) only counts down while a survivor on their feet is within `ESCAPE_RADIUS`
   of the car; otherwise it stalls where it is, and the stand keeps coming on its own clock. A warm engine ends
   nothing: a survivor at the car holds [E] (`HOLD.DRIVE`, `ESCAPE_DRIVE_TIME`, the same path and reach as the
-  engine-start hold) and `driveOff()` is the victory, for everyone; until then groups keep coming at
+  engine-start hold) and `driveOff()` ends the act, for everyone; until then groups keep coming at
   `ESCAPE_LINGER_PACE` of the stand's pace. Two bits of the global state's flags byte carry "stalled" and
   "somebody is getting in" to the HUD, and the client holds its own countdown on a stall. The end screen
   tells each player whether they were within `ESCAPE_RADIUS` when the car left (client side).
+- **Two acts** (`shared/acts.js`). On the valley `driveOff()` is `Game.crossBridge()`, not the victory: the
+  same run goes on, at dawn of the next day, on the mainland, whose seed is the valley's with `MAINLAND` (the top
+  bit) set. So the act needs no field of its own anywhere: WELCOME, `S2C.WORLD_RESET`, the handoff's save and the
+  world hash all carry the seed, and `isMainland(seed)` answers everywhere (a valley seed never has the bit:
+  `randomSeed` stays under 2^31). `crossBridge` clears the world as a new run does, but keeps the run: the day
+  count, the scores and XP, the unlocked schematics, the kits of whoever left (`leftKits`, the fallen's turned to
+  `RETURN_KIT`); the living keep what they carry (`Game.arrive`: placed at the airfield's spawn points, turned to
+  the plane), the dead and the turned are survivors again with `RETURN_KIT`, and nobody takes damage for
+  `CROSSING_GRACE`. `stockWorld()` (the half of `startGame` that fills a map) stocks the mainland. There
+  `world.car` is the wrecked plane on Kessler Airfield (built in world.js in place of the breakdown, the same place
+  id `ZONE.CAMP`, named by `zoneName(z, seed)`), `suppliesOf(seed)` its parts (`PLANE_SUPPLIES`, the same shape as
+  `SUPPLIES`, so `SUPPLY_NEED`, the hints and the wire do not change), and its final stand and take-off are the
+  car's, with `victory()` the win. The layout puts the airfield beside Route 40 as a roadside place, its runway one
+  of its own streets, and plans no railway (it would cross the highway next to the start). The client builds the
+  mainland a moment after the crossing's cutscene comes up (`Game.onWorldReset`, `client/ui/crossing.js`: a canvas
+  of its own over everything, the input frozen while it plays), and `NOTIFY.CROSSED` resets what it keeps of a
+  map. The wording of the way out (car or plane) is `vehicleOf(seed)`. `Game({ acts: false })` keeps the car as
+  the win (tests). A wipe on the mainland ends the run; the next one starts on a new valley (with `SEED`, on its
+  own valley again: `rollWorld`).
   A supply cannot be lost on the way to the car: whatever drops an item (a death, [G], a full backpack, a
   disconnect, loot) calls `Game.dropItem`, which only lets it come to rest where a survivor can pick it up
   again - never on the lake bed off the pier, inside a wall or beyond the edge of the map.

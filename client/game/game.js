@@ -428,11 +428,11 @@ export class Game {
 
   playCrossing() {
     this.crossing ||= new Crossing(this.ui.root);
-    this.input.held = true; // (nobody walks off blind: the server keeps them from harm meanwhile, CROSSING_GRACE)
+    this.input.frozen = true; // (nobody walks off blind: the server keeps them from harm meanwhile, CROSSING_GRACE)
     this.ui.setMapOpen(false);
     this.ui.setBoardOpen(false);
     this.crossing.play(() => {
-      this.input.held = false;
+      this.input.frozen = false;
       // (the view is ours, not the server's: turned to the plane as the server turned the body, Game.arrive)
       const car = this.world?.car;
       if (car && this.self.alive) {

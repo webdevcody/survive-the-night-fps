@@ -1,7 +1,7 @@
 // Binary wire protocol. Everything is little-endian, tightly packed.
 // Positions are quantized to 1/64 m in int16 (range +-512 m).
 
-export const PROTOCOL_VERSION = 34; // 26: the frag grenade and the noisemaker (items 33-34, PROJ 7-8); 28: salvage, ammo reserve, unequip, RPG (PROJ 9); 29: carrying the mounted gun (ACT.GUN_PUT, HOLD.GUN_LIFT, ENT.GUN fields 6-7, s.hmg); 30: the flare gun (items 56, 79; ammo 9; PROJ 10); 31: the walkie-talkie in weapon slot 6 (SLOT_RADIO), PLF.ON_AIR; 32: achievements (EVT.ACHIEVE); 33: XP, levels and perks (S2C.PROGRESS, s.perks in SELF.RIDE, a level in S2C.PLAYERS and S2C.BOARD rows); 34: IN_PING carries u16 last measured RTT (ms) for the player list
+export const PROTOCOL_VERSION = 35; // 26: the frag grenade and the noisemaker (items 33-34, PROJ 7-8); 28: salvage, ammo reserve, unequip, RPG (PROJ 9); 29: carrying the mounted gun (ACT.GUN_PUT, HOLD.GUN_LIFT, ENT.GUN fields 6-7, s.hmg); 30: the flare gun (items 56, 79; ammo 9; PROJ 10); 31: the walkie-talkie in weapon slot 6 (SLOT_RADIO), PLF.ON_AIR; 32: achievements (EVT.ACHIEVE); 33: XP, levels and perks (S2C.PROGRESS, s.perks in SELF.RIDE, a level in S2C.PLAYERS and S2C.BOARD rows); 34: IN_PING carries u16 last measured RTT (ms) for the player list; 35: the mainland, act 2 (a world seed with its top bit set, plane parts items 85-89, NOTIFY.CROSSED)
 
 // client -> server
 export const C2S = {
@@ -24,7 +24,7 @@ export const S2C = {
   VOICE: 6,
   REJECT: 7,
   PONG: 8,
-  WORLD_RESET: 9, // u32 seed: a new playthrough on a new map - rebuild the world from this seed
+  WORLD_RESET: 9, // u32 seed: a new map - rebuild the world from this seed (a new playthrough, or the crossing to the mainland: shared/acts.js)
   BOARD: 10, // the leaderboard, as asked for (see writeBoard)
   ROOM: 11, // str code, str name, u8 ROOMF: the game this socket was put in (before anything else; quick joins learn it here)
   FRIENDS: 12, // u8 count, then per player u16 id, str account name ('' = a guest, not signed in): everyone's on joining, a newcomer's to the rest
