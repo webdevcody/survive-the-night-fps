@@ -7,12 +7,13 @@
 //   { t: 'close', slot, code }     ...and closed (code: the socket's close code - 4001 the player left on purpose)
 //   { t: 'in', buf }               their messages (frames, in order)    { t: 'stop' }          shut down
 //   { t: 'finish' }                the server is going down: end the match being played, and say when it is
+//   { t: 'progress', tok, ... }    a player's progress (progress.js): { first, xp, perks, best } as they join, { perks } on a pick
 // To it:
 //   { t: 'ready', seed }           the game is built and ticking        { t: 'out', buf }      messages for sockets
 //   { t: 'closed', slot }          done with that slot's socket: nothing more will go out for it
 //   { t: 'kick', slot }            close that socket: it took a seat and never joined (JOIN_WAIT)
 //   { t: 'status', ... }           once a second, and when the number of players changes
-//   { t: 'rec', op, ... }          the leaderboard (RemoteRecords)      { t: 'board', ... }    a player asked for it
+//   { t: 'rec', op, ... }          the leaderboard and XP (RemoteRecords) { t: 'board', ... }  a player asked for it
 //   { t: 'an', rec }               a record of the match being played (analytics.js), for the database (matchstore.js)
 //   { t: 'finished' }              ...the match is ended and its records posted
 import { parentPort, workerData } from 'node:worker_threads';
@@ -48,6 +49,9 @@ class RemoteRecords {
   }
   bump(rec, stat, n = 1) {
     if (rec) post({ t: 'rec', op: 'bump', tok: rec.tok, stat, n });
+  }
+  best(rec, day) {
+    if (rec) post({ t: 'rec', op: 'best', tok: rec.tok, day });
   }
   // me: the asking player's record, here: everybody's in this game
   sendBoard(slot, me, here) {
@@ -124,6 +128,9 @@ parentPort.on('message', (m) => {
       post({ t: 'closed', slot: m.slot });
       break;
     }
+    case 'progress':
+      game.onProgress(m.tok, m);
+      break;
     case 'finish':
       try {
         game.track?.finish('interrupted');
