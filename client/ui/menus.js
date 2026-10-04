@@ -69,7 +69,7 @@ export function renderControls(parent, list) {
 }
 
 // what the game asks of the player: on every splash, whichever tagline is drawn under it
-const GOAL = 'Scavenge by day. Board up by night. Fix the car. Get out.';
+const GOAL = 'Scavenge by day. Board up by night. Fix the car, cross the bridge, fix the plane. Get out.';
 const TAGLINES = [
   'Your car died on Route 9. The dark is coming.',
   'Nobody is coming to save you.',

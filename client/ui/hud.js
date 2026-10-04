@@ -1,6 +1,7 @@
 // Per-frame HUD. update(h) is called every frame: it diffs against cached values and only
 // touches the DOM when a (rounded) value actually changed.
-import { ITEM, ITEM_DEFS, WEAPONS, AMMO_NAMES, CAR_PARTS } from '../../shared/defs.js';
+import { ITEM, ITEM_DEFS, WEAPONS, AMMO_NAMES, CAR_PARTS, suppliesOf } from '../../shared/defs.js';
+import { vehicleOf } from '../../shared/acts.js';
 import { PHASE, dayLength, NIGHT_LENGTH, DUSK_WARNING } from '../../shared/constants.js';
 import { GUN, MOUNTED_GUN } from '../../shared/mountedgun.js';
 import { el, svgEl, fmtTime, parsePrompt, clamp } from './dom.js';
@@ -343,8 +344,9 @@ export class Hud {
     if (h.finale) {
       // a stalled warm-up keeps its time on show: it stopped there, it did not start over. (A title that fits one
       // line: a second one pushes the horde counter down into the kill feed.)
-      title = h.escapeReady ? 'Get in the car!' : h.escapeStalled ? 'Stalled' : 'Final stand';
-      label = h.escapeReady ? (h.escapeLeaving ? 'Someone is getting in' : 'The engine is running') : h.escapeStalled ? 'Get back to the car' : 'Engine ready in';
+      const V = vehicleOf(h.seed);
+      title = h.escapeReady ? (V.name === 'car' ? 'Get in the car!' : 'Get aboard!') : h.escapeStalled ? 'Stalled' : 'Final stand';
+      label = h.escapeReady ? (h.escapeLeaving ? V.getting : 'The engine is running') : h.escapeStalled ? `Get back to the ${V.name}` : 'Engine ready in';
       time = h.escapeReady ? '' : fmtTime(h.escapeT);
     } else if (state === 'night') {
       title = 'Night ' + day;
@@ -691,8 +693,15 @@ export class Hud {
         this.ctxIco.innerHTML = glyph('campfire');
         this.ctxTitle.textContent = 'Campfire';
       } else if (type === 'car') {
-        this.ctxIco.innerHTML = glyph('car');
-        this.ctxTitle.textContent = 'The car';
+        // (the plane on the mainland: shared/acts.js)
+        const V = vehicleOf(ctx.seed);
+        this.ctxIco.innerHTML = glyph(V.glyph);
+        this.ctxTitle.textContent = `The ${V.name}`;
+        suppliesOf(ctx.seed).forEach((id, i) => {
+          const p = this.ctxPartEls[i];
+          p.title = ITEM_DEFS[id].name;
+          p.firstChild.innerHTML = itemIcon(id);
+        });
       } else if (type === 'structure') {
         this.ctxIco.innerHTML = glyph('hammer');
       } else if (type === 'fair') {

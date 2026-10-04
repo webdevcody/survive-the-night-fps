@@ -30,6 +30,24 @@ export const PROPS = {
     ],
     desc: 'crashed military helicopter lying tilted on its side, broken rotor blades on the ground, scorched, tail boom broken toward +Z',
   },
+  // the way out of the mainland (act 2), on Kessler Airfield's apron: world.car there
+  plane: {
+    size: [9.8, 2.5, 7.5],
+    boxes: [
+      [0, 1.2, -2.15, 1.2, 1.6, 3.2], // engine and the front of the cabin
+      [0, 1.2, 0.6, 1.16, 1.56, 2.4], // the back of the cabin
+      [0, 1.2, 2.75, 0.9, 0.9, 1.9], // tail cone
+      [0, 1.85, 3.25, 0.14, 1.3, 1.1], // fin
+      [0, 1.15, 3.35, 3.4, 0.14, 0.8], // tailplane
+      [0, 0.61, -0.62, 9.8, 0.24, 1.6], // wing
+    ],
+    cyls: [
+      [-1.45, -0.55, 0.28, 0.5],
+      [1.45, -0.55, 0.28, 0.5],
+      [0, -2.9, 0.22, 0.42],
+    ],
+    desc: 'wrecked single-engine low-wing light plane, nose to -Z: faded white with a red stripe, the propeller gone off its hub, cowling panel open, a flat tyre, a cracked window, one wingtip crumpled',
+  },
   military_tent: { size: [4, 2.6, 6], boxes: [[0, 1.3, 0, 4, 2.6, 6]], desc: 'olive military field tent, open flap facing -Z' },
   boat: { size: [1.4, 0.7, 4], boxes: [[0, 0.35, 0, 1.3, 0.7, 3.9]], desc: 'old wooden rowboat, peeling paint' },
   gas_pump: { size: [0.8, 1.9, 0.6], boxes: [[0, 0.95, 0, 0.8, 1.9, 0.6]], desc: '1970s gas pump, faded red, hose' },

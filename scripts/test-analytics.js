@@ -32,7 +32,7 @@ const KEYS = {
   event: ['k', 'matchId', 'at', 't', 'day', 'phase', 'type', 'userId', 'name', 'x', 'z', 'data'],
   sample: ['k', 'matchId', 'at', 't', 'day', 'phase', 'players', 'survivors', 'downed', 'dead', 'zombies', 'tickMs', 'tickP99', 'pingAvg'],
 };
-const EVENT_TYPES = new Set(['join', 'leave', 'down', 'death', 'revive', 'turned', 'returned_at_dawn', 'night_start', 'dawn', 'boss_spawn', 'boss_kill', 'supply_found', 'supply_install', 'schematic', 'engine_start', 'engine_ready', 'crate_drop', 'car_alarm', 'radio_call', 'bell', 'victory', 'wipe', 'abandoned', 'interrupted']);
+const EVENT_TYPES = new Set(['join', 'leave', 'down', 'death', 'revive', 'turned', 'returned_at_dawn', 'night_start', 'dawn', 'boss_spawn', 'boss_kill', 'supply_found', 'supply_install', 'schematic', 'engine_start', 'engine_ready', 'crossed', 'crate_drop', 'car_alarm', 'radio_call', 'bell', 'victory', 'wipe', 'abandoned', 'interrupted']);
 const PHASES = new Set(['day', 'night', 'final_stand']);
 const shapeErrors = [];
 // undefined anywhere, or a number that is not finite (JSON would turn those into null or drop them unseen)
@@ -54,7 +54,7 @@ const sink = (rec) => {
 };
 
 // ---------------------------------------------------------------- a game and its clients
-const game = new Game({ seed, dayLength: 3600, nightLength: 3600, log: () => {}, analytics: sink });
+const game = new Game({ seed, dayLength: 3600, nightLength: 3600, acts: false, log: () => {}, analytics: sink });
 // The dead stand still: every hurt in this test is dealt by the test, so what comes out is what it put in
 game.zm.update = () => {};
 const run = (ticks) => {
@@ -363,6 +363,31 @@ let dee;
   leave(dee);
   leave(eve);
   check('with no match running nothing more comes out: not finish again, not a kill, not a leave', recs.length === n1 && !dee.p.ts && !eve.p.ts, `${recs.length - n1} more`);
+}
+
+// ================================================================ two acts: driving off the valley crosses to the mainland
+// (the game above is one act, acts: false, so that its drive off is the victory)
+{
+  const g2 = new Game({ seed, dayLength: 3600, log: () => {}, analytics: sink });
+  g2.zm.update = () => {};
+  const conn = { id: 0, send(bytes) { const r = new Reader(bytes.slice().buffer); if (r.u8() === S2C.WELCOME) conn.id = r.u16(); } };
+  const session = g2.onOpen(conn);
+  const w = new Writer(64);
+  w.u8(C2S.JOIN);
+  w.u8(PROTOCOL_VERSION);
+  w.str('Fay');
+  g2.onMessage(session, w.bytes().slice());
+  const p = g2.players.get(conn.id);
+  const id = g2.track.m.id;
+  g2.supplies = SUPPLY_NEED.slice();
+  g2.startEngine(p);
+  g2.escape.t = 0;
+  g2.escape.ready = true;
+  Object.assign(p.state, { x: g2.world.car.x + 2, z: g2.world.car.z });
+  g2.driveOff(p);
+  const ev = events(id, 'crossed');
+  check('a drive off the valley is a crossing: an event, and the same match goes on on the mainland', ev.length === 1 && ev[0].name === 'Fay' && ev[0].data.aboard === 1 && of('match_end', id).length === 0 && g2.track.m?.id === id && g2.phase === PHASE.DAY, JSON.stringify(ev[0]?.data));
+  g2.onClose(session, LEFT_CODE);
 }
 
 // ================================================================ every record

@@ -37,8 +37,9 @@ import {
   STRUCT_ORDER,
   REPAIR_COST,
   ZOMBIE_DEFS,
-  SUPPLIES,
   SUPPLY_NEED,
+  suppliesOf,
+  zoneName,
   SCHEM_BIT,
   THROW_ITEMS,
   CONT_DEFS,
@@ -49,7 +50,6 @@ import {
   ZANIM,
   IMPACT,
   ZONE,
-  ZONE_NAMES,
   AMMO_NAMES,
   AMMO_ITEMS,
   CONSUMABLES,
@@ -58,6 +58,8 @@ import {
 } from '../../shared/defs.js';
 import { LEFT_CODE, MOVED_CODE, ACT, ENT, SNAP, HOLD, CAR_ID, PING_KIND, PFLAG, CHATF, PLF, PROGF, dqpos } from '../../shared/protocol.js';
 import { createWorld } from '../../shared/world.js';
+import { vehicleOf, isMainland, valleyOf } from '../../shared/acts.js';
+import { Crossing } from '../ui/crossing.js';
 import { treeAt, fellTree, regrowTrees } from '../../shared/felling.js';
 import { nightTheme } from '../../shared/nights.js';
 import { shotDirections, currentWeapon, eyeHeight } from '../../shared/playersim.js';
@@ -292,7 +294,7 @@ export class Game {
     this.keyHints = new KeyHints(this); // names the key on the HUD at the moment it would help
     this.conn = new Connection({
       snapshot: (r) => this.onSnapshot(r),
-      world: (seed) => this.loadWorld(seed),
+      world: (seed) => this.onWorldReset(seed),
       inventory: (r) => this.onInventory(r),
       chat: (id, flags, text) => this.onChat(id, flags, text),
       players: (r) => this.onPlayers(r),
@@ -415,6 +417,42 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- world
+  // The server deals a new map. Off this valley over the bridge to its mainland (Game.crossBridge), the crossing comes
+  // on screen first and the mainland is built behind it a moment later: building it holds the page for a second.
+  onWorldReset(seed) {
+    if (this.world && this.state === 'playing' && isMainland(seed) && !isMainland(this.seed) && valleyOf(seed) === this.seed) {
+      this.playCrossing();
+      setTimeout(() => this.loadWorld(seed), 80);
+    } else this.loadWorld(seed);
+  }
+
+  playCrossing() {
+    this.crossing ||= new Crossing(this.ui.root);
+    this.input.held = true; // (nobody walks off blind: the server keeps them from harm meanwhile, CROSSING_GRACE)
+    this.ui.setMapOpen(false);
+    this.ui.setBoardOpen(false);
+    this.crossing.play(() => {
+      this.input.held = false;
+      // (the view is ours, not the server's: turned to the plane as the server turned the body, Game.arrive)
+      const car = this.world?.car;
+      if (car && this.self.alive) {
+        this.input.yaw = Math.atan2(-(car.x - this.renderPos.x), -(car.z - this.renderPos.z));
+        this.input.pitch = 0;
+      }
+      this.arrivalCards();
+    });
+  }
+
+  // NOTIFY.CROSSED's cards, once the crossing has played
+  arrivalCards() {
+    const day = this.arrival;
+    if (day == null) return;
+    this.arrival = null;
+    this.ui.notify(`DAY ${day}`, 'big', 5);
+    this.ui.notify('Over the bridge: the car died at Kessler Airfield, beside a wrecked plane. Find its parts, fix it, fly out.', 'sub', 7);
+    this.audio.stinger?.('dawn');
+  }
+
   loadWorld(seed) {
     if (this.seed === seed && this.world) return;
     const t0 = performance.now();
@@ -1151,6 +1189,7 @@ export class Game {
   onNotify(msg, arg) {
     const ui = this.ui;
     const a = this.audio;
+    const V = vehicleOf(this.seed);
     if (this.fixtures.notify(msg, arg)) return;
     if (this.fair.onNotify(msg, arg)) return;
     switch (msg) {
@@ -1168,7 +1207,7 @@ export class Game {
         break;
       case NOTIFY.DAWN:
         ui.notify(`DAY ${arg}`, 'big', 4);
-        ui.notify('You made it. The sun burns the horde - go find those supplies.', 'sub', 4);
+        ui.notify(`You made it. The sun burns the horde - go find those ${V.parts}.`, 'sub', 4);
         a.stinger?.('dawn');
         break;
       case NOTIFY.HORDE_SOON: {
@@ -1204,20 +1243,20 @@ export class Game {
         a.stinger?.('supply');
         break;
       case NOTIFY.SUPPLY_FOUND:
-        ui.notify(`${ITEM_DEFS[arg]?.name || 'A supply'} found! Bring it to the car.`, 'good', 5);
+        ui.notify(`${ITEM_DEFS[arg]?.name || 'A supply'} found! Bring it to the ${V.name}.`, 'good', 5);
         a.stinger?.('car_part');
         break;
       case NOTIFY.CAR_PART:
-        ui.notify(`${ITEM_DEFS[arg]?.name || 'Part'} installed in the car`, 'good', 4);
+        ui.notify(`${ITEM_DEFS[arg]?.name || 'Part'} installed in the ${V.name}`, 'good', 4);
         a.playLocal('install_part');
         break;
       case NOTIFY.SUPPLIES_DONE:
-        ui.notify('EVERY SUPPLY IS IN', 'big', 5);
-        ui.notify(`Fortify the car. Hold ${bindTag('interact')} at the car to start the engine - it takes 90 seconds to warm up.`, 'sub', 7);
+        ui.notify(V.allIn, 'big', 5);
+        ui.notify(`Fortify the ${V.name}. Hold ${bindTag('interact')} at the ${V.name} to start the engine - it takes 90 seconds to warm up.`, 'sub', 7);
         a.stinger?.('car_part');
         break;
       case NOTIFY.NEED_SUPPLIES:
-        ui.notify('The car still needs supplies', 'warning', 2.5);
+        ui.notify(`The ${V.name} still needs ${V.parts}`, 'warning', 2.5);
         break;
       case NOTIFY.CAR_ALARM:
         ui.notify('CAR ALARM!', 'danger', 4);
@@ -1231,12 +1270,12 @@ export class Game {
         break;
       case NOTIFY.ENGINE_START:
         ui.notify('THE FINAL STAND', 'big', 5);
-        ui.notify('The engine is warming up. Every corpse in the valley heard it. Stay at the car: it stalls if nobody is there.', 'sub', 6);
+        ui.notify(`The engine is warming up. ${V.heard}. Stay at the ${V.name}: it stalls if nobody is there.`, 'sub', 6);
         a.stinger?.('boss');
         break;
       case NOTIFY.ESCAPE_READY:
-        ui.notify('GET IN THE CAR!', 'big', 5);
-        ui.notify(`Hold ${bindTag('interact')} at the car to drive away. Whoever is not at the car is left behind.`, 'sub', 7);
+        ui.notify(V.board, 'big', 5);
+        ui.notify(`Hold ${bindTag('interact')} at the ${V.name} to ${V.go}. Whoever is not at the ${V.name} is left behind.`, 'sub', 7);
         a.stinger?.('car_part');
         break;
       case NOTIFY.SCHEMATIC:
@@ -1353,6 +1392,20 @@ export class Game {
         ui.notify(`DAY ${arg}`, 'big', 5);
         ui.notify('Your car died on Route 9. Find the supplies to fix it - before the dark finds you.', 'sub', 6);
         break;
+      case NOTIFY.CROSSED:
+        // over the bridge: a new map, the same run (what NEW_GAME forgets of the old map, but not the run)
+        if (this.deathShown) ui.hideOverlays();
+        this.deathShown = false;
+        this.discovered = new Set([ZONE.CAMP]);
+        this.stripped.clear();
+        this.regrowTrees();
+        this.pings = [];
+        this.waypoint = null;
+        this.flyover?.clear();
+        this.graves?.reset();
+        this.arrival = arg;
+        if (!this.crossing?.active) this.arrivalCards();
+        break;
       case NOTIFY.PLAYER_JOINED:
       case NOTIFY.PLAYER_LEFT:
         break;
@@ -1377,17 +1430,18 @@ export class Game {
       need += n;
       have += Math.min(n, g.supplies[i]);
     });
+    const V = vehicleOf(this.seed);
     ui.notify(g.finale ? 'THE FINAL STAND' : `${night ? 'NIGHT' : 'DAY'} ${g.day}`, 'big', 5);
     if (g.finale) {
-      ui.notify('The car is fixed and the engine is warming up. Defend it, then get in.', 'sub', 6);
-      ui.notify('You joined a run in progress: every supply is in. Your team is at the car.', 'toast', 8);
+      ui.notify(`The ${V.name} is fixed and the engine is warming up. Defend it, then get in.`, 'sub', 6);
+      ui.notify(`You joined a run in progress: every ${V.part} is in. Your team is at the ${V.name}.`, 'toast', 8);
       return;
     }
-    ui.notify('Your car died on Route 9. Find the supplies, fix it, drive out.', 'sub', 6);
-    ui.notify(g.suppliesDone ? 'You joined a run in progress: every supply is in. Starting the engine is next.' : `You joined a run in progress: ${have} of ${need} car supplies are in.`, 'toast', 8);
+    ui.notify(isMainland(this.seed) ? 'Your team made it over the bridge to the mainland. Find the plane parts, fix the plane, fly out.' : 'Your car died on Route 9. Find the supplies, fix it, drive out.', 'sub', 6);
+    ui.notify(g.suppliesDone ? `You joined a run in progress: every ${V.part} is in. Starting the engine is next.` : `You joined a run in progress: ${have} of ${need} ${V.partsOf} are in.`, 'toast', 8);
     let team = 'Your team is marked on the compass. Scavenge with them before dark.';
     if (night) team = 'Night: the horde is out. Find your team on the compass and hold out until dawn.';
-    else if (g.suppliesDone) team = 'Your team is marked on the compass. Meet them at the car.';
+    else if (g.suppliesDone) team = `Your team is marked on the compass. Meet them at the ${V.name}.`;
     else if (g.timeLeft <= DUSK_WARNING) team = 'Night is seconds away. Find your team on the compass and board up with them.';
     ui.notify(team, 'toast', 8);
   }
@@ -1987,14 +2041,14 @@ export class Game {
     return z >= 0 && (this.discovered.has(z) || this.global.hints.includes(z));
   }
   waypointName(z = this.waypoint.zone) {
-    return this.knowsPlace(z) ? ZONE_NAMES[z] : 'Waypoint';
+    return this.knowsPlace(z) ? zoneName(z, this.seed) : 'Waypoint';
   }
 
   // a teammate has just set a waypoint: a word on screen, if it is one teamWaypoints shows us
   waypointSet(id, way) {
     const p = this.players.get(id);
     if (!this.world || p.status === 2 || (p.status === 1) !== !!this.prediction.state.zombie) return;
-    this.ui.notify(`${p.name} marked ${this.knowsPlace(way.zone) ? ZONE_NAMES[way.zone] : 'a waypoint'}`, 'toast', 3);
+    this.ui.notify(`${p.name} marked ${this.knowsPlace(way.zone) ? zoneName(way.zone, this.seed) : 'a waypoint'}`, 'toast', 3);
     this.audio.playLocal('ui_click', { volume: 0.4 });
   }
 
@@ -2444,7 +2498,7 @@ export class Game {
         if (this.discovered.has(z.id)) continue;
         if (Math.hypot(rp.x - z.x, rp.z - z.z) < z.flat + 6) {
           this.discovered.add(z.id);
-          this.ui.notify(`Discovered · ${ZONE_NAMES[z.id]}`, 'toast', 3.5);
+          this.ui.notify(`Discovered · ${zoneName(z.id, this.seed)}`, 'toast', 3.5);
         }
       }
     }
@@ -2457,7 +2511,7 @@ export class Game {
         this.waypoint = null;
         this.shareWaypoint();
         // a place seen for the first time has just said so itself ("Discovered")
-        if (wp.visited) this.ui.notify(wp.zone >= 0 ? `Arrived · ${ZONE_NAMES[wp.zone]}` : 'Waypoint reached', 'toast', 2.5);
+        if (wp.visited) this.ui.notify(wp.zone >= 0 ? `Arrived · ${zoneName(wp.zone, this.seed)}` : 'Waypoint reached', 'toast', 2.5);
       }
     }
     this.pings = this.pings.filter((p) => time - p.t < PING_LIFE);
@@ -2662,14 +2716,15 @@ export class Game {
       // The run is won for everyone, but the car took whoever was at it: a survivor further off than ESCAPE_RADIUS
       // when it left stayed in the valley, and so did the players who had already turned.
       const car = this.world.car;
+      const V = vehicleOf(this.seed);
       let title = 'You escaped';
-      let reason = 'The engine roars. You tear down Route 9 and leave the valley behind.';
+      let reason = V.away;
       if (!this.self.alive || this.prediction.state.zombie) {
         title = 'They escaped';
-        reason = 'The engine roars and the car is gone down Route 9. You stay in the valley with the rest of the dead.';
+        reason = V.dead;
       } else if (Math.hypot(this.renderPos.x - car.x, this.renderPos.z - car.z) > ESCAPE_RADIUS) {
         title = 'Left behind';
-        reason = 'The car tears down Route 9 without you. The others made it out of the valley.';
+        reason = V.gone;
       }
       this.ui.showVictory({ days: g.day, kills, title, reason, restartIn: Math.ceil(g.restartT), record: this.runReport, progress: this.progress });
       this.freePointerForEnd();
@@ -2780,12 +2835,13 @@ export class Game {
     const dcar = Math.hypot(this.renderPos.x - car.x, this.renderPos.z - car.z);
     if (dcar < CAR_REACH) {
       this.lookTarget = 'car';
-      const missing = SUPPLIES.filter((p, i) => g.supplies[i] < SUPPLY_NEED[i]);
+      const V = vehicleOf(this.seed);
+      const missing = suppliesOf(this.seed).filter((p, i) => g.supplies[i] < SUPPLY_NEED[i]);
       const carrying = missing.filter((p) => counts[p]);
-      if (g.finale) this.prompt = g.escapeReady ? `${bindTag('interact')} Hold to get in and drive away` : 'Defend the car until the engine is warm';
+      if (g.finale) this.prompt = g.escapeReady ? `${bindTag('interact')} Hold to ${V.getIn}` : `Defend the ${V.name} until the engine is warm`;
       else if (!missing.length) this.prompt = `${bindTag('interact')} Hold to start the engine (final stand)`;
       else if (carrying.length) this.prompt = `${bindTag('interact')} Install ${carrying.map((p) => ITEM_DEFS[p].name).join(', ')}`;
-      else this.prompt = `The car needs: ${missing.map((p) => ITEM_DEFS[p].name).join(', ')}`;
+      else this.prompt = `The ${V.name} needs: ${missing.map((p) => ITEM_DEFS[p].name).join(', ')}`;
     }
     // nothing to interact with: a tree or a wreck within a swing's reach says what hitting it gives
     if (!this.prompt) this.prompt = harvestPrompt(this.world, s, this.stripped);
@@ -2855,7 +2911,7 @@ export class Game {
     const car = this.world.car;
     if (!reason && def.schem && !(unlocked & (1 << SCHEM_BIT[def.schem]))) reason = `Locked · find the ${ITEM_DEFS[def.schem].name}`;
     if (!reason && Math.hypot(x - this.renderPos.x, z - this.renderPos.z) > BUILD_REACH + (def.snap ? 1 : 0)) reason = 'Too far';
-    if (!reason && Math.hypot(x - car.x, z - car.z) < 3.2) reason = 'Too close to the car';
+    if (!reason && Math.hypot(x - car.x, z - car.z) < 3.2) reason = `Too close to the ${vehicleOf(this.seed).name}`;
     if (!reason && this.world.isDeepWater(x, z)) reason = 'In the water';
     if (!reason && this.buildBlocked(def, x, y, z, rotY)) reason = 'Obstructed';
     if (!reason && !afford) reason = 'Not enough materials';
@@ -2942,6 +2998,7 @@ export class Game {
     h.wave = g.wave;
     h.waves = g.waves;
     h.finale = g.finale;
+    h.seed = this.seed; // (which map: the car's escape or the plane's, shared/acts.js)
     h.escapeT = g.escapeT;
     h.escapeReady = g.escapeReady;
     h.escapeStalled = g.escapeStalled;
@@ -2978,8 +3035,9 @@ export class Game {
     h.heals = HEAL_ITEMS.reduce((n, it) => n + (counts[it] || 0), 0);
     h.drinks = counts[ITEM.ENERGY_DRINK] || 0; // what the drink key has left
     let partsMask = 0;
-    SUPPLIES.forEach((_, i) => g.supplies[i] >= SUPPLY_NEED[i] && (partsMask |= 1 << i));
-    if (this.lookTarget === 'car') h.context = { type: 'car', parts: partsMask };
+    const items = suppliesOf(this.seed);
+    items.forEach((_, i) => g.supplies[i] >= SUPPLY_NEED[i] && (partsMask |= 1 << i));
+    if (this.lookTarget === 'car') h.context = { type: 'car', parts: partsMask, seed: this.seed };
     else if (this.lookTarget && this.lookTarget.kind === ENT.STRUCTURE) h.context = { type: 'structure', name: STRUCT_DEFS[this.lookTarget.stype].name, hp: this.lookTarget.q[3] / 255 };
     else h.context = this.fair.hud();
     h.ping = Math.round(this.conn.rtt);
@@ -2989,13 +3047,13 @@ export class Game {
     // objective tracker
     const carried = {};
     let anyCarried = false;
-    SUPPLIES.forEach((it, i) => {
+    items.forEach((it, i) => {
       if (counts[it] && g.supplies[i] < SUPPLY_NEED[i]) {
         carried[it] = counts[it];
         anyCarried = true;
       }
     });
-    h.objective = { supplies: g.supplies, hints: g.hints, found: g.found, carried, anyCarried, phase: g.phase, timeLeft: Math.ceil(g.timeLeft), finale: g.finale, escapeT: Math.ceil(g.escapeT), escapeReady: g.escapeReady, escapeStalled: g.escapeStalled, escapeLeaving: g.escapeLeaving, suppliesDone: g.suppliesDone, wave: g.wave, waves: g.waves };
+    h.objective = { seed: this.seed, supplies: g.supplies, hints: g.hints, found: g.found, carried, anyCarried, phase: g.phase, timeLeft: Math.ceil(g.timeLeft), finale: g.finale, escapeT: Math.ceil(g.escapeT), escapeReady: g.escapeReady, escapeStalled: g.escapeStalled, escapeLeaving: g.escapeLeaving, suppliesDone: g.suppliesDone, wave: g.wave, waves: g.waves };
     // downed overlay
     h.downed = self.alive && s.downed ? { bleed: self.bleed || 0, reviving: !!self.beingRevived, medkit: (counts[ITEM.MEDKIT] || 0) > 0 } : null;
     // compass + world markers
@@ -3018,7 +3076,9 @@ export class Game {
     const dist = (x, z) => Math.hypot(x - rp.x, z - rp.z);
     const car = this.world.car;
     const dCar = dist(car.x, car.z);
-    const carIcon = glyph('car');
+    const V = vehicleOf(this.seed);
+    const items = suppliesOf(this.seed);
+    const carIcon = glyph(V.glyph);
     cm.push({ kind: 'car', bearing: bearing(car.x - rp.x, car.z - rp.z), icon: carIcon, label: dCar > 6 ? `${Math.round(dCar)}m` : '', pinEdge: g.finale, cls: g.finale ? 'urgent' : '' });
     // rumoured supply places still missing something (one already taken from its hiding place is no reason to go there)
     const done = (i) => g.supplies[i] >= SUPPLY_NEED[i];
@@ -3033,7 +3093,7 @@ export class Game {
       if (d < 25) return;
       hintSeen.add(zid);
       // (the compass spells a marker's name out while you face it; a rumour keeps its question mark, as on the map)
-      cm.push({ kind: 'hint', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: itemIcon(SUPPLIES[si]), label: `${Math.round(d)}m`, name: ZONE_NAMES[zid] + '?', d });
+      cm.push({ kind: 'hint', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: itemIcon(items[si]), label: `${Math.round(d)}m`, name: zoneName(zid, this.seed) + '?', d });
     });
     // discovered places nearby (a place that already has a supply icon or a waypoint on it needs no flag too)
     const wp = this.waypoint;
@@ -3042,7 +3102,7 @@ export class Game {
       if (!this.discovered.has(z.id) || z.id === ZONE.CAMP || hintSeen.has(z.id) || wp?.zone === z.id || team.some((t) => t.zone === z.id)) continue;
       const d = dist(z.x, z.z);
       if (d < 30 || d > 260) continue;
-      cm.push({ kind: 'poi', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: glyph('flag'), label: '', name: `${ZONE_NAMES[z.id]} · ${Math.round(d)}m`, d });
+      cm.push({ kind: 'poi', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: glyph('flag'), label: '', name: `${zoneName(z.id, this.seed)} · ${Math.round(d)}m`, d });
     }
     // the team's waypoints: on the tape while in view, and a marker on the spot like yours (raised the same way). One
     // on the spot of your own adds no flag: yours says who else is headed there
@@ -3113,7 +3173,7 @@ export class Game {
     }
     // the car when it matters (finale, or carrying supplies back)
     if ((g.finale || h.objective?.anyCarried || g.suppliesDone) && dCar > 10 && this.project(car.x, car.y + 2.2, car.z, sc)) {
-      wm.push({ kind: 'car', x: sc.x, y: sc.y, icon: carIcon, name: g.finale ? (g.escapeReady ? 'GET IN' : g.escapeStalled ? 'Engine stalled' : 'Defend the car') : 'Your car', sub: `${Math.round(dCar)}m`, cls: g.finale ? 'urgent' : '', scale: 0.95 });
+      wm.push({ kind: 'car', x: sc.x, y: sc.y, icon: carIcon, name: g.finale ? (g.escapeReady ? (V.name === 'car' ? 'GET IN' : 'GET ABOARD') : g.escapeStalled ? 'Engine stalled' : `Defend the ${V.name}`) : V.mine, sub: `${Math.round(dCar)}m`, cls: g.finale ? 'urgent' : '', scale: 0.95 });
     }
   }
 
@@ -3138,8 +3198,9 @@ export class Game {
       } else if (e.kind === ENT.CRATE && e.q[3] !== 2) crates.push({ x: e.rx, z: e.rz });
     }
     const carried = {};
-    SUPPLIES.forEach((it) => counts[it] && (carried[it] = counts[it]));
+    suppliesOf(this.seed).forEach((it) => counts[it] && (carried[it] = counts[it]));
     return {
+      seed: this.seed,
       self: { x: this.renderPos.x, z: this.renderPos.z, yaw: this.input.yaw },
       mates,
       enemies,

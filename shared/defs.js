@@ -1,6 +1,7 @@
 // Game content definitions shared by client and server.
 // Numeric ids are part of the wire protocol - do not renumber.
 import { FLASHLIGHT_MAX, STAMINA_MAX } from './constants.js';
+import { isMainland } from './acts.js';
 
 // ---------------------------------------------------------------- items
 export const ITEM = {
@@ -77,6 +78,12 @@ export const ITEM = {
   SPARK_PLUGS: 82,
   FUEL_CAN: 83,
   FAN_BELT: 84,
+  // plane parts (act 2, the mainland: shared/acts.js)
+  MAGNETO: 85,
+  PROPELLER: 86,
+  FUEL_PUMP: 87,
+  CONTROL_CABLE: 88,
+  AVGAS: 89,
   // schematics (picked up -> unlocks recipes for the whole team)
   SCHEM_SHOTGUN: 90,
   SCHEM_RIFLE: 91,
@@ -171,6 +178,11 @@ export const ITEM_DEFS = {
   [ITEM.SPARK_PLUGS]: { name: 'Spark Plugs', cat: 'part', stack: 1, color: 0xd0d3d4, desc: 'Car supply. Bring it to your broken-down car on Route 9.' },
   [ITEM.FUEL_CAN]: { name: 'Jerry Can', cat: 'part', stack: 3, color: 0xb71c1c, desc: 'Fuel for the car. The tank needs three cans.' },
   [ITEM.FAN_BELT]: { name: 'Fan Belt', cat: 'part', stack: 1, color: 0x212121, desc: 'Car supply. Bring it to your broken-down car on Route 9.' },
+  [ITEM.MAGNETO]: { name: 'Magneto', cat: 'part', stack: 1, color: 0x2b2f33, desc: 'Plane part: the spark for the engine. Bring it to the wrecked plane on Kessler Airfield.' },
+  [ITEM.PROPELLER]: { name: 'Propeller', cat: 'part', stack: 1, color: 0x8d9296, desc: 'Plane part: a two-blade prop off another wreck. Bring it to the wrecked plane on Kessler Airfield.' },
+  [ITEM.FUEL_PUMP]: { name: 'Fuel Pump', cat: 'part', stack: 1, color: 0x6d6f3a, desc: 'Plane part. Bring it to the wrecked plane on Kessler Airfield.' },
+  [ITEM.CONTROL_CABLE]: { name: 'Control Cables', cat: 'part', stack: 1, color: 0x9a9a92, desc: 'Plane part: a coil of steel cable for the rudder and the elevator. Bring it to the wrecked plane on Kessler Airfield.' },
+  [ITEM.AVGAS]: { name: 'Avgas Can', cat: 'part', stack: 3, color: 0x2e6fb0, desc: 'Aviation fuel. The plane needs three cans.' },
 
   [ITEM.SCHEM_SHOTGUN]: { name: 'Shotgun Schematic', cat: 'schem', stack: 1, color: 0x6c8fb5, desc: 'Unlocks the Shotgun and the Double-Barrel at the workbench for the whole team.' },
   [ITEM.SCHEM_RIFLE]: { name: 'Rifle Schematic', cat: 'schem', stack: 1, color: 0x6c8fb5, desc: 'Unlocks the Hunting Rifle and the Anti-Tank Rifle at the workbench for the whole team.' },
@@ -194,6 +206,10 @@ export const radioLinked = (speakerOnRadio, listenerHasWalkie) => speakerOnRadio
 export const SUPPLIES = [ITEM.CAR_BATTERY, ITEM.SPARE_TIRE, ITEM.SPARK_PLUGS, ITEM.FAN_BELT, ITEM.FUEL_CAN];
 export const SUPPLY_NEED = [1, 1, 1, 1, 3];
 export const CAR_PARTS = SUPPLIES; // (legacy name)
+// On the mainland the way out is the plane, and these are what it needs (in the same shape: SUPPLY_NEED holds for both,
+// so the hints, the HUD and the wire are the same in either act)
+export const PLANE_SUPPLIES = [ITEM.MAGNETO, ITEM.PROPELLER, ITEM.FUEL_PUMP, ITEM.CONTROL_CABLE, ITEM.AVGAS];
+export const suppliesOf = (seed) => (isMainland(seed) ? PLANE_SUPPLIES : SUPPLIES);
 
 // Where supply i is still worth looking for. hints: the place each hidden one is rumoured to be in (the 4 parts,
 // then the 3 jerry cans; 255: none); found: a bit per hint, set once that one has been taken from its hiding place.
@@ -745,6 +761,7 @@ export const NOTIFY = {
   GEN_LOW: 48, // a generator nearby has a minute of fuel left (sent to the survivors round it)
   GEN_OUT: 49, // ...it has run dry: its floodlights are out
   POCKETS: 62, // (to whoever tried) the backpack cannot come off while its extra slots hold anything
+  CROSSED: 63, // arg = day: the car drove off the valley over the old bridge, and the run goes on on the mainland (act 2)
 };
 
 // killer kinds for killfeed
@@ -810,6 +827,9 @@ export const ZONE_NAMES = [
   'Mercy Clinic',
   'Tri-County Fair',
 ];
+// The start of the mainland (act 2) is the same place id as the breakdown's, built as the airfield the plane is on
+export const AIRFIELD_NAME = 'Kessler Airfield';
+export const zoneName = (z, seed) => (z === ZONE.CAMP && isMainland(seed) ? AIRFIELD_NAME : ZONE_NAMES[z]);
 
 // weighted loot tables per zone: [item, weight, min, max]
 export const LOOT_TABLES = {

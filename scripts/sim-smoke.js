@@ -18,6 +18,9 @@ import { SLOT_PISTOL, SLOT_MELEE } from '../shared/constants.js';
 import { ITEM_DEFS } from '../shared/defs.js';
 import { raycastWorld, groundAt } from '../shared/collision.js';
 import { NIGHT_THEMES, nightTheme, nightBoss, BOSS_POOL, FIRST_BOSS } from '../shared/nights.js';
+import { isMainland, mainlandOf, valleyOf } from '../shared/acts.js';
+import { PLANE_SUPPLIES } from '../shared/defs.js';
+import { countItem } from '../server/inventory.js';
 
 const seed = +(process.argv[2] || 4242);
 // The checks must pass on any seed, so none of them may lean on what the ones before it happened to leave behind.
@@ -3148,14 +3151,48 @@ check('ping broadcast', B.pings > 0);
   A.act(ACT.HOLD_BEGIN, CAR_ID);
   run(20);
   check('getting in is a hold the whole team is told about', A.self.holdKind === HOLD.DRIVE && A.self.holdProgress > 0.2 && B.global.escapeLeaving && game.phase !== PHASE.VICTORY, `kind ${A.self.holdKind}, progress ${A.self.holdProgress?.toFixed(2)}`);
+  const day = game.day;
+  const valley = game.seed;
+  game.giveItem(p, ITEM.TUNA, 2);
+  const tuna = countItem(p.inv, ITEM.TUNA);
+  const pistol = p.state.weapons[SLOT_PISTOL];
   run(Math.round(20 * ESCAPE_DRIVE_TIME));
-  check('victory when a survivor drives off', game.phase === PHASE.VICTORY && A.notes.some((n) => n[0] === NOTIFY.VICTORY));
+  // driving off the valley is not the end: the car crosses the old bridge, and the run goes on on the mainland
+  check('driving off the valley crosses to the mainland, at dawn of the next day', game.phase === PHASE.DAY && game.seed === mainlandOf(valley) && game.world.seed === game.seed && game.day === day + 1 && A.notes.some((n) => n[0] === NOTIFY.CROSSED && n[1] === day + 1) && !A.notes.some((n) => n[0] === NOTIFY.VICTORY), `phase ${game.phase}, seed ${valley} -> ${game.seed}, day ${day} -> ${game.day}`);
+  const plane = game.world.car;
+  const pa = A.p();
+  const pb = B.p();
+  const field = game.world.zones.find((z) => z.id === ZONE.CAMP);
+  check('...the team at the airfield by the plane, the living with what they carried', [pa, pb].every((q) => q.alive && !q.zombie && Math.hypot(q.state.x - field.x, q.state.z - field.z) < field.flat && Math.hypot(q.state.x - plane.x, q.state.z - plane.z) < 28) && countItem(pa.inv, ITEM.TUNA) === tuna && pa.state.weapons[SLOT_PISTOL] === pistol && game.world.props.some((q) => q.type === 'plane' && Math.hypot(q.x - plane.x, q.z - plane.z) < 0.01), `${[pa, pb].map((q) => Math.hypot(q.state.x - plane.x, q.state.z - plane.z).toFixed(1)).join(', ')} m from the plane`);
+  const hidden = game.items.filter((e) => e.hint >= 0);
+  check('...and the plane parts hidden around the mainland in place of the car supplies', game.supplies.every((n) => n === 0) && !game.escape.active && hidden.length === 7 && hidden.every((e) => PLANE_SUPPLIES.includes(e.item)) && new Set(game.supplyHints).size >= 5, `${hidden.map((e) => ITEM_DEFS[e.item].name).join(', ')}`);
+  const hits = pa.hp;
+  game.godMode = false;
+  game.damagePlayer(pa, 30, { kind: KILLER.WORLD });
+  game.godMode = true;
+  check('...where nothing hurts them while they come off the bridge', pa.hp === hits, `hp ${hits} -> ${pa.hp}`);
+  // the plane is the way out now: its parts, its engine, its final stand, and taking off wins the run
+  A.tp(plane.x - Math.sin(plane.ry) * 4.4, plane.z - Math.cos(plane.ry) * 4.4); // in front of its nose
+  run(3);
+  for (let i = 0; i < PLANE_SUPPLIES.length; i++) game.giveItem(pa, PLANE_SUPPLIES[i], SUPPLY_NEED[i]);
+  A.act(ACT.INTERACT, CAR_ID);
+  run(3);
+  check('the plane takes its parts', A.global.suppliesDone && PLANE_SUPPLIES.every((it) => countItem(pa.inv, it) === 0), JSON.stringify(A.global.supplies));
+  A.act(ACT.HOLD_BEGIN, CAR_ID);
+  run(60);
+  check('...its engine starts the final stand', game.escape.active && A.global.finale);
+  game.escape.t = 0.1;
+  run(20 * 3);
+  A.act(ACT.HOLD_BEGIN, CAR_ID);
+  run(20 + Math.round(20 * ESCAPE_DRIVE_TIME));
+  check('victory when a survivor takes off in the plane', game.phase === PHASE.VICTORY && A.notes.some((n) => n[0] === NOTIFY.VICTORY), `phase ${game.phase}`);
 }
 
-// the escape is the team's to make (a game of its own, two survivors, day 3)
+// the escape is the team's to make (a game of its own on a mainland, two survivors, day 3: the plane's escape, which is
+// the car's in all but the map)
 import { ESCAPE_TIME, ESCAPE_RADIUS, ESCAPE_DRIVE_TIME } from '../shared/constants.js'; // (here, beside the checks that use them)
 {
-  const g = new Game({ seed, log: () => {}, godMode: true });
+  const g = new Game({ seed: mainlandOf(seed), log: () => {}, godMode: true });
   const join = (name) => {
     const session = g.onOpen({ send() {} });
     const w = new Writer(64);
@@ -3615,7 +3652,8 @@ import { ESCAPE_TIME, ESCAPE_RADIUS, ESCAPE_DRIVE_TIME } from '../shared/constan
   const car = g2.world.car;
   check('the next game rolls a new map and sends its seed', g2.phase === PHASE.DAY && g2.world !== first && g2.world.seed === g2.seed && resets.length === 1 && resets[0] === g2.seed >>> 0, `seed ${first.seed} -> ${g2.seed}`);
   check('...with the survivors at its breakdown and its supplies hidden in seven of its places', Math.hypot(p.state.x - car.x, p.state.z - car.z) < 14 && new Set(g2.supplyHints).size === 7 && g2.supplyHints.every((z) => g2.world.zoneById[z]));
-  const kept = game.seed;
+  const ended = game.seed; // (the escape checks above left this run on its mainland)
+  const kept = valleyOf(ended);
   // the run that is ending leaves a score behind: A drops a walker, B dies, and A gets the kill
   const pa = A.p();
   const pb = B.p();
@@ -3632,7 +3670,7 @@ import { ESCAPE_TIME, ESCAPE_RADIUS, ESCAPE_DRIVE_TIME } from '../shared/constan
   game.restartT = 0;
   game.update();
   check("a new game clears everyone's waypoint", wayBefore && B.roster.get(A.id)?.way === null && pa.waypoint === null);
-  check('a pinned seed keeps its map', game.phase === PHASE.DAY && game.seed === kept && game.world.seed === kept);
+  check('a pinned seed keeps its map: a run that ended on its mainland starts over in its valley', isMainland(ended) && game.phase === PHASE.DAY && game.seed === kept && game.world.seed === kept, `seed ${ended} -> ${game.seed}`);
   const next = { a: score(pa), b: score(pb), board: board() };
   const scored = last.a[0] > 0 && last.a[1] > 0 && last.b[2] > 0 && last.board.some((k) => k > 0);
   const zeroed = [...game.players.values()].every((p) => p.kills === 0 && p.zkills === 0 && p.deaths === 0) && [A, B].every((c) => [...c.roster.values()].every((r) => r.kills === 0));

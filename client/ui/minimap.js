@@ -3,7 +3,8 @@
 // (the car, waypoints, the team, pings, supply drops) waits on the rim, in its direction, while it is out of range.
 // Enemies in range are red dots on a canvas of their own, redrawn every frame (a horde is too many to be DOM markers).
 // The car supplies shrink to a row of icons under it (Objective's slim mode).
-import { SUPPLIES, SUPPLY_NEED, ZONE_NAMES } from '../../shared/defs.js';
+import { SUPPLY_NEED, suppliesOf, zoneName } from '../../shared/defs.js';
+import { vehicleOf } from '../../shared/acts.js';
 import { MAP_SIZE } from '../../shared/constants.js';
 import { el, svgEl } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
@@ -98,7 +99,7 @@ export class Minimap {
       let l = this.labPool[li];
       if (!l) l = this.labPool[li] = { e: el('span', 'mmap-lab', this.labels), t: '', tf: '' };
       li++;
-      const t = ZONE_NAMES[zn.id];
+      const t = zoneName(zn.id, world.seed);
       if (l.t !== t) l.e.textContent = l.t = t;
       const lt = tf(px, py) + ' translate(-50%,-50%)';
       if (l.tf !== lt) l.e.style.transform = l.tf = lt;
@@ -158,14 +159,14 @@ export class Minimap {
       if (d.supplies[si] >= SUPPLY_NEED[si] || seen.has(zid + ':' + si)) return;
       seen.add(zid + ':' + si);
       const zn = world.zoneById[zid];
-      if (zn) put(zn.x, zn.z, 'hint', itemIcon(SUPPLIES[si]), false);
+      if (zn) put(zn.x, zn.z, 'hint', itemIcon(suppliesOf(world.seed)[si]), false);
     });
     for (const b of d.benches) put(b.x, b.z, 'bench', glyph('wrench'), false);
     for (const t of d.teamWays) put(t.x, t.z, 'teamway', glyph('flag'), true);
     if (d.waypoint) put(d.waypoint.x, d.waypoint.z, 'way', glyph('flag'), true);
     for (const cr of d.crates) put(cr.x, cr.z, 'crate', glyph('hazard'), true);
     for (const p of d.pings) put(p.x, p.z, 'ping k' + p.kind, glyph('ping'), true);
-    put(d.car.x, d.car.z, 'car', glyph('car'), true);
+    put(d.car.x, d.car.z, 'car', glyph(vehicleOf(world.seed).glyph), true);
     for (const m of d.mates) put(m.x, m.z, 'mate ' + m.status, glyph(m.status === 'downed' ? 'downed' : 'person'), true);
     for (let i = mi; i < this.pool.length; i++) if (!this.pool[i].e.hidden) this.pool[i].e.hidden = true;
   }

@@ -52,6 +52,10 @@ export const PLACES = {
   [ZONE.LODGE]: { flat: 28, blend: 26, clear: 30, dirt: 0.25, gates: 'flr' },
 };
 export const PLACE_COUNT = 17; // named places on a map besides the breakdown
+// On the mainland (act 2: shared/acts.js) the start is Kessler Airfield in place of the breakdown: a roadside place
+// at the breakdown's spot, its front gate on Route 40 and the runway down its far side (a road from elsewhere comes in
+// on the left, clear of the hangar)
+export const AIRFIELD = { site: 'roadside', flat: 40, blend: 26, clear: 46, dirt: 0.2, gates: 'l', core: true };
 
 // The railway (planned below, built by rail.js). The line runs through the depot DEPOT_TRACK m behind the middle of
 // its yard (local +Z), dead straight for RAIL_STRAIGHT m either side of it and eased back into its curve over
@@ -89,8 +93,10 @@ const facing = (x, z, tx, tz) => Math.atan2(x - tx, z - tz);
 //   zones    the places: their PLACES entry plus { id, x, z, ry, h, hwy }
 //   highway  [x, z] points Route 9 passes through, from one edge of the map to the other
 //   links    [a, b, kind] roads to route; an end is { zone, gate } or { x, z } (a junction on Route 9 near there)
-//   rail     the railway: { line, depot, train, bank }, see below (null if no course could be found for it)
-export function planLayout(rng, relief, rrng = rng) {
+//   rail     the railway: { line, depot, train, bank }, see below (null if no course could be found for it, and on
+//            the mainland, which has none)
+// mainland: plan act 2's map, the airfield for a start (AIRFIELD)
+export function planLayout(rng, relief, rrng = rng, mainland = false) {
   const shuffle = (a) => {
     for (let i = a.length - 1; i > 0; i--) {
       const j = rng.int(0, i);
@@ -101,9 +107,9 @@ export function planLayout(rng, relief, rrng = rng) {
   const inside = (x, z, r) => Math.max(Math.abs(x), Math.abs(z)) + r <= MAP_HALF - RIM;
 
   const zones = [];
-  const put = (id, x, z, ry, fixed) => {
-    const site = PLACES[id].site;
-    zones.push({ ...PLACES[id], id, x, z, ry: ry ?? 0, h: 0, hwy: site === 'start' || site === 'highway', fixed });
+  const put = (id, x, z, ry, fixed, spec = PLACES[id]) => {
+    const site = spec.site;
+    zones.push({ ...spec, id, x, z, ry: ry ?? 0, h: 0, hwy: site === 'start' || site === 'highway', fixed });
     return true;
   };
   // woods between (x,z) and the nearest place already down
@@ -139,7 +145,16 @@ export function planLayout(rng, relief, rrng = rng) {
     for (const p of hwy) d = Math.min(d, Math.hypot(x - p[0], z - p[1]));
     return d;
   };
-  put(ZONE.CAMP, camp[0], camp[1]);
+  if (mainland) {
+    // the airfield beside the road at the breakdown's spot, on either side, its front gate on the road
+    const [ax, az] = hwyAt(-4);
+    const [bx, bz] = hwyAt(4);
+    const l = Math.hypot(bx - ax, bz - az);
+    const sd = rng.chance(0.5) ? 1 : -1;
+    const cx = camp[0] - ((bz - az) / l) * sd * AIRFIELD.flat * GATE;
+    const cz = camp[1] + ((bx - ax) / l) * sd * AIRFIELD.flat * GATE;
+    put(ZONE.CAMP, cx, cz, facing(cx, cz, camp[0], camp[1]), true, AIRFIELD);
+  } else put(ZONE.CAMP, camp[0], camp[1]);
   // places on Route 9 take turns either side of the breakdown, two stops to an arm
   const stops = [0];
   const slots = [];
@@ -203,7 +218,7 @@ export function planLayout(rng, relief, rrng = rng) {
   //   depot  index of the point of the line the depot stands at; train: of the middle of the stalled train
   //   bank   the side of the line (1 left, -1 right, looking along it) the loading bank beside the train is on
   let rail = null;
-  {
+  if (!mainland) {
     const spec = PLACES[ZONE.STATION];
     const edge = (x, z) => Math.max(Math.abs(x), Math.abs(z));
     // about what the ground does there (world.js presses the valley floor into the raw hills the same way)

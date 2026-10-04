@@ -951,9 +951,20 @@ export class MatchTracker {
     m.engineReadyS = this.t();
     this.event('engine_ready', null, { survivors: this.survivors(), warmupS: m.engineS === null ? null : r1(m.engineReadyS - m.engineS) });
   }
-  // Game.driveOff: p got in and drove (victory follows)
+  // Game.driveOff: p got in and drove (victory follows, or on the valley the crossing to the mainland)
   drove(p) {
     if (this.m) this.m.driver = p;
+  }
+  // Game.crossBridge, before anyone is moved: the car is over the bridge, and the run goes on on the mainland
+  crossed() {
+    const m = this.m;
+    if (!m) return;
+    const g = this.g;
+    const car = g.world.car;
+    let aboard = 0;
+    for (const p of g.players.values()) if (p.alive && !p.zombie && Math.hypot(p.state.x - car.x, p.state.z - car.z) <= ESCAPE_RADIUS) aboard++;
+    this.event('crossed', m.driver && g.players.get(m.driver.id) === m.driver ? m.driver : null, { aboard, survivors: this.survivors(), players: g.players.size, day: g.day });
+    m.driver = null;
   }
   // Game.flySupplyDrop: a plane is on its way with a crate for (x, z)
   crateDrop(x, z) {

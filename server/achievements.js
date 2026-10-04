@@ -15,6 +15,7 @@ import { ITEM, ZTYPE, ZONE, CONT, KILLER, EVT } from '../shared/defs.js';
 import { ACH_STATS, ACH_STAT_INDEX, ACH_BY_ID, ACHF, KILL_FEATS } from '../shared/achievements.js';
 import { swimming } from '../shared/swim.js';
 import { handcars } from '../shared/handcar.js';
+import { isMainland } from '../shared/acts.js';
 
 const SEND_EVERY = 3; // seconds: counts are gathered this long before they go out (a feat goes at once)
 const MOVE_MAX = 15; // m/s: further than this between two looks is a respawn or a teleport, not travel
@@ -270,15 +271,36 @@ export class AchievementTracker {
   }
 
   // Game.victory, before anything about the players changes
+  // Game.victory: the plane took off from the mainland (the valley's escape was counted as the car left it: crossed),
+  // or, in a game of one act (Game.acts off), the car drove off the valley
   victory() {
+    const g = this.g;
+    const car = g.world.car;
+    const plane = isMainland(g.seed);
+    for (const p of g.players.values()) {
+      if (!p.alive || p.zombie) continue;
+      if (Math.hypot(p.state.x - car.x, p.state.z - car.z) <= ESCAPE_RADIUS) {
+        if (plane) this.feat(p, 'wheels_up');
+        else this.bump(p, 'escapes');
+      }
+      if (!this.runDeaths) this.feat(p, 'flawless');
+      this.send(p);
+    }
+  }
+
+  // Game.crossBridge, before anyone is moved: the car left the valley with whoever was at it
+  crossed() {
     const g = this.g;
     const car = g.world.car;
     for (const p of g.players.values()) {
       if (!p.alive || p.zombie) continue;
       if (Math.hypot(p.state.x - car.x, p.state.z - car.z) <= ESCAPE_RADIUS) this.bump(p, 'escapes');
-      if (!this.runDeaths) this.feat(p, 'flawless');
       this.send(p);
     }
+    // (the place feats are about one map: the mainland's start over)
+    this.town.clear();
+    this.townBy.clear();
+    for (const p of g.players.values()) this.of(p).places.clear();
   }
 
   drove(p) {

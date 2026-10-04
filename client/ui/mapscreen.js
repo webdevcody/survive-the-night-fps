@@ -3,7 +3,8 @@
 // A click sets your own waypoint (the game keeps it, shows it on the compass and in the world, and shares it:
 // the team's waypoints are flags here too, with who set them). A pinch or the wheel zooms, a drag pans, and [R] turns
 // the map with you, the way you face up (a compass in its corner keeps north).
-import { ZONE, ZONE_NAMES, SUPPLIES, SUPPLY_NEED, ITEM_DEFS, supplyRumours } from '../../shared/defs.js';
+import { ZONE, ZONE_NAMES, SUPPLY_NEED, ITEM_DEFS, supplyRumours, suppliesOf, zoneName } from '../../shared/defs.js';
+import { vehicleOf } from '../../shared/acts.js';
 import { MAP_HALF, MAP_SIZE } from '../../shared/constants.js';
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
@@ -26,7 +27,7 @@ export class MapScreen {
     const bg = el('div', 'map-bg', this.root);
     const frame = (this.frame = el('div', 'map-frame paper', this.root));
     const head = el('div', 'map-head', frame);
-    el('span', 'map-title', head, 'Field map · Harlan Valley');
+    this.title = el('span', 'map-title', head, 'Field map · Harlan Valley');
     this.coords = el('span', 'map-coords', head, '');
     // north up, or turned with you so the way you face is up: kept between openings, and games
     this.headingUp = lsGet(HEADING_KEY, '0') === '1';
@@ -56,10 +57,12 @@ export class MapScreen {
     el('b', '', dial, 'N');
     this.north.addEventListener('click', () => this.setHeadingUp(!this.headingUp));
     const side = el('div', 'map-side', body);
-    el('h3', 'inv-h', side).appendChild(el('span', 'inv-h-t', null, 'Car supplies'));
+    this.supHead = el('span', 'inv-h-t', null, 'Car supplies');
+    el('h3', 'inv-h', side).appendChild(this.supHead);
     this.supList = el('div', 'map-sup', side);
     el('h3', 'inv-h', side).appendChild(el('span', 'inv-h-t', null, 'Legend'));
     const lg = el('div', 'map-legend', side);
+    this.legend = {};
     for (const [cls, ico, t] of [
       ['you', 'arrowUp', 'You'],
       ['mate', 'person', 'Survivor'],
@@ -72,8 +75,7 @@ export class MapScreen {
       ['teamway', 'flag', "A teammate's waypoint"],
     ]) {
       const r = el('div', 'lg ' + cls, lg);
-      svgEl('i', 'lg-ico', r, glyph(ico));
-      el('span', '', r, t);
+      this.legend[cls] = { ico: svgEl('i', 'lg-ico', r, glyph(ico)), text: el('span', '', r, t) };
     }
     const keys = el('div', 'map-keys', side);
     for (const [k, t] of [
@@ -281,6 +283,12 @@ export class MapScreen {
   setWorld(world) {
     if (this.world === world) return;
     this.world = world;
+    const V = vehicleOf(world.seed);
+    this.title.textContent = `Field map · ${V.map}`;
+    this.supHead.textContent = V.Parts;
+    this.legend.car.ico.innerHTML = glyph(V.glyph);
+    this.legend.car.text.textContent = V.mine;
+    this._supKey = '';
     this.canvasWrap.textContent = '';
     this.canvas = null;
     this.labels.textContent = '';
@@ -361,11 +369,14 @@ export class MapScreen {
     this._layout();
     const way = d.waypoint;
     const taken = (i) => !!(d.found & (1 << i));
+    const seed = this.world.seed;
+    const V = vehicleOf(seed);
+    const items = suppliesOf(seed);
     // place names: known once discovered. A rumour names its place too, and marks it while its supply is still there
     this.labelEls.forEach((l, i) => {
       const z = this.world.zones[i];
       const known = d.discovered.has(z.id);
-      const txt = known ? ZONE_NAMES[z.id] : d.hints.includes(z.id) ? ZONE_NAMES[z.id] + '?' : '?';
+      const txt = known ? zoneName(z.id, seed) : d.hints.includes(z.id) ? zoneName(z.id, seed) + '?' : '?';
       if (l.textContent !== txt) l.textContent = txt;
       l.classList.toggle('unknown', !known);
       l.classList.toggle('hinted', d.hints.some((zid, k) => zid === z.id && !taken(k)));
@@ -403,12 +414,12 @@ export class MapScreen {
       if (seen.has(k)) return;
       seen.add(k);
       const off = seen.size % 3;
-      put(z.x + (off - 1) * 6, z.z - 14, 'hint', itemIcon(SUPPLIES[si]));
+      put(z.x + (off - 1) * 6, z.z - 14, 'hint', itemIcon(items[si]));
     });
     for (const b of d.benches) put(b.x, b.z, 'bench', glyph('wrench'), 'bench');
     for (const c of d.crates) put(c.x, c.z, 'crate', glyph('hazard'), 'drop');
     for (const p of d.pings) put(p.x, p.z, 'ping k' + p.kind, glyph('ping'), p.name);
-    put(d.car.x, d.car.z, 'car', glyph('car'), 'car');
+    put(d.car.x, d.car.z, 'car', glyph(V.glyph), V.name);
     for (const m of d.mates) put(m.x, m.z, 'mate ' + m.status, glyph(m.status === 'downed' ? 'downed' : 'person'), m.name);
     // (the marker stands upright on screen, so its arrow turns with the map as well as with you)
     put(d.self.x, d.self.z, 'you', glyph('arrowUp'), '', this.rot - d.self.yaw);
@@ -419,13 +430,13 @@ export class MapScreen {
     if (key !== this._supKey) {
       this._supKey = key;
       this.supList.textContent = '';
-      SUPPLIES.forEach((item, i) => {
+      items.forEach((item, i) => {
         const r = el('div', 'ms-row' + (d.supplies[i] >= SUPPLY_NEED[i] ? ' done' : d.carried[item] ? ' carried' : ''), this.supList);
         svgEl('i', 'ms-ico', r, itemIcon(item));
         const t = el('div', 'ms-t', r);
         el('b', '', t, ITEM_DEFS[item].name + (SUPPLY_NEED[i] > 1 ? ` ${d.supplies[i]}/${SUPPLY_NEED[i]}` : ''));
         const rum = supplyRumours(i, d.hints, d.found);
-        el('span', '', t, d.supplies[i] >= SUPPLY_NEED[i] ? 'installed' : rum.zones.map((z) => ZONE_NAMES[z]).join(' · ') || (rum.found ? 'found' : 'unknown'));
+        el('span', '', t, d.supplies[i] >= SUPPLY_NEED[i] ? 'installed' : rum.zones.map((z) => zoneName(z, seed)).join(' · ') || (rum.found ? 'found' : 'unknown'));
       });
     }
   }

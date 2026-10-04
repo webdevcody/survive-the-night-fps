@@ -94,6 +94,7 @@ import {
   LOOT_TABLES,
   SUPPLIES,
   SUPPLY_NEED,
+  suppliesOf,
   SCHEMATICS,
   SCHEM_BIT,
   CONT,
@@ -120,6 +121,7 @@ import { XP, XPS, XP_SRC, levelOf, perkMods, perkMask } from '../shared/progress
 import { BTN } from '../shared/constants.js';
 const BTN_JUMP = BTN.JUMP;
 import { createWorld } from '../shared/world.js';
+import { isMainland, mainlandOf, valleyOf } from '../shared/acts.js';
 import { fellTree, regrowTrees } from '../shared/felling.js';
 import { MineNav } from './minenav.js';
 import { createPlayerState, copyPlayerState, samePlayerState, snapPlayerState, hashPlayerState, simulatePlayer, eyeHeight, currentWeapon, DRAW_TIME, radioKeyed } from '../shared/playersim.js';
@@ -161,6 +163,7 @@ const FINAL_STAND_JOIN_RANGE = 95; // wanderers this close to a survivor join th
 // The escape is the team's to make (the radius and the hold are ESCAPE_RADIUS and ESCAPE_DRIVE_TIME in constants.js).
 // Also a first pass:
 const ESCAPE_LINGER_PACE = 0.5; // once the engine is warm, groups keep coming at this share of the stand's pace until someone drives
+const CROSSING_GRACE = 12; // s the survivors take no damage once over the bridge: the clients are showing the crossing and building the mainland
 const NO_HASH = -2; // a command packet that came without a state fingerprint
 const WEDGED_FOR = 15; // s one of the dead has been after a survivor without getting anywhere (z.wedgeT): its kill earns no XP
 const CMDS_PER_TICK = CMD_RATE / SERVER_TICK_RATE; // commands a client issues per server tick
@@ -302,6 +305,10 @@ export class Game {
     this.devAdmin = !!opts.devAdmin;
     this.dawnReturn = opts.dawnReturn ?? DAWN_RETURN; // the dead are survivors again at sunrise (the option: tests)
     this.themes = opts.themes !== false; // night themes (shared/nights.js). false: every night is plain (tests, benchmarks)
+    // two maps to a run (shared/acts.js): driving off the valley crosses to the mainland, and the plane there is the win.
+    // false: the car is the win, as it was (tests)
+    this.acts = opts.acts !== false;
+    this.arriveUntil = 0; // (game time) the survivors just off the bridge take no damage until then (crossBridge)
     // an emptied game rolls its next valley on the next tick (resetToWaiting). false: on the next join instead - a
     // game in a worker of its own (room-worker.js), which closes if nobody comes, need not build one for nobody
     this.rollWhenEmpty = opts.rollWhenEmpty !== false;
@@ -1045,9 +1052,13 @@ export class Game {
 
   // Every playthrough gets a valley of its own: once a game has been played on this one, generate the next
   // and tell the clients its seed. Call with the world cleared (structures live in the old world's grids).
+  // (A pinned seed is the same valley every run: a run that ended on its mainland goes back to it.)
   rollWorld() {
-    if (!this.worldPlayed || this.fixedSeed) return;
-    this.setWorld(randomSeed());
+    if (!this.worldPlayed || (this.fixedSeed && !isMainland(this.seed))) return;
+    this.setWorld(this.fixedSeed ? valleyOf(this.seed) : randomSeed());
+    this.tellWorld();
+  }
+  tellWorld() {
     const w = new Writer(8);
     w.u8(S2C.WORLD_RESET);
     w.u32(this.seed >>> 0);
@@ -1108,6 +1119,30 @@ export class Game {
     this.unlocked = 0;
     this.warned = false;
     this.nightStats = { kills: 0, structLost: 0, downs: 0, deaths: 0, revives: 0 };
+    this.stockWorld();
+    for (const p of this.players.values()) {
+      p.kills = p.zkills = p.deaths = 0; // the scoreboard counts this run only: whoever stayed on from the last one starts level
+      p.xpBase = this.xpOf(p); // ...and so does the end screen's XP: the last run's is on their record now
+      p.xpRun.fill(0);
+      p.nightKills = p.nightRevives = 0;
+      p.lastChance = false;
+      if (p.perksNext >= 0) p.perks = p.perksNext; // (spawnHuman puts them in force)
+      p.perksNext = -1;
+      p.progDirty = true;
+      p.waypoint = null; // (it pointed into the old valley; the client drops its own on NEW_GAME)
+      this.spawnHuman(p);
+    }
+    this.notify(NOTIFY.NEW_GAME, this.day);
+    this.globalDirty = true;
+    this.playersDirty = true;
+    this.track.start();
+    this.ach.start();
+    this.log('new game started');
+  }
+
+  // A map's start, for a new run or for the mainland once the team has crossed to it: the supply planes, the loot,
+  // the containers and what is hidden in them, the car supplies (or the plane parts), and the living and the dead.
+  stockWorld() {
     this.scheduleSupplyDrops();
     const w = this.world;
     // floor loot
@@ -1139,24 +1174,6 @@ export class Game {
     this.zm.spawnInitial();
     this.cm.spawnInitial();
     this.dm.spawnInitial();
-    for (const p of this.players.values()) {
-      p.kills = p.zkills = p.deaths = 0; // the scoreboard counts this run only: whoever stayed on from the last one starts level
-      p.xpBase = this.xpOf(p); // ...and so does the end screen's XP: the last run's is on their record now
-      p.xpRun.fill(0);
-      p.nightKills = p.nightRevives = 0;
-      p.lastChance = false;
-      if (p.perksNext >= 0) p.perks = p.perksNext; // (spawnHuman puts them in force)
-      p.perksNext = -1;
-      p.progDirty = true;
-      p.waypoint = null; // (it pointed into the old valley; the client drops its own on NEW_GAME)
-      this.spawnHuman(p);
-    }
-    this.notify(NOTIFY.NEW_GAME, this.day);
-    this.globalDirty = true;
-    this.playersDirty = true;
-    this.track.start();
-    this.ach.start();
-    this.log('new game started');
   }
 
   // Hide the car supplies around the valley: each at a random hiding spot of a random place on this map, and
@@ -1177,7 +1194,7 @@ export class Game {
     this.supplyFound = 0;
     // deal them out round the places: a place only gets a second one once every place has had one
     let turn = 0;
-    this.supplyHints = SUPPLIES.flatMap((item, i) => new Array(SUPPLY_NEED[i]).fill(item)).map((item, hint) => {
+    this.supplyHints = suppliesOf(this.seed).flatMap((item, i) => new Array(SUPPLY_NEED[i]).fill(item)).map((item, hint) => {
       for (let tries = 0; tries < places.length; tries++) {
         const sp = places[turn++ % places.length].pop();
         if (!sp) continue;
@@ -1604,12 +1621,86 @@ export class Game {
   // A survivor got in and drove (HOLD.DRIVE at the car, once the engine is warm). That wins the run for the whole
   // team, as victory always has: one phase and one restart for everybody. Whoever is not at the car is left
   // behind, which each client works out for its own end screen from ESCAPE_RADIUS.
+  // On the valley (act 1) it is not the end: the car goes over the old bridge, and the run goes on on the mainland.
   driveOff(p) {
     if (!this.escape.active || !this.escape.ready) return;
     this.log('drove off:', p.name);
     this.track.drove(p);
-    this.ach.drove(p);
-    this.victory();
+    if (!isMainland(this.seed)) this.ach.drove(p);
+    if (this.acts && !isMainland(this.seed)) this.crossBridge();
+    else this.victory();
+  }
+
+  // Act 1 is over: the car is over the bridge with whoever was at it, and the run goes on on the mainland, the
+  // valley's seed with MAINLAND set (shared/acts.js), at dawn of the next day. Nothing of the valley comes along but
+  // the team: the living keep what they carry, the dead (and whoever was left behind and has turned) are survivors
+  // again there with what the dead wake with, as at sunrise, and the schematics stay learnt. The plane is the way out
+  // now: its parts to find, its final stand, and taking off is the win (victory). Every client builds the new map
+  // from WORLD_RESET and shows the crossing over the bridge as it does (NOTIFY.CROSSED).
+  crossBridge() {
+    const car = this.world.car;
+    for (const p of this.players.values()) {
+      const aboard = p.alive && !p.zombie && Math.hypot(p.state.x - car.x, p.state.z - car.z) <= ESCAPE_RADIUS;
+      this.award(p, XPS.escape, aboard ? XP.escape : XP.team);
+    }
+    this.track.crossed();
+    this.ach.crossed();
+    this.sound(SOUND.CAR_START, car.x, 0.5, car.z, 0);
+    // (clearWorld forgets who left: they are still in this run, and a rejoin brings back what they left with)
+    const kits = new Map(this.leftKits);
+    for (const who of this.fallen) if (kits.has(who)) kits.set(who, RETURN_KIT);
+    this.clearWorld();
+    this.leftKits = kits;
+    this.setWorld(mainlandOf(this.seed));
+    this.worldPlayed = true;
+    this.tellWorld();
+    this.phase = PHASE.DAY;
+    this.day++;
+    this.timeLeft = this.dayLen;
+    this.supplies = [0, 0, 0, 0, 0];
+    this.warned = false;
+    this.shadeWarned = false;
+    this.nightStats = { kills: 0, structLost: 0, downs: 0, deaths: 0, revives: 0 };
+    this.stockWorld();
+    for (const p of this.players.values()) {
+      p.waypoint = null;
+      p.nightKills = p.nightRevives = 0;
+      p.lastChance = false;
+      if (p.alive && !p.zombie) this.arrive(p);
+      else {
+        this.spawnHuman(p, RETURN_KIT);
+        p.state.yaw = Math.atan2(-(this.world.car.x - p.state.x), -(this.world.car.z - p.state.z)); // (facing the plane, as arrive)
+        this.track.returned(p);
+      }
+    }
+    this.arriveUntil = this.time + CROSSING_GRACE;
+    this.notify(NOTIFY.CROSSED, this.day);
+    this.globalDirty = true;
+    this.playersDirty = true;
+    this.log(`crossed the bridge to the mainland (seed ${this.seed}), day ${this.day}`);
+  }
+
+  // A survivor off the bridge: at the airfield with all they carried, on their feet, facing the plane
+  arrive(p) {
+    const s = p.state;
+    const fresh = createPlayerState();
+    for (const k of ['weapons', 'mags', 'ammo', 'slot', 'stamina', 'perks']) fresh[k] = s[k];
+    Object.assign(s, fresh);
+    const sp = this.world.spawnPoints[Math.floor(this.rng() * this.world.spawnPoints.length)];
+    s.x = sp.x + (this.rng() - 0.5) * 1.5;
+    s.z = sp.z + (this.rng() - 0.5) * 1.5;
+    s.y = groundAt(this.world, s.x, s.z, 50, 0.3);
+    const car = this.world.car;
+    s.yaw = Math.atan2(-(car.x - s.x), -(car.z - s.z));
+    if (p.downed) p.hp = Math.max(p.hp, REVIVE_HP);
+    p.downed = false;
+    p.bleed = 0;
+    p.revivedBy = 0;
+    this.endUse(p);
+    p.hold = null;
+    p.invDirty = true;
+    this.fillHistory(p);
+    this.playersDirty = true;
   }
 
   // ---------------------------------------------------------------- items / loot
@@ -2201,7 +2292,7 @@ export class Game {
     if (id === CAR_ID) {
       if (!this.nearCar(p)) return;
       let installed = 0;
-      SUPPLIES.forEach((item, i) => {
+      suppliesOf(this.seed).forEach((item, i) => {
         const need = SUPPLY_NEED[i] - this.supplies[i];
         if (need <= 0) return;
         const have = countItem(p.inv, item);
@@ -2995,6 +3086,7 @@ export class Game {
   damagePlayer(p, amount, src) {
     if (!p.alive || amount <= 0 || p.away) return; // (dropped and held: nothing hurts them until they are back)
     if (this.godMode && !p.zombie) return;
+    if (this.time < this.arriveUntil && !p.zombie) return; // (just over the bridge: crossBridge)
     if (this.phase !== PHASE.DAY && this.phase !== PHASE.NIGHT) return;
     if (p.downed) {
       // hits on a downed survivor drain what's left of their blood
@@ -3343,6 +3435,9 @@ export class Game {
       case 'engine':
         for (let i = 0; i < SUPPLIES.length; i++) this.supplies[i] = SUPPLY_NEED[i];
         this.startEngine(p);
+        break;
+      case 'cross': // over the bridge to the mainland now, as if the car had just driven off the valley
+        if (!isMainland(this.seed)) this.crossBridge();
         break;
       case 'unlock':
         for (const it of SCHEMATICS) this.unlockSchematic(it, null);

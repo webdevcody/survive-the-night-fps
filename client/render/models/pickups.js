@@ -623,6 +623,60 @@ BUILD[ITEM.FAN_BELT] = (b) => {
   b.torus('rubber', 0.1, 0.008, 3, 20, PI * 2, { p: [0.03, 0.022, 0.01], r: [PI / 2 + 0.1, 0, 0.4], s: [1.3, 1, 1] });
 };
 
+// ---- plane parts (the mainland: shared/acts.js)
+BUILD[ITEM.MAGNETO] = (b) => {
+  b.box('paint', 0.14, 0.11, 0.1, { p: [0, 0.055, 0], c: [0.18, 0.19, 0.2] });
+  b.cyl('steel', 0.045, 0.045, 0.02, 12, { p: [0, 0.06, -0.06], r: [PI / 2, 0, 0] }); // mounting flange
+  b.cyl('chrome', 0.008, 0.008, 0.03, 6, { p: [0, 0.06, -0.08], r: [PI / 2, 0, 0] }); // drive shaft
+  b.cyl('paint', 0.035, 0.035, 0.03, 10, { p: [0, 0.06, 0.065], r: [PI / 2, 0, 0], c: [0.42, 0.16, 0.1] }); // distributor cap
+  b.tube('rubber', [[0.015, 0.07, 0.065], [0.06, 0.05, 0.12], [0.13, 0.006, 0.15]], 0.004, 6, 4);
+  b.tube('rubber', [[-0.015, 0.05, 0.065], [-0.05, 0.03, 0.12], [-0.11, 0.006, 0.17]], 0.004, 6, 4);
+};
+
+// a two-blade propeller off another wreck, lying flat with its spinner up (1.7 m tip to tip, yellow tips)
+BUILD[ITEM.PROPELLER] = (b) => {
+  const blade = (sx, x0, x1, c0, c1, t0, t1, c) => {
+    const C = [];
+    for (let k = 0; k < 8; k++) {
+      const out = (k & 1 ? 1 : -1) * sx > 0, top = k & 2, Z = k & 4;
+      const ch = out ? c1 : c0;
+      C.push([sx * (out ? x1 : x0), top ? (out ? t1 : t0) : 0.002, (Z ? 1 : -1) * ch * 0.5 + (out ? 0.012 * sx : 0)]);
+    }
+    b.hull('paint', C, { c });
+  };
+  for (const sx of [-1, 1]) {
+    blade(sx, 0.07, 0.78, 0.12, 0.08, 0.026, 0.014, [0.2, 0.2, 0.21]);
+    blade(sx, 0.78, 0.85, 0.08, 0.07, 0.014, 0.012, [0.86, 0.68, 0.12]);
+  }
+  b.cyl('steel', 0.075, 0.075, 0.09, 14, { p: [0, 0.045, 0] });
+  b.lathe('paint', [[0, 0.09], [0.075, 0.09], [0.062, 0.14], [0.034, 0.18], [0, 0.195]], 14, { c: [0.62, 0.62, 0.6] });
+};
+
+BUILD[ITEM.FUEL_PUMP] = (b) => {
+  b.box('steel', 0.1, 0.008, 0.11, { p: [0, 0.004, 0] }); // mounting plate
+  b.cyl('paint', 0.045, 0.045, 0.14, 12, { p: [0, 0.05, 0], r: [0, 0, PI / 2], c: [0.36, 0.37, 0.2] });
+  for (const sx of [-1, 1]) b.cyl('chrome', 0.012, 0.012, 0.03, 8, { p: [sx * 0.085, 0.05, 0], r: [0, 0, PI / 2] }); // in, out
+  b.box('plastic', 0.03, 0.02, 0.025, { p: [0.02, 0.104, 0] }); // the plug
+};
+
+// a flat coil of steel cable, its end run out to a turnbuckle
+BUILD[ITEM.CONTROL_CABLE] = (b) => {
+  for (const R of [0.16, 0.147, 0.134, 0.121]) b.torus('steel', R, 0.006, 4, 26, PI * 2, { p: [0, 0.006, 0], r: [PI / 2, 0, 0] });
+  b.tube('steel', [[0.16, 0.006, 0], [0.24, 0.006, 0.05], [0.33, 0.006, 0.06]], 0.006, 4, 4);
+  b.cyl('chrome', 0.01, 0.01, 0.05, 8, { p: [0.355, 0.01, 0.062], r: [0, 0, PI / 2] });
+};
+
+// a square can of aviation fuel, blue with a white band
+BUILD[ITEM.AVGAS] = (b) => {
+  const blue = [0.15, 0.3, 0.55];
+  b.box('paint', 0.26, 0.15, 0.15, { p: [0, 0.075, 0], c: blue });
+  b.box('paint', 0.26, 0.05, 0.15, { p: [0, 0.175, 0], c: [0.85, 0.85, 0.82] });
+  b.box('paint', 0.26, 0.16, 0.15, { p: [0, 0.28, 0], c: blue });
+  b.box('paint', 0.12, 0.02, 0.03, { p: [-0.03, 0.39, 0], c: blue }); // handle
+  for (const x of [-0.08, 0.02]) b.box('paint', 0.02, 0.03, 0.03, { p: [x, 0.375, 0], c: blue });
+  b.cyl('steel', 0.022, 0.022, 0.03, 10, { p: [0.09, 0.375, 0] }); // cap
+};
+
 // fallback weapon shapes (used only for a weapon weapons.js has no model for)
 function FALLBACK_WEAPON(b, id) {
   const gun = (L, stock) => {

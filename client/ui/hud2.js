@@ -1,7 +1,8 @@
 // Iteration 2 HUD pieces: compass strip, objective tracker ("field notes"), world markers (teammate
 // nameplates, pings, the car), downed overlay, damage direction arrows and the dawn summary card.
 // Same conventions as hud.js: update() is called every frame and only touches the DOM on change.
-import { ITEM_DEFS, SUPPLIES, SUPPLY_NEED, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours } from '../../shared/defs.js';
+import { ITEM_DEFS, SUPPLIES, SUPPLY_NEED, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours, suppliesOf, zoneName } from '../../shared/defs.js';
+import { vehicleOf } from '../../shared/acts.js';
 import { PHASE, DUSK_WARNING } from '../../shared/constants.js';
 import { nightBoss } from '../../shared/nights.js';
 import { el, svgEl, fmtTime, clamp } from './dom.js';
@@ -275,13 +276,14 @@ export class Objective {
     this.list = el('div', 'obj-list', this.root);
     this.rows = SUPPLIES.map((item, i) => {
       const r = el('div', 'obj-row', this.list);
-      svgEl('i', 'obj-ico', r, itemIcon(item));
+      const ico = svgEl('i', 'obj-ico', r, itemIcon(item));
       const name = el('span', 'obj-name', r, ITEM_DEFS[item].name + (SUPPLY_NEED[i] > 1 ? 's' : ''));
       const where = el('span', 'obj-where', r, '');
       const st = el('span', 'obj-st', r, '');
       svgEl('i', 'obj-box', r, glyph('check')); // ticked off once it is in the car
-      return { r, name, where, st, key: '', tip: null };
+      return { r, ico, name, where, st, key: '', tip: null };
     });
+    this.items = SUPPLIES; // (the plane's parts on the mainland: _relabel)
     this.key = '';
     this.done = -1;
     // slim (under the minimap): the supplies are a row of icons, and a pointer over one says what it is and where.
@@ -327,14 +329,30 @@ export class Objective {
     this.tip.hidden = false;
   }
 
+  // the map the run is on now: what the way out needs, and what it is called
+  _relabel(items, V) {
+    this.items = items;
+    this.hIco.innerHTML = glyph(V.glyph);
+    items.forEach((item, i) => {
+      const row = this.rows[i];
+      row.ico.innerHTML = itemIcon(item);
+      row.name.textContent = ITEM_DEFS[item].name + (SUPPLY_NEED[i] > 1 ? 's' : '');
+      row.key = '';
+    });
+  }
+
   update(o) {
     if (!o) return;
     const key = JSON.stringify(o);
     if (key === this.key) return;
     this.key = key;
+    const V = vehicleOf(o.seed);
+    const items = suppliesOf(o.seed);
+    if (items !== this.items) this._relabel(items, V);
+    const name = (z) => zoneName(z, o.seed);
     let done = 0;
     let total = 0;
-    SUPPLIES.forEach((item, i) => {
+    items.forEach((item, i) => {
       const need = SUPPLY_NEED[i];
       const have = o.supplies[i] | 0;
       total += need;
@@ -350,7 +368,7 @@ export class Objective {
         // because every one has been picked up: it is in somebody's hands, or lying where they left it
         const rum = supplyRumours(i, o.hints, o.found);
         if (!rum.zones.length) where = rum.found ? 'found' : 'somewhere out there';
-        else where = need > 1 ? rum.zones.map((z) => ZONE_NAMES[z]).join(' · ') : ZONE_NAMES[rum.zones[0]] + '?';
+        else where = need > 1 ? rum.zones.map(name).join(' · ') : name(rum.zones[0]) + '?';
       }
       const st = need > 1 && !complete ? `${have}/${need}` : '';
       const k = where + '|' + st + '|' + complete + '|' + carried;
@@ -358,15 +376,15 @@ export class Objective {
       row.key = k;
       // the slim tracker's hover text: the name, then where it is in words
       let body;
-      if (complete) body = 'Installed in the car.';
-      else if (carried) body = `In your pack: take ${carried > 1 ? 'them' : 'it'} to the car and install ${carried > 1 ? 'them' : 'it'}.`;
+      if (complete) body = `Installed in the ${V.name}.`;
+      else if (carried) body = `In your pack: take ${carried > 1 ? 'them' : 'it'} to the ${V.name} and install ${carried > 1 ? 'them' : 'it'}.`;
       else {
         const rum = supplyRumours(i, o.hints, o.found);
-        if (rum.zones.length) body = `Rumoured to be at ${rum.zones.map((z) => ZONE_NAMES[z]).join(', ')}.`;
+        if (rum.zones.length) body = `Rumoured to be at ${rum.zones.map(name).join(', ')}.`;
         else if (rum.found) body = 'Already picked up: a survivor has it, or it was dropped somewhere.';
-        else body = 'Nobody knows where yet. Search the valley.';
+        else body = `Nobody knows where yet. Search ${V.where}.`;
       }
-      row.tip = { name: ITEM_DEFS[item].name + (need > 1 ? `s · ${Math.min(have, need)} of ${need} in the car` : ''), body };
+      row.tip = { name: ITEM_DEFS[item].name + (need > 1 ? `s · ${Math.min(have, need)} of ${need} in the ${V.name}` : ''), body };
       row.where.textContent = where;
       row.st.textContent = st;
       row.r.classList.toggle('done', complete);
@@ -384,17 +402,17 @@ export class Objective {
     if (o.finale) {
       if (o.escapeReady) {
         // nothing ends the run but a survivor driving, and whoever is not at the car then stays behind
-        dir = o.escapeLeaving ? 'Someone is getting in: be at the car or be left behind!' : `The engine is running. Hold ${bindTag('interact')} at the car to drive away.`;
+        dir = o.escapeLeaving ? `${V.getting}: be at the ${V.name} or be left behind!` : `The engine is running. Hold ${bindTag('interact')} at the ${V.name} to ${V.go}.`;
         tone = 'good';
       } else if (o.escapeStalled) {
-        dir = 'The engine stalls: get back to the car';
+        dir = `The engine stalls: get back to the ${V.name}`;
         tone = 'danger';
       } else {
-        dir = `Defend the car · engine ready in ${fmtTime(o.escapeT)}`;
+        dir = `Defend the ${V.name} · engine ready in ${fmtTime(o.escapeT)}`;
         tone = 'danger';
       }
     } else if (o.suppliesDone) {
-      dir = `Every supply is in. Hold ${bindTag('interact')} at the car to start the engine - then survive the final stand.`;
+      dir = `Every ${V.part} is in. Hold ${bindTag('interact')} at the ${V.name} to start the engine - then survive the final stand.`;
       tone = 'good';
     } else if (o.phase === PHASE.NIGHT) {
       dir = `Survive the night · wave ${o.wave}/${o.waves}`;
@@ -403,16 +421,16 @@ export class Objective {
       dir = `Nightfall in ${fmtTime(o.timeLeft)} - build a shelter where you stand`;
       tone = 'danger';
     } else if (o.anyCarried) {
-      dir = 'Bring the supplies you carry back to the car';
+      dir = `Bring the ${V.parts} you carry back to the ${V.name}`;
       tone = 'good';
     } else if (o.phase === PHASE.DAY) {
-      dir = 'Scavenge and find the car supplies before dark';
+      dir = `Scavenge and find the ${V.partsOf} before dark`;
     }
     this.directive.textContent = dir;
     this.directive.className = 'obj-dir' + (tone ? ' dir-' + tone : '');
     this.directive.hidden = !dir;
     this.root.classList.toggle('compact', o.phase === PHASE.NIGHT || o.finale);
-    this.headTip.body = `${done} of ${total} car supplies are in the car. Install them all, start the engine and drive away.` + (dir ? `\n\nNow: ${dir}` : '');
+    this.headTip.body = `${done} of ${total} ${V.partsOf} are in the ${V.name}. Install them all, start the engine and ${V.go}.` + (dir ? `\n\nNow: ${dir}` : '');
     if (this.tipFor) this._hover(this.tipFor); // (what it says may just have changed)
   }
 }

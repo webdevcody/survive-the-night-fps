@@ -12,7 +12,7 @@ const cache = new Map();
 
 // number of cached visual variants per prop (seed % n)
 const VARIANTS = {
-  car: 1, car_wreck: 4, pickup_truck: 2, gravestone: 4, grave_cross: 3, barrel: 4, crate: 3, crate_small: 3, chair: 3, fence: 3,
+  car: 1, plane: 1, car_wreck: 4, pickup_truck: 2, gravestone: 4, grave_cross: 3, barrel: 4, crate: 3, crate_small: 3, chair: 3, fence: 3,
   campfire: 1, heli_wreck: 1, watchtower: 1, water_tower: 1, radio_mast: 1, tent: 2, corpse: 3, bones: 2, pumpkin: 3,
   power_pole: 2, road_sign: 2, tire_pile: 2, sandbags: 2, woodpile: 2, scarecrow: 1, boat: 2,
   // iteration 2
@@ -245,6 +245,110 @@ BUILD.car = (b, r) => {
   cinderBlocks(b, -0.62, -1.4, 0.3);
   b.box('rust', 0.12, 0.2, 0.3, { p: [-0.72, 0.1, 0.6] }); // jack under the sill
   b.pop();
+};
+
+// The wreck on Kessler Airfield (the mainland's way out): a low-wing single, nose to -Z, wing root under the cabin at
+// the origin. Every part stays inside the boxes of PROPS.plane.
+BUILD.plane = (b) => {
+  const WHITE = [0.8, 0.78, 0.72], RED = [0.56, 0.13, 0.1], BELLY = [0.55, 0.55, 0.52];
+  const paint = (x, y, z, c) => c.setRGB(...(y > 0.99 && y < 1.09 ? RED : y < 0.78 ? BELLY : WHITE));
+  const prof = (t) => {
+    const a = t * PI * 2;
+    const cs = Math.cos(a), sn = Math.sin(a);
+    return [Math.sign(cs) * Math.abs(cs) ** 0.7, Math.sign(sn) * Math.abs(sn) ** 0.7];
+  };
+  const secs = [
+    { z: -3.66, w: 0.1, h: 0.1, y: 1.12 },
+    { z: -3.55, w: 0.78, h: 0.7, y: 1.1 },
+    { z: -3.2, w: 1.0, h: 0.86, y: 1.12 },
+    { z: -2.25, w: 1.1, h: 0.96, y: 1.12 },
+    { z: -1.9, w: 1.14, h: 1.0, y: 1.1 },
+    { z: 0.6, w: 1.12, h: 0.96, y: 1.08 },
+    { z: 1.8, w: 0.86, h: 0.76, y: 1.13 },
+    { z: 3.3, w: 0.36, h: 0.42, y: 1.2 },
+    { z: 3.62, w: 0.06, h: 0.06, y: 1.22 },
+  ];
+  // a point on the fuselage at z, around-parameter t (out: how far off the skin)
+  const fus = (z, t, out = 1.01) => {
+    let k = 0;
+    while (k < secs.length - 2 && z > secs[k + 1].z) k++;
+    const A = secs[k], B = secs[k + 1], f = Math.min(1, Math.max(0, (z - A.z) / (B.z - A.z)));
+    const w = A.w + (B.w - A.w) * f, h = A.h + (B.h - A.h) * f, y = A.y + (B.y - A.y) * f;
+    const [px, py] = prof(t);
+    return [px * w * 0.5 * out, py * h * 0.5 * out + y, z];
+  };
+  const panel = (mat, z0, z1, t0, t1, out = 1.012) => {
+    const zm = (z0 + z1) / 2;
+    const c = fus(zm, (t0 + t1) / 2, 0);
+    b.quadOut(mat, [fus(z0, t0, out), fus(z1, t0, out), fus(z1, t1, out), fus(z0, t1, out)], [0, c[1], zm]);
+  };
+  b.loft('aircraft', secs, prof, 16, { cfn: paint });
+  // the cowling: a panel off on the right, the engine dark behind it, oil run down the side; no propeller on the hub
+  panel('dark', -3.1, -2.45, -0.12, 0.1);
+  panel('rust', -2.4, -1.95, -0.2, -0.08);
+  b.cyl('steel', 0.07, 0.07, 0.05, 8, { p: [0, 1.12, -3.67], r: [PI / 2, 0, 0] });
+  b.cylBetween('rust', [0.38, 0.72, -2.7], [0.42, 0.66, -2.35], 0.035, 0.035, 6);
+  // the cabin: dark inside, the windows on it, one of them smashed out
+  const C = [];
+  for (let k = 0; k < 8; k++) {
+    const X = k & 1 ? 1 : -1, top = k & 2, Z = k & 4;
+    C.push([X * (top ? 0.4 : 0.52), top ? 1.92 : 1.5, Z ? (top ? 0.35 : 0.75) : top ? -1.3 : -1.95]);
+  }
+  b.hull('dark', C);
+  const mid = [0, 1.7, -0.5];
+  const off = (p, d = 0.012) => {
+    const dx = p[0] - mid[0], dy = p[1] - mid[1], dz = p[2] - mid[2], l = Math.hypot(dx, dy, dz);
+    return [p[0] + (dx / l) * d, p[1] + (dy / l) * d, p[2] + (dz / l) * d];
+  };
+  const lerp3 = (a, c, t) => [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t, a[2] + (c[2] - a[2]) * t];
+  const shrink = (q, k = 0.1) => {
+    const cx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, cy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, cz = (q[0][2] + q[1][2] + q[2][2] + q[3][2]) / 4;
+    return q.map((p) => off(lerp3(p, [cx, cy, cz], k)));
+  };
+  b.quadOut('glass', shrink([C[0], C[1], C[3], C[2]], 0.08), mid); // windscreen
+  for (const sx of [-1, 1]) {
+    const q = sx > 0 ? [C[1], C[5], C[7], C[3]] : [C[0], C[4], C[6], C[2]];
+    for (const [t0, t1] of [[0.04, 0.48], [0.54, 0.95]]) {
+      if (sx > 0 && t0 > 0.5) continue; // (the rear window on the right is gone)
+      b.quadOut('glass', shrink([lerp3(q[0], q[1], t0), lerp3(q[0], q[1], t1), lerp3(q[3], q[2], t1), lerp3(q[3], q[2], t0)], 0.1), mid);
+    }
+  }
+  b.box('aircraft', 0.8, 0.04, 1.62, { p: [0, 1.935, -0.48], c: WHITE });
+  // the wing, left tip crumpled down, red tips
+  for (const sx of [-1, 1]) {
+    const tipY = sx < 0 ? -0.05 : 0;
+    const W = [];
+    for (let k = 0; k < 8; k++) {
+      const out = (k & 1 ? 1 : -1) * sx > 0, top = k & 2, Z = k & 4;
+      const x = out ? 4.75 : 0.5;
+      W.push([sx * x, out ? (top ? 0.66 : 0.56) + tipY : top ? 0.7 : 0.52, Z ? (out ? 0.0 : 0.16) : out ? -1.22 : -1.4]);
+    }
+    b.hull('aircraft', W, { c: WHITE });
+    b.box('aircraft', 0.14, 0.09, 1.1, { p: [sx * 4.8, 0.61 + tipY, -0.62], c: RED });
+  }
+  b.box('aircraft', 1.0, 0.16, 1.5, { p: [0, 0.61, -0.62], c: BELLY });
+  // the tail: fin with a red rudder, the tailplane
+  const F = [];
+  for (let k = 0; k < 8; k++) {
+    const X = k & 1 ? 0.05 : -0.05, top = k & 2, Z = k & 4;
+    F.push([X, top ? 2.42 : 1.3, Z ? 3.72 : top ? 3.3 : 2.72]);
+  }
+  b.hull('aircraft', F, { cfn: (x, y, z, c) => c.setRGB(...(z > 3.42 && y > 1.6 ? RED : WHITE)) });
+  for (const sx of [-1, 1]) {
+    const S = [];
+    for (let k = 0; k < 8; k++) {
+      const out = (k & 1 ? 1 : -1) * sx > 0, top = k & 2, Z = k & 4;
+      S.push([sx * (out ? 1.62 : 0.12), top ? 1.18 : 1.12, Z ? 3.7 : out ? 3.28 : 3.02]);
+    }
+    b.hull('aircraft', S, { c: WHITE });
+  }
+  // the gear: two mains under the wing (the right tyre flat), the nose wheel
+  for (const sx of [-1, 1]) {
+    b.cylBetween('steel', [sx * 1.45, 0.52, -0.55], [sx * 1.45, 0.25, -0.55], 0.035, 0.035, 6);
+    b.group({ p: [sx * 1.45, 0.25, -0.55] }, () => wheel(b, 0.25, 0.14, { flat: sx > 0 ? 0.3 : 0, rimR: 0.5 }));
+  }
+  b.cylBetween('steel', [0, 0.66, -2.9], [0, 0.19, -2.9], 0.03, 0.03, 6);
+  b.group({ p: [0, 0.19, -2.9] }, () => wheel(b, 0.19, 0.11, { rimR: 0.5 }));
 };
 
 BUILD.car_wreck = (b, r, v) => {

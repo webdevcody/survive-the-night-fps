@@ -13,14 +13,16 @@
 // usage: node scripts/test-world.js [seed ...]
 import { createWorld, TREE_TYPES, ROCK_TYPES } from '../shared/world.js';
 import { PLACES, gatePoint } from '../shared/layout.js';
+import { mainlandOf } from '../shared/acts.js';
 import { ZONE, ZONE_NAMES, CONT_DEFS } from '../shared/defs.js';
 import { PROPS } from '../shared/props.js';
 import { COL, footprintContains, pushCircle, canReach, groundAt } from '../shared/collision.js';
 import { simulatePlayer, createPlayerState } from '../shared/playersim.js';
 import { BTN, CMD_RATE, MAP_HALF, GRID_STEP, PLAYER_RADIUS, PLAYER_HEIGHT, EYE_HEIGHT, STEP_HEIGHT, WATER_LEVEL } from '../shared/constants.js';
 
-// Between them these four valleys have every place (the test fails if one is missing).
-const SEEDS = process.argv.length > 2 ? process.argv.slice(2).map(Number) : [1, 2, 8, 9];
+// Between them these four valleys have every place (the test fails if one is missing); the two mainlands after them
+// (act 2) have Kessler Airfield where the valleys have the breakdown.
+const SEEDS = process.argv.length > 2 ? process.argv.slice(2).map(Number) : [1, 2, 8, 9, mainlandOf(1), mainlandOf(8)];
 
 // Known failures: what the checks below find wrong today that is being fixed somewhere else. A failure listed here
 // is printed but does not fail the test. An entry is a place, a check and the spot in the place's own frame.

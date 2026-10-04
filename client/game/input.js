@@ -207,7 +207,7 @@ export class Input {
 
   // gameplay button mask for the next command
   sample() {
-    if (!this.enabled) {
+    if (!this.enabled || this.held) {
       this.latched = 0;
       return 0;
     }

@@ -124,6 +124,9 @@ export const ACHIEVEMENTS = [
   F(66, 'turncoat', 'secret', 'silver', 'Turncoat', 'As one of the dead, kill a survivor.', 'claw', { secret: true }),
   F(67, 'car_alarm', 'secret', 'bronze', 'Wake the Neighbours', "Set off a car's alarm.", 'hazard', { secret: true }),
   F(68, 'dinner_bell', 'secret', 'silver', 'Dinner Bell', 'Ring the chapel bell at night.', 'horde', { secret: true }),
+
+  // ---- the mainland (act 2)
+  F(69, 'wheels_up', 'survival', 'platinum', 'Wheels Up', 'Fly out of the mainland: be at the plane, alive, when it takes off.', 'plane'),
 ];
 
 export const ACH_BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));

@@ -3346,3 +3346,48 @@
     min-width: 0;
   }
 }
+
+/* ---------------------------------------------------------------- the crossing to the mainland (crossing.js) */
+.stn-ui .crossing {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #000;
+  pointer-events: none;
+}
+.stn-ui .crossing-cv {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.stn-ui .crossing-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 17%;
+  text-align: center;
+  color: var(--bone);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+}
+.stn-ui .crossing-act {
+  font-family: var(--f-mono);
+  font-size: calc(var(--u) * 26);
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--sun);
+}
+.stn-ui .crossing-title {
+  font-family: var(--f-head);
+  font-size: calc(var(--u) * 132);
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+.stn-ui .crossing-sub {
+  font-family: var(--f-type);
+  font-size: calc(var(--u) * 28);
+  max-width: 42em;
+  margin: 0.6em auto 0;
+  color: var(--bone-dim);
+}

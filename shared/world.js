@@ -18,6 +18,7 @@ import { buildClinic, darkAt } from './clinic.js';
 import { buildCemetery } from './cemetery.js';
 import { buildFair } from './fair.js';
 import { planRail } from './rail.js';
+import { isMainland } from './acts.js';
 
 export { ROAD };
 
@@ -49,8 +50,16 @@ const STREETS = {
   [ZONE.DRIVEIN]: [[[[0, -30], [0, -20], [-1.5, -11]], ROAD.DIRT, 2.6]],
   [ZONE.FAIR]: [[[[0, -33], [0, -20], [0, -4], [0, 9]], ROAD.DIRT, 2.6]],
 };
+// Kessler Airfield (the mainland's start, ZONE.CAMP there): the runway along the back of the yard, and the taxiway
+// from the gate out to it
+const AIRFIELD_STREETS = [
+  [[[-34, 22], [-12, 22], [12, 22], [34, 22]], ROAD.ASPHALT, 5.5],
+  [[[0, -35], [0, -24], [-1, 4], [0, 17]], ROAD.ASPHALT, 2.4],
+];
 
 export function createWorld(seed) {
+  const mainland = isMainland(seed);
+  const streets = mainland ? { ...STREETS, [ZONE.CAMP]: AIRFIELD_STREETS } : STREETS;
   const rng = mulberry32(seed ^ 0x5eed);
   const nA = createNoise2D(seed + 1);
   const nB = createNoise2D(seed + 2);
@@ -67,7 +76,7 @@ export function createWorld(seed) {
     return n1 * 24 + n2 * 4.5 + rd * rd * 9 - 5;
   };
   // own rng stream: the plan only depends on the seed
-  const { valley, zones, lake, ponds, highway: hwyAnchors, links, rail: railPlan } = planLayout(mulberry32(seed ^ 0x1a707), relief, mulberry32(seed ^ 0x7a11));
+  const { valley, zones, lake, ponds, highway: hwyAnchors, links, rail: railPlan } = planLayout(mulberry32(seed ^ 0x1a707), relief, mulberry32(seed ^ 0x7a11), mainland);
   const zoneById = {};
   for (const z of zones) zoneById[z.id] = z;
   const nearZone = (x, z, pad) => {
@@ -241,7 +250,7 @@ export function createWorld(seed) {
       ctrl.push([ax + dx * 0.68 + px * o2, az + dz * 0.68 + pz * o2]);
       ctrl.push([bx, bz]);
     }
-    highway = buildRoad(ctrl, ROAD.ASPHALT, 3.6, 'Route 9');
+    highway = buildRoad(ctrl, ROAD.ASPHALT, 3.6, mainland ? 'Route 40' : 'Route 9');
   }
   // nearest point of Route 9 to (x,z): [x, z, index]
   const hwyPoint = (x, z) => {
@@ -416,7 +425,7 @@ export function createWorld(seed) {
     const [x, z] = gatePoint(zn, e.gate);
     // driveway: the road runs on in from the gate - half way to the middle at the front, a little way into the
     // yard at the sides and back (unless one of the place's own streets meets it there)
-    const street = (STREETS[zn.id] || []).some(([pts]) => [pts[0], pts[pts.length - 1]].some(([lx, lz]) => Math.hypot(zwx(zn, lx, lz) - x, zwz(zn, lx, lz) - z) < 6));
+    const street = (streets[zn.id] || []).some(([pts]) => [pts[0], pts[pts.length - 1]].some(([lx, lz]) => Math.hypot(zwx(zn, lx, lz) - x, zwz(zn, lx, lz) - z) < 6));
     const t = e.gate === 'f' ? 0.5 : 0.75;
     const inner = street ? null : [zn.x + (x - zn.x) * t, zn.z + (z - zn.z) * t];
     return { x, z, inner };
@@ -447,10 +456,10 @@ export function createWorld(seed) {
     const r = buildRoad(ctrl, kind, kind === ROAD.TRAIL ? 1.5 : 2.6);
     if (kind !== ROAD.TRAIL) markRoadCells(r);
   }
-  for (const zid in STREETS) {
+  for (const zid in streets) {
     const zn = zoneById[zid];
     if (!zn) continue;
-    for (const [pts, kind, width] of STREETS[zid]) buildRoad(pts.map(([lx, lz]) => [zwx(zn, lx, lz), zwz(zn, lx, lz)]), kind, width);
+    for (const [pts, kind, width] of streets[zid]) buildRoad(pts.map(([lx, lz]) => [zwx(zn, lx, lz), zwz(zn, lx, lz)]), kind, width);
   }
 
   // ---------------------------------------------------------------- heightfield (roads flattened in below)
@@ -948,8 +957,59 @@ export function createWorld(seed) {
   let cemetery = null; // (the chapel's builder fills it in)
   const spawnPoints = [];
 
+  // KESSLER AIRFIELD (the mainland's start): the car gave out at the gate. A wrecked plane stands on the apron by the
+  // runway, with the hangar across the taxiway and the airfield office by the gate. Front (-Z) on Route 40, the
+  // runway (AIRFIELD_STREETS) along the back.
+  if (mainland) place(ZONE.CAMP, (b) => {
+    const APRON = 0.05; // (the top of the apron's slab: what stands on it stands this high)
+    b.box(-12, -0.05, 2, 17, 0.1, 15, 'concrete', { collide: true }); // apron
+    const pp = b.prop('plane', -12, 2, PI, { seed: 3, ly: APRON }); // nose to the runway
+    car = { x: pp.x, y: pp.y, z: pp.z, ry: pp.ry };
+    b.clear(-12, 2, 10);
+    b.prop('car', 7.5, -17, 0.35, { seed: 7 }); // what got you over the bridge, dead at the gate
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * PI * 2;
+      spawnPoints.push({ x: b.wx(5.5 + Math.sin(a) * 2.2, -9 + Math.cos(a) * 3.2), z: b.wz(5.5 + Math.sin(a) * 2.2, -9 + Math.cos(a) * 3.2) });
+    }
+    b.prop('barrel', -19.5, -4.6, 0, { ly: APRON });
+    b.prop('barrel', -18.6, -5.2, 0.6, { ly: APRON });
+    b.prop('tire_pile', -4.8, -4.5, 0, { ly: APRON });
+    b.cont(CONT.TOOLBOX, -5.2, 7.8, { prop: 'toolbox', ry: 0.4, nocollide: true, ly: APRON, h: 0.2 });
+    b.loot(-6.5, -3.5, APRON + 0.02);
+    b.loot(-17.5, 8.5, APRON + 0.02);
+    // the hangar: open to the taxiway, its back to the woods
+    b.room(16, 0, 16, 14, 5.6, 'tin', { w: [gap(7, 8.4, 4.6)], e: [door(10, 1.3)], n: [win(5, 1.6, 1.6, 2.6), win(11, 1.6, 1.6, 2.6)] }, { roof: 'gable', roofH: 2.4, roofMat: 'tin_rust', floorMat: 'concrete' });
+    b.cont(CONT.SHELF, 20, 6.4, { prop: 'shelf', ry: PI });
+    b.cont(CONT.SHELF, 14, 6.4, { prop: 'shelf', ry: PI });
+    b.cont(CONT.LOCKER, 23.4, -3.5, { prop: 'locker', ry: -PI / 2 });
+    b.cont(CONT.TOOLBOX, 21.5, -5.6, { prop: 'toolbox', ly: 0.12, nocollide: true, h: 0.2 });
+    b.cont(CONT.CRATE, 11, 5.8, { prop: 'crate' });
+    b.prop('pallet', 18.5, -4.8, 0.2);
+    b.prop('crate_small', 18.4, -4.8, 0.5, { ly: 0.15 });
+    b.prop('barrel', 22.8, 5.6, 0);
+    b.prop('barrel', 22.9, 4.7, 1.1);
+    b.partSpot(19.5, 2.5);
+    b.loot(13, -2.5);
+    b.loot(17, 3.5);
+    // the airfield office by the gate
+    b.room(17, -12.5, 9, 6, 3.2, 'clapboard', { w: [door(3, 1.2)], n: [win(2.5, 1.4), win(6.5, 1.4)], e: [win(3)] }, { roof: 'flat', roofMat: 'concrete' });
+    b.box(15.5, 0, -10.5, 3, 1.0, 0.7, 'planks', { collide: true }); // counter
+    b.cont(CONT.CABINET, 19.6, -9.9, { prop: 'cabinet', ry: PI });
+    b.cont(CONT.LOCKER, 21, -14, { prop: 'locker', ry: -PI / 2 });
+    b.loot(15.5, -10.5, 1.02);
+    b.loot(14, -14);
+    b.cont(CONT.DUMPSTER, 26.5, 6, { prop: 'dumpster', ry: -PI / 2 });
+    // the old control tower, out by the runway
+    b.prop('watchtower', -27, -8, 0.2);
+    b.wreck('car_wreck', -8, -18.5, 1.2);
+    b.wreck('pickup_truck', 30, -2, PI / 2 + 0.1);
+    b.prop('jersey_barrier', -6, -24, 0.05);
+    b.prop('jersey_barrier', 6, -24, -0.05);
+    b.prop('streetlight', -4.5, -14, -PI / 2);
+    b.prop('streetlight', -4.5, 12, -PI / 2);
+  });
   // THE BREAKDOWN (start): your car died on the shoulder of Route 9 next to a little rest area.
-  place(ZONE.CAMP, (b, z) => {
+  else place(ZONE.CAMP, (b, z) => {
     const pc = b.prop('car', 5.4, 1.5, 0.04, { seed: 7 });
     car = { x: pc.x, y: pc.y, z: pc.z, ry: pc.ry };
     b.clear(5.4, 1.5, 4);

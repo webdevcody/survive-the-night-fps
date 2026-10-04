@@ -28,6 +28,7 @@ import * as THREE from 'three';
 import { ENT, dqpos } from '../../shared/protocol.js';
 import { CONT } from '../../shared/defs.js';
 import { fixtureSpots } from '../../shared/fixtures.js';
+import { vehicleOf } from '../../shared/acts.js';
 import { WHEEL } from '../../shared/fair.js';
 import { createProp } from '../render/models/props.js';
 import { bindTag } from './binds.js';
@@ -261,7 +262,7 @@ export class Highlight {
     const g = this.g;
     const t = g.lookTarget;
     if (!t || !offers(g.prompt || '')) return null;
-    if (t === 'car') return this.propAt('car', g.world.car.x, g.world.car.z, 0.05);
+    if (t === 'car') return this.propAt(vehicleOf(g.seed).prop, g.world.car.x, g.world.car.z, 0.05); // (the plane on the mainland)
     if (t === 'radio') {
       const r = fixtureSpots(g.world).radio;
       return r && this.propAt('radio_set', r.x, r.z, 1);

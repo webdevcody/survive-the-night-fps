@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ACHIEVEMENTS, ACH_BY_ID, ACH_BY_N, ACH_STATS, ACHF, KILL_FEATS, applyAchievements, sanitizeProgress, mergeProgress, counterUnlocks, achProgress } from '../shared/achievements.js';
 import { C2S, PROTOCOL_VERSION, SNAP, Writer, Reader } from '../shared/protocol.js';
-import { ITEM, ZTYPE, KILLER, EVT } from '../shared/defs.js';
+import { ITEM, ZTYPE, KILLER, EVT, SUPPLY_NEED } from '../shared/defs.js';
+import { PHASE } from '../shared/constants.js';
 import { floatY } from '../shared/swim.js';
 import { handcars } from '../shared/handcar.js';
 import { readEvents } from '../client/net/decode.js';
@@ -192,6 +193,35 @@ const walker = (game, p, dx = 3) => game.zm.spawn(ZTYPE.WALKER, p.state.x + dx, 
   Object.assign(ben.state, { x: car.x + 300, z: car.z });
   game.victory();
   check('a win: the one at the car escaped, the one far off did not; a death in the run is no Flawless', got.of(ann).add.escapes === 1 && !got.of(ben).add.escapes && !got.of(ann).ids.includes('flawless'), JSON.stringify(got.of(ann)));
+}
+
+// two acts: the car leaving the valley is the escape from it, and the plane taking off from the mainland is Wheels Up
+{
+  const game = new Game({ seed: 4244, godMode: true, dayLength: 3600, themes: false, log: () => {} });
+  const got = watch(game);
+  const Ivy = enter(game, 'Ivy');
+  const Jon = enter(game, 'Jon');
+  const ivy = Ivy.p();
+  const jon = Jon.p();
+  const at = (p, d) => Object.assign(p.state, { x: game.world.car.x + d, z: game.world.car.z });
+  const ready = () => {
+    game.supplies = SUPPLY_NEED.slice();
+    game.startEngine(ivy);
+    game.escape.t = 0;
+    game.escape.ready = true;
+  };
+  ready();
+  at(ivy, 2);
+  at(jon, 300);
+  game.driveOff(ivy);
+  wait(game, 0.2);
+  const crossed = got.of(ivy).add.escapes === 1 && !got.of(jon).add.escapes && got.of(ivy).ids.includes('driver') && !got.of(ivy).ids.includes('wheels_up');
+  ready();
+  at(ivy, 300);
+  at(jon, 2);
+  game.driveOff(jon);
+  wait(game, 0.2);
+  check('the crossing counts as escaping the valley; taking off from the mainland is Wheels Up, for whoever is at the plane', crossed && game.phase === PHASE.VICTORY && got.of(jon).ids.includes('wheels_up') && !got.of(ivy).ids.includes('wheels_up') && got.of(ivy).add.escapes === 1 && !got.of(jon).add.escapes && !got.of(jon).ids.includes('driver'), JSON.stringify([got.of(ivy), got.of(jon)]));
 }
 
 // a flawless run in an invite-only game; a signed-in player's progress goes to the network thread
