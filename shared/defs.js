@@ -728,7 +728,7 @@ export const EVT = {
   BESTIARY: 37,
 };
 
-export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7 };
+export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7, SCRAP: 8 };
 
 export const NOTIFY = {
   NIGHT_FALLS: 1,

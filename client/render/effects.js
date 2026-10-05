@@ -528,11 +528,11 @@ class GibPool {
         for (let c = 0; c < 3; c++) R[k + c] += W[k + c] * dt;
         if (age < 0.9 && (this.trail[i] -= dt) <= 0) {
           this.trail[i] = 0.07;
-          fx.gibDrip(P[k], P[k + 1], P[k + 2], this.green[i]);
+          if (this.green[i] < 2) fx.gibDrip(P[k], P[k + 1], P[k + 2], this.green[i]);
         }
         if (floor !== null) {
           P[k + 1] = floor + rad;
-          if (!this.bounces[i]) fx.gibSplat(P[k], floor, P[k + 2], this.green[i]);
+          if (!this.bounces[i] && this.green[i] < 2) fx.gibSplat(P[k], floor, P[k + 2], this.green[i]);
           if (V[k + 1] < -3 && this.bounces[i] < 2) {
             this.bounces[i]++;
             V[k] *= 0.55;
@@ -680,6 +680,17 @@ export class Effects {
         for (let i = 0; i < 8; i++) A.emit(x, y, z, nx * 3 + this.rnd(-1.5, 1.5), this.rnd(0.5, 3), nz * 3 + this.rnd(-1.5, 1.5), this.rnd(0.4, 0.8), 0.08, 0.06, 0.45, 0.33, 0.2, 1, 0.3, 0.22, 0.14, 0.5, 12, 1, TEX.SPARK, 10);
         A.emit(x, y, z, nx * 0.5, 0.3, nz * 0.5, 0.9, 0.2, 0.8, 0.4, 0.35, 0.28, 0.45, 0.35, 0.3, 0.25, 0, 0, 2, TEX.SMOKE);
         break;
+      case IMPACT.SCRAP: {
+        // a struck wreck: rust flakes and chunks of plate knocked off, falling and bouncing, a clang's worth of sparks, and a puff of dust
+        for (let i = 0, n = 3 + Math.floor(Math.random() * 3); i < n; i++) {
+          const sz = this.rnd(0.04, 0.1);
+          const rust = this.rnd(0.35, 0.55);
+          this.gibLumps.add(x, y, z, nx * this.rnd(1, 3.5) + this.rnd(-1.5, 1.5), this.rnd(1.5, 4), nz * this.rnd(1, 3.5) + this.rnd(-1.5, 1.5), sz * this.rnd(1, 2), sz * 0.4, sz * this.rnd(0.8, 1.4), rust, rust * 0.42, rust * 0.2, 2);
+        }
+        for (let i = 0; i < 8; i++) A.emit(x, y, z, nx * 1.5 + this.rnd(-1, 1), this.rnd(0.3, 1.8), nz * 1.5 + this.rnd(-1, 1), this.rnd(0.5, 1), 0.05, 0.1, 0.42, 0.22, 0.1, 0.9, 0.3, 0.17, 0.08, 0, 6, 1, TEX.BLOOD);
+        A.emit(x, y, z, nx * 0.4, 0.4, nz * 0.4, 1, 0.3, 1, 0.4, 0.33, 0.27, 0.4, 0.3, 0.26, 0.22, 0, 0, 2, TEX.SMOKE);
+      }
+      // falls through to the sparks
       case IMPACT.METAL:
       case IMPACT.SPARK:
         for (let i = 0; i < 12; i++) D.emit(x, y, z, nx * 4 + this.rnd(-3, 3), this.rnd(0, 4), nz * 4 + this.rnd(-3, 3), this.rnd(0.15, 0.4), 0.06, 0.02, 1, 0.8, 0.4, 1, 1, 0.4, 0.1, 0, 14, 0.5, TEX.SPARK);
