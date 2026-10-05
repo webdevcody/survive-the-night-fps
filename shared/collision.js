@@ -10,6 +10,7 @@ export const COL = {
   TREE: 16,
   NOBULLET: 32, // bullets pass through (e.g. wire, fences)
   SALVAGE: 64, // wreck: melee hits yield scrap
+  CAR: 128, // a car, van, truck or bus: a melee hit rocks it and knocks scrap metal off
 };
 
 export const BOX = 0;

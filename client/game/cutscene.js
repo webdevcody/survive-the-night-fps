@@ -87,6 +87,7 @@ export function liveProps(scene, world) {
   let fitted = '';
   return {
     plane,
+    car, // (the parked car: a melee hit rocks this one, since the static world does not draw it)
     // g: the global state. cine: a cutscene is on (the crossing has a car of its own on the road)
     update(dt, g, cine) {
       if (car) car.visible = !(cine && g.phase === PHASE.CROSSING);

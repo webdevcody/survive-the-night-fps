@@ -12,7 +12,7 @@
 // shots.json: [{ "name": "machete-vs-car", "who": "A", "give": [53], "key": "Digit3", "tp": [x, z, (y)],
 //               "lookAt": [x, z, y] | "yaw": r, "pitch": r, "wait": 1500, "throwAt": ms, "hideHud": true,
 //               "hideVm": true, "hideZombies": true, "say": ["/spawn brute"], "others": { "A": { "tp": [...], "give": [...], "key": "...",
-//               "yaw": r, "pitch": r } }, "title": "..." }]
+//               "yaw": r, "pitch": r } }, "swings": 4, "swingEvery": 800, "settle": 1200, "title": "..." }]
 //   who        the client that takes the shot (A, or B: B joins when any shot needs it); others: put the other
 //              client somewhere first (the third-person view of a player holding something)
 //   give/key   /give each item and equip it from the backpack, then press a key (Digit1 guns, Digit2 sidearm,
@@ -170,7 +170,16 @@ async function run(root, dir) {
         document.body.classList.toggle('clip-nohud', !!s.hideHud);
         window.__game.renderer.vmScene.visible = !s.hideVm;
       }, s);
-      if (s.throwAt !== undefined) {
+      if (s.swings) {
+        // click the melee button a few times, then let the scrap it knocked off land
+        for (let i = 0; i < s.swings; i++) {
+          await p.evaluate(() => (window.__game.input.mouseButtons = 1));
+          await sleep(90);
+          await p.evaluate(() => (window.__game.input.mouseButtons = 0));
+          await sleep(s.swingEvery ?? 800);
+        }
+        await sleep(s.settle ?? 1200);
+      } else if (s.throwAt !== undefined) {
         await p.evaluate(() => (window.__game.input.mouseButtons = 1));
         await sleep(80);
         await p.evaluate(() => (window.__game.input.mouseButtons = 0));

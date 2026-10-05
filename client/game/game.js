@@ -94,6 +94,8 @@ import { planCost } from '../../shared/autocraft.js';
 import { FairClient } from './fair.js';
 import { HandcarClient } from './handcar.js';
 import { Highlight } from './highlight.js';
+import { CarBash } from '../render/carbash.js';
+import { BASH_SOFT, BASH_HARD } from '../../shared/carbash.js';
 import { Input } from './input.js';
 import { actionsOf, bindTag, bindPair, bindLabel } from './binds.js';
 import { DropHold } from './drophold.js';
@@ -478,6 +480,8 @@ export class Game {
     if (this.railway) this.scene.add(this.railway);
     this.bridge = this.world.bridge ? new BridgeView(this.scene, this.world) : null; // (the mainland: the bridge the car came over)
     this.live = liveProps(this.scene, this.world); // (...the car they came in and the plane: the props a cutscene moves)
+    this.carBash?.dispose();
+    this.carBash = new CarBash(this.scene, this.world);
     this.under = 0;
     const t2 = performance.now();
     this.staticWorld = new StaticWorld(this.scene, this.world);
@@ -525,6 +529,8 @@ export class Game {
     this.water.material.dispose();
     this.bridge?.dispose();
     this.bridge = null;
+    this.carBash?.dispose();
+    this.carBash = null;
     this.live?.dispose();
     this.live = null;
     if (this.mine) {
@@ -1128,6 +1134,13 @@ export class Game {
         g.remoteShot(ev);
       },
       impact(kind, x, y, z, nx, ny, nz, own) {
+        // a melee hit on a car: the body rocks, a dent stays, scrap metal breaks off. Close enough to be in arm's
+        // reach, so it is not dropped with the sparks that would land in the swinger's face.
+        if (kind === IMPACT.BASH || kind === IMPACT.BASH_HARD) {
+          g.carBash?.hit(x, y, z, nx, ny, nz, kind === IMPACT.BASH_HARD ? BASH_HARD : BASH_SOFT);
+          g.effects.impact(IMPACT.SPARK, x, y, z, nx, ny, nz);
+          return;
+        }
         // what our own shot struck was shown as it was fired (predictPellet): this is the server saying so again
         if (!own && g.sameAsOwn(x, y, z)) return;
         // hits on ourselves are shown by the damage vignette, not particles in our face
@@ -1192,6 +1205,7 @@ export class Game {
       regrown() {
         g.stripped.clear();
         g.regrowTrees();
+        g.carBash?.clearMarks(); // (the dents and the loose metal go when the wrecks give again)
       },
       flyover(x, y, z, heading, eta) {
         g.flyover?.start(x, y, z, heading, eta, g.time, g.audio);
@@ -2706,6 +2720,7 @@ export class Game {
     this.entities.update(dt, this.renderTick, time, cine ? cam.position : rp);
     if (cine) this.entities.hidePlayers(); // (they are in the car, or the plane: the cutscene draws them there)
     this.live?.update(dt, this.global, !!cine);
+    this.carBash?.update(dt, this.live?.car);
     this.rockets.update(dt);
     this.skyflares.update(dt, cam); // (after the entities: their fires are gathered; before the environment and the lights)
     this.gun.update(dt, ldx * lk, ldy * lk);

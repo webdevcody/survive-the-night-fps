@@ -10,7 +10,7 @@ import { STREET_PROP_DEFS } from './props-street.js';
 import { INTERIOR_PROP_DEFS } from './props-interior.js';
 
 export const PROPS = {
-  car: { size: [1.9, 1.45, 4.6], boxes: [[0, 0.72, 0, 1.9, 1.44, 4.5]], desc: 'broken-down rusty sedan, hood propped open, one wheel missing (on a jack/blocks), shattered windows. The quest car at camp.' },
+  car: { size: [1.9, 1.45, 4.6], boxes: [[0, 0.72, 0, 1.9, 1.44, 4.5]], salvage: true, desc: 'broken-down rusty sedan, hood propped open, one wheel missing (on a jack/blocks), shattered windows. The quest car at camp. Prying at it with a melee weapon yields scrap; the car stays, and still drives.' },
   // (the mainland, act 2: shared/mainland.js)
   plane_wreck: {
     size: [15.8, 4.6, 12],

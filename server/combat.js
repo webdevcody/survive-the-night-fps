@@ -467,7 +467,10 @@ export class Combat {
         const hz = oz + fz * _ray.t;
         const tree = col && col.flags & COL.TREE;
         const wreck = col && col.flags & COL.SALVAGE;
-        g.impact(tree ? IMPACT.WOOD : wreck ? IMPACT.SPARK : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
+        // a car rocks and throws scrap metal (BASH); a bat hits harder than a knife. Bullets stay sparks.
+        const car = !claws && col && col.flags & COL.CAR;
+        const hard = ev.weapon === ITEM.BAT || ev.weapon === ITEM.SPIKED_BAT;
+        g.impact(tree ? IMPACT.WOOD : car ? (hard ? IMPACT.BASH_HARD : IMPACT.BASH) : wreck ? IMPACT.SPARK : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
         if (!claws && (tree || wreck)) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
       }
     }

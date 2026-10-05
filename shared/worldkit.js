@@ -3,6 +3,7 @@
 // with one, mainland.js the mainland: the same walls, rooms, roofs, props and placement rules in both.
 import { ZONE, CONT } from './defs.js';
 import { PROPS } from './props.js';
+import { CAR_BASH } from './carbash.js';
 import { ColliderGrid, makeBox, makeCyl, COL } from './collision.js';
 
 const PI = Math.PI;
@@ -28,7 +29,7 @@ export function createKit({ rng, heightAt, half }) {
     if (!def) return;
     const c = Math.cos(ry);
     const s = Math.sin(ry);
-    const flags = COL.STATIC | (def.salvage ? COL.SALVAGE : 0);
+    const flags = COL.STATIC | (def.salvage ? COL.SALVAGE : 0) | (CAR_BASH.has(type) ? COL.CAR : 0);
     if (def.boxes) {
       for (const b of def.boxes) {
         const [lx, ly, lz, sx, sy, sz] = b;

@@ -8,6 +8,7 @@ import { createProp } from './models/props.js';
 import { PROPS } from '../../shared/props.js';
 import { buildCity, TIER } from './citykit.js';
 import { MultiMesh } from './multimesh.js';
+import { bashMaterial } from './carbash.js';
 
 const CHUNK = 80;
 const CHUNK_CITY = 128; // (the mainland's: its city is a great many materials, and every chunk draws each of them once)
@@ -278,6 +279,8 @@ export class StaticWorld {
         flat = mat.color;
         mat = FLAT;
       }
+      // a melee hit rocks a car by shoving the vertices inside its box (carbash.js). Only this world's copy.
+      mat = bashMaterial(mat);
       const key = `${Math.floor(x / size)},${Math.floor(z / size)}`;
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = new Map()));
