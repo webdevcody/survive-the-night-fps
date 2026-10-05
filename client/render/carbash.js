@@ -101,10 +101,12 @@ export class CarBash {
     this.group.name = 'car-bash';
     scene.add(this.group);
     this.box = new THREE.BoxGeometry(1, 1, 1);
-    this.dentGeo = new THREE.BoxGeometry(0.34, 0.2, 0.02);
-    this.paint = lambert(0x4a5c6e);
-    this.scrap = lambert(0x8a7560);
-    this.dentMat = lambert(0xc8bba6); // bare metal where the paint tore: it has to read on a dark wreck and on the blue car
+    this.dentGeo = new THREE.BoxGeometry(0.36, 0.22, 0.016);
+    this.dentBack = new THREE.BoxGeometry(0.58, 0.4, 0.016);
+    this.paint = lambert(0xc4a06a); // a torn panel: rusty steel, so it reads on grass
+    this.scrap = lambert(0x5c4632);
+    this.dentMat = lambert(0xfff3dc); // bare metal
+    this.dentDark = lambert(0x1a120c); // the paint torn back around it
     this.shards = []; // { s, mesh }
     this.dents = []; // { mesh, key }
     this.perCar = new Map(); // car key -> how many dents
@@ -195,13 +197,16 @@ export class CarBash {
 
   addDent(d, key) {
     while (this.dents.length >= MAX_DENTS) this.dropDent(0);
-    const mesh = new THREE.Mesh(this.dentGeo, this.dentMat);
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
-    mesh.position.set(d.x, d.y, d.z);
+    const mesh = new THREE.Group();
     _n.set(d.nx, d.ny, d.nz);
     if (_n.lengthSq() < 1e-6) _n.set(0, 0, 1);
     else _n.normalize();
+    const ring = new THREE.Mesh(this.dentBack, this.dentDark);
+    const face = new THREE.Mesh(this.dentGeo, this.dentMat);
+    ring.position.z = 0.01;
+    face.position.z = 0.022;
+    mesh.add(ring, face);
+    mesh.position.set(d.x, d.y, d.z);
     mesh.quaternion.setFromUnitVectors(_z, _n);
     mesh.rotateZ(d.spin);
     this.group.add(mesh);
@@ -286,9 +291,11 @@ export class CarBash {
     this.scene.remove(this.group);
     this.box.dispose();
     this.dentGeo.dispose();
+    this.dentBack.dispose();
     this.paint.dispose();
     this.scrap.dispose();
     this.dentMat.dispose();
+    this.dentDark.dispose();
   }
 }
 

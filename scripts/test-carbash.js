@@ -49,10 +49,14 @@ const check = (name, ok, info = '') => {
   const soft = makeShards(1, 1, 1, 1, 0, 0, BASH_SOFT, rng);
   const hard = makeShards(1, 1, 1, 1, 0, 0, BASH_HARD, rng);
   check('a knife knocks one piece off and a bat knocks three', soft.length === 1 && hard.length === 3 && soft[0].panel && hard[0].panel, `${soft.length} / ${hard.length}`);
+  check('the piece is a scrap of metal, not a panel in the lens', soft[0].sx < 0.4 && soft[0].sz < 0.25 && Math.hypot(soft[0].vx, soft[0].vz) < 3.5, `${soft[0].sx.toFixed(2)}x${soft[0].sz.toFixed(2)} v ${Math.hypot(soft[0].vx, soft[0].vz).toFixed(2)}`);
   const s = hard[0];
+  const x0 = s.x;
+  const z0 = s.z;
   let y0 = s.y;
   for (let t = 0; t < 4; t += 1 / 60) stepShard(s, 0, 1 / 60, null);
   check('the piece flies, then lands and stays', s.sleep && s.y < y0 && s.y < 0.1 && s.vy === 0, `y ${y0.toFixed(2)} -> ${s.y.toFixed(3)}`);
+  check('it lands within a step of the car', Math.hypot(s.x - x0, s.z - z0) < 2.2, `d ${Math.hypot(s.x - x0, s.z - z0).toFixed(2)}`);
   const buried = makeShards(0, 0.5, 0, 0, 1, 0, BASH_SOFT, rng)[0];
   buried.vy = -2;
   let pushed = false;

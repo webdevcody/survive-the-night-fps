@@ -120,7 +120,8 @@ export function springStep(sp, dt) {
 }
 
 // ---------------------------------------------------------------- scrap that breaks off and falls
-// rng: () => 0..1. The first piece is a panel; the rest are smaller bits. A bat (strength > 1.2) throws more.
+// rng: () => 0..1. The first piece is a torn panel; the rest are smaller bits. A bat (strength > 1.2) throws more.
+// They go mostly up and along the panel, and only a little outward, so they land beside the car.
 export function makeShards(x, y, z, nx, ny, nz, strength, rng) {
   const n = strength > 1.2 ? 3 : strength > 0.9 ? 2 : 1;
   const out = [];
@@ -128,25 +129,32 @@ export function makeShards(x, y, z, nx, ny, nz, strength, rng) {
   nx /= len;
   ny /= len;
   nz /= len;
+  let tx = -nz;
+  let tz = nx;
+  const tl = Math.hypot(tx, tz) || 1;
+  tx /= tl;
+  tz /= tl;
   for (let i = 0; i < n; i++) {
     const panel = i === 0;
-    const speed = (panel ? 2.4 : 3.6) * (0.65 + strength * 0.45);
+    const side = (i % 2 === 0 ? 1 : -1) * (0.75 + rng() * 0.55);
+    const outSp = (panel ? 0.55 : 0.9) * (0.75 + strength * 0.2);
+    const sideSp = (panel ? 1.05 : 1.55) * side;
     out.push({
-      x: x + nx * (panel ? 0.08 : 0.05),
-      y: y + ny * 0.05 + 0.02,
-      z: z + nz * (panel ? 0.08 : 0.05),
-      vx: nx * speed + (rng() - 0.5) * 1.6,
-      vy: 1.1 + rng() * 1.6 + strength * 0.35,
-      vz: nz * speed + (rng() - 0.5) * 1.6,
+      x: x + nx * 0.14,
+      y: y + Math.max(0, ny) * 0.04 + 0.05,
+      z: z + nz * 0.14,
+      vx: nx * outSp + tx * sideSp,
+      vy: (panel ? 2.15 : 2.7) + rng() * 0.9 + strength * 0.2,
+      vz: nz * outSp + tz * sideSp,
       rx: rng() * Math.PI,
       ry: rng() * Math.PI,
       rz: rng() * Math.PI,
-      wx: (rng() - 0.5) * 16,
-      wy: (rng() - 0.5) * 10,
-      wz: (rng() - 0.5) * 16,
-      sx: panel ? 0.46 : 0.07 + rng() * 0.1,
-      sy: panel ? 0.02 : 0.012 + rng() * 0.016,
-      sz: panel ? 0.28 : 0.05 + rng() * 0.09,
+      wx: (rng() - 0.5) * 14,
+      wy: (rng() - 0.5) * 8,
+      wz: (rng() - 0.5) * 14,
+      sx: panel ? 0.32 : 0.06 + rng() * 0.05,
+      sy: panel ? 0.016 : 0.008 + rng() * 0.008,
+      sz: panel ? 0.18 : 0.04 + rng() * 0.035,
       nx, ny, nz,
       panel,
       sleep: false,
@@ -169,11 +177,13 @@ export function makeDent(x, y, z, nx, ny, nz, rng) {
   tx -= nx * dot;
   ty -= ny * dot;
   tz -= nz * dot;
-  const sc = 0.14;
+  const sc = 0.05;
+  // the swing stops on the collision box, a few centimetres outside the paint, so the scrape sits on the skin
+  const inset = 0.05;
   return {
-    x: x + nx * 0.028 + tx * sc,
-    y: y + ny * 0.028 + ty * sc,
-    z: z + nz * 0.028 + tz * sc,
+    x: x - nx * inset + tx * sc,
+    y: y - ny * inset + ty * sc,
+    z: z - nz * inset + tz * sc,
     nx, ny, nz,
     spin: (rng() - 0.5) * 0.5,
   };
