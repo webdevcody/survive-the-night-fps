@@ -12,10 +12,12 @@
 // shots.json: [{ "name": "machete-vs-car", "who": "A", "give": [53], "key": "Digit3", "tp": [x, z, (y)],
 //               "lookAt": [x, z, y] | "yaw": r, "pitch": r, "wait": 1500, "throwAt": ms, "hideHud": true,
 //               "hideVm": true, "hideZombies": true, "say": ["/spawn brute"], "others": { "A": { "tp": [...], "give": [...], "key": "...",
-//               "yaw": r, "pitch": r, "swings": 3, "swingEvery": 700 } }, "swings": 4, "swingEvery": 800, "settle": 1200, "title": "..." }]
+//               "yaw": r, "pitch": r, "swings": 3, "swingEvery": 700 } }, "swings": 4, "swingEvery": 800, "settle": 1200,
+//               "swingFrom": { "tp": [x, z], "lookAt": [x, z, y], "swings": 3 }, "title": "..." }]
 //   who        the client that takes the shot (A, or B: B joins when any shot needs it); others: put the other
 //              client somewhere first (the third-person view of a player holding something). others.swings: that
 //              client clicks too, then the camera comes back and waits `settle` so what broke off can land
+//   swingFrom  the photographer swings from there first, then moves to tp / lookAt for the still
 //   give/key   /give each item and equip it from the backpack, then press a key (Digit1 guns, Digit2 sidearm,
 //              Digit3 melee, Digit4 throwables, Digit5 the hammer, Digit6 the walkie-talkie)
 //   tp/lookAt  /tp to x z (onto the ground), then turn to face a world point (x, z, height)
@@ -175,10 +177,15 @@ async function run(root, dir) {
       for (const [who, o] of Object.entries(s.others || {})) {
         if (o.swings) swings.push({ page: pages[who], spec: o, n: o.swings, every: o.swingEvery ?? s.swingEvery ?? 800 });
       }
+      if (s.swingFrom?.swings) {
+        await tp(p, s.swingFrom.tp);
+        await aim(p, s.swingFrom);
+        swings.push({ page: p, spec: s.swingFrom, n: s.swingFrom.swings, every: s.swingFrom.swingEvery ?? s.swingEvery ?? 800 });
+      }
       if (s.swings) swings.push({ page: p, spec: s, n: s.swings, every: s.swingEvery ?? 800 });
       if (swings.length) {
-        // click the melee button a few times. Another client can be the one swinging, so the camera is not
-        // where the scrap flies; then this view comes forward and waits for the pieces to land.
+        // click the melee button a few times. The photographer can swing from swingFrom and then step back,
+        // or another client can swing, so the camera is not where the scrap flies. Then wait for it to land.
         await sleep(s.wait ?? 400);
         for (const w of swings) {
           await w.page.bringToFront();
@@ -192,6 +199,10 @@ async function run(root, dir) {
           }
         }
         await p.bringToFront();
+        if (s.swingFrom) {
+          await tp(p, s.tp);
+          await aim(p, s);
+        }
         await sleep(s.settle ?? 1200);
         if (s.lookAt || s.yaw !== undefined || s.pitch !== undefined) await aim(p, s);
         await sleep(300);
