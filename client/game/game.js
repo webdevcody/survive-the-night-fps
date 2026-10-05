@@ -1338,6 +1338,10 @@ export class Game {
         ui.notify("Empty the backpack's extra pockets first", 'warning', 2.5);
         a.playLocal('build_fail');
         break;
+      case NOTIFY.NEED_HAMMER:
+        ui.notify(`Equip the hammer to repair ${bindTag('slot5')}`, 'warning', 2);
+        a.playLocal('build_fail');
+        break;
       case NOTIFY.CAMPFIRE_LIT:
         ui.notify('The fire roars back to life.', 'good', 2);
         break;
