@@ -467,7 +467,7 @@ export class Combat {
         const hz = oz + fz * _ray.t;
         const tree = col && col.flags & COL.TREE;
         const wreck = col && col.flags & COL.SALVAGE;
-        g.impact(tree ? IMPACT.WOOD : wreck ? IMPACT.SPARK : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
+        g.impact(tree ? IMPACT.WOOD : wreck ? (claws ? IMPACT.SPARK : IMPACT.WRECK) : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
         if (!claws && (tree || wreck)) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
       }
     }

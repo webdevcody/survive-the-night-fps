@@ -728,7 +728,8 @@ export const EVT = {
   BESTIARY: 37,
 };
 
-export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7 };
+// WRECK: a melee swing landing on a wreck (COL.SALVAGE) - sparks, shards of it thrown off, the wreck rocking
+export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7, WRECK: 8 };
 
 export const NOTIFY = {
   NIGHT_FALLS: 1,

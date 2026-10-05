@@ -8,6 +8,7 @@ import { createProp } from './models/props.js';
 import { PROPS } from '../../shared/props.js';
 import { buildCity, TIER } from './citykit.js';
 import { MultiMesh } from './multimesh.js';
+import { patchRock } from './wreckrock.js';
 
 const CHUNK = 80;
 const CHUNK_CITY = 128; // (the mainland's: its city is a great many materials, and every chunk draws each of them once)
@@ -466,6 +467,7 @@ export class StaticWorld {
     // change of material within one only the material's own.
     const programOf = (mat) => [mat.type, mat.customProgramCacheKey?.() ?? '', Object.keys(mat.defines || {}).sort().join('+'), !!mat.map, !!mat.normalMap, !!mat.vertexColors, mat.side, mat.alphaTest > 0, !!mat.polygonOffset].join('|');
     const mats = [...byMat.values()];
+    for (const m of mats) patchRock(m.mat);
     const firstOf = new Map();
     mats.forEach((m, i) => {
       m.program = programOf(m.mat);

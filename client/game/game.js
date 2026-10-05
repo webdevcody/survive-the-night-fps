@@ -108,6 +108,7 @@ import { buildRailway } from '../render/railway.js';
 import { BridgeView } from '../render/bridge.js';
 import { Crossing, Takeoff, liveProps } from './cutscene.js';
 import { StaticWorld } from '../render/staticworld.js';
+import { WreckRock } from '../render/wreckrock.js';
 import { Crowd } from '../render/crowd.js';
 import { getCrowdMaterial, crowdBones } from '../render/models/skinning.js';
 import { Foliage } from '../render/foliage.js';
@@ -482,6 +483,7 @@ export class Game {
     const t2 = performance.now();
     this.staticWorld = new StaticWorld(this.scene, this.world);
     this.staticWorld.setShadows(!!this.renderer.q.shadows);
+    this.wreckRock = new WreckRock(this.world);
     const t3 = performance.now();
     this.foliage = new Foliage(this.scene, this.world, this.renderer.q, this.settings.grassDistance);
     const t4 = performance.now();
@@ -1130,9 +1132,14 @@ export class Game {
       impact(kind, x, y, z, nx, ny, nz, own) {
         // what our own shot struck was shown as it was fired (predictPellet): this is the server saying so again
         if (!own && g.sameAsOwn(x, y, z)) return;
+        // a swing on a wreck: it rocks, and rings (a knife's reach puts that inside the 1.2 m below)
+        if (kind === IMPACT.WRECK) {
+          g.wreckRock.hit(x, y, z, nx, nz);
+          g.audio.play(SOUND.METAL_HIT, { x, y, z, volume: 0.8 });
+        }
         // hits on ourselves are shown by the damage vignette, not particles in our face
         const dc = Math.hypot(x - g.camera.position.x, y - g.camera.position.y, z - g.camera.position.z);
-        if (dc < 1.2) return;
+        if (dc < 1.2 && kind !== IMPACT.WRECK) return;
         g.effects.impact(kind, x, y, z, nx, ny, nz);
         if (kind === 1 || kind === 6) g.audio.play(SOUND.FLESH_HIT, { x, y, z, volume: 0.6 });
       },
@@ -2769,6 +2776,7 @@ export class Game {
     this.env.update(dt, cycle, cam.position, time, weather, this._envOver);
     this.viewDist = Math.max(cine ? cine.far : 0, this.env.fogVisibility + 40); // how far anything is drawn: past it the haze has it
     this.staticWorld.update(cam.position, this.viewDist);
+    this.wreckRock.update(dt);
     this.foliage.update(cam.position, this.env.fogVisibility, time, weather, cam);
     if (this.water) {
       const u = this.water.material.uniforms;
@@ -2939,6 +2947,7 @@ export class Game {
     const weather = this.weather.update(dt, null, this.time, cam.position);
     this.env.update(dt, 0.49, cam.position, this.time, weather);
     this.staticWorld.update(cam.position, this.env.fogVisibility + 40);
+    this.wreckRock.update(dt);
     this.foliage.update(cam.position, this.env.fogVisibility, this.time, weather, cam);
     this.lights.update(dt, this.time, cam.position, false, this.staticFires, [], this.env.night);
     this.power.update(dt, this.time, cam.position, this.env.night); // (no floodlight is left lit from the game before)

@@ -407,10 +407,38 @@ function headGeometry() {
   });
 }
 
+// a torn flake of sheet steel, thin along Y: a ragged pentagon, one face a shade lighter than the other
+function shardGeometry() {
+  const g = new THREE.CylinderGeometry(0.5, 0.5, 1, 5, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const k = 1 + 0.35 * Math.sin(Math.atan2(z, x) * 2.3 + 0.7);
+    p.setXYZ(i, x * k, p.getY(i), z * k);
+  }
+  g.computeVertexNormals();
+  return paintVerts(g, (x, y, z, col, o) => {
+    const s = y > 0 ? 1 : 0.75;
+    paint(col, o, s, s, s);
+  });
+}
+// what comes off a wreck (sRGB): rust, bare steel, flakes of old paint
+const SHARD_COLS = [
+  [0.45, 0.22, 0.1],
+  [0.36, 0.17, 0.08],
+  [0.52, 0.5, 0.47],
+  [0.28, 0.27, 0.26],
+  [0.55, 0.16, 0.12],
+  [0.2, 0.3, 0.42],
+  [0.68, 0.66, 0.6],
+];
+
 class GibPool {
-  // sit: how much of a piece's half thickness stays above the ground when it lies there
-  constructor(scene, geo, material, max, sit = 0.75) {
+  // sit: how much of a piece's half thickness stays above the ground when it lies there. bleeds: it trails blood in
+  // the air and splats where it lands (meat does; a shard of a wreck does not)
+  constructor(scene, geo, material, max, sit = 0.75, bleeds = true) {
     this.sit = sit;
+    this.bleeds = bleeds;
     this.mesh = new THREE.InstancedMesh(geo, material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
@@ -526,13 +554,13 @@ class GibPool {
         const gy = world.floorAt(P[k], P[k + 2], P[k + 1]);
         if (floor === null && P[k + 1] - rad <= gy) floor = gy;
         for (let c = 0; c < 3; c++) R[k + c] += W[k + c] * dt;
-        if (age < 0.9 && (this.trail[i] -= dt) <= 0) {
+        if (this.bleeds && age < 0.9 && (this.trail[i] -= dt) <= 0) {
           this.trail[i] = 0.07;
           fx.gibDrip(P[k], P[k + 1], P[k + 2], this.green[i]);
         }
         if (floor !== null) {
           P[k + 1] = floor + rad;
-          if (!this.bounces[i]) fx.gibSplat(P[k], floor, P[k + 2], this.green[i]);
+          if (this.bleeds && !this.bounces[i]) fx.gibSplat(P[k], floor, P[k + 2], this.green[i]);
           if (V[k + 1] < -3 && this.bounces[i] < 2) {
             this.bounces[i]++;
             V[k] *= 0.55;
@@ -592,6 +620,7 @@ export class Effects {
     this.gibLumps = new GibPool(scene, lumpGeometry(), gibMat, 110);
     this.gibLimbs = new GibPool(scene, limbGeometry(), gibMat, 70);
     this.gibHeads = new GibPool(scene, headGeometry(), gibMat, 14, 0.95);
+    this.shards = new GibPool(scene, shardGeometry(), gibMat, 72, 0.9, false);
     this.gibLoad = 0; // bodies blown apart lately: a crowd going up at once throws fewer pieces each
     // tracers
     this.tracerMax = 64;
@@ -685,6 +714,20 @@ export class Effects {
         for (let i = 0; i < 12; i++) D.emit(x, y, z, nx * 4 + this.rnd(-3, 3), this.rnd(0, 4), nz * 4 + this.rnd(-3, 3), this.rnd(0.15, 0.4), 0.06, 0.02, 1, 0.8, 0.4, 1, 1, 0.4, 0.1, 0, 14, 0.5, TEX.SPARK);
         D.emit(x, y, z, 0, 0, 0, 0.07, 0.6, 0.2, 1, 0.8, 0.5, 1, 1, 0.6, 0.3, 0, 0, 0, TEX.GLOW);
         break;
+      case IMPACT.WRECK: {
+        this.impact(IMPACT.SPARK, x, y, z, nx, ny, nz);
+        // rust shaken loose: flakes and a brown puff hanging where it struck
+        for (let i = 0; i < 10; i++) A.emit(x, y, z, nx * 2 + this.rnd(-1.2, 1.2), this.rnd(0.3, 2.5), nz * 2 + this.rnd(-1.2, 1.2), this.rnd(0.5, 1), 0.04, 0.05, 0.42, 0.2, 0.08, 1, 0.3, 0.15, 0.07, 0.6, 12, 1, TEX.BLOOD + LIT, 8);
+        A.emit(x, y, z, nx * 0.6, 0.2, nz * 0.6, 1.1, 0.25, 1, 0.4, 0.26, 0.15, 0.45, 0.36, 0.26, 0.18, 0, 0, 2, TEX.SMOKE, 0.4);
+        // pieces of it torn off, out toward whoever struck it (started clear of the body so they fall out, not in)
+        for (let i = 0, n = 3 + Math.floor(Math.random() * 3); i < n; i++) {
+          const [r, g, b] = SHARD_COLS[Math.floor(Math.random() * SHARD_COLS.length)];
+          const s = this.rnd(1.2, 3.2);
+          const w = this.rnd(0.035, 0.09);
+          this.shards.add(x + nx * 0.12, y + this.rnd(-0.05, 0.05), z + nz * 0.12, nx * s + this.rnd(-1.3, 1.3), this.rnd(1.2, 3.8), nz * s + this.rnd(-1.3, 1.3), w, this.rnd(0.004, 0.008), w * this.rnd(0.5, 0.9), r, g, b);
+        }
+        break;
+      }
       case IMPACT.ACID:
         for (let i = 0; i < 14; i++) A.emit(x, y, z, this.rnd(-2, 2), this.rnd(1, 4), this.rnd(-2, 2), this.rnd(0.4, 0.9), 0.12, 0.2, 0.4, 0.95, 0.2, 0.95, 0.2, 0.6, 0.1, 0, 10, 1, TEX.BLOOD);
         this.acid.add(x, this.world.floorAt(x, z, y) + 0.04, z, 4.6);
@@ -1145,6 +1188,7 @@ export class Effects {
     this.gibLumps.update(dt, this);
     this.gibLimbs.update(dt, this);
     this.gibHeads.update(dt, this);
+    this.shards.update(dt, this);
     this.gibLoad = Math.max(0, this.gibLoad - dt * 3);
     // tracers
     let n = 0;
