@@ -745,7 +745,8 @@ export const NOTIFY = {
   GEN_LOW: 48, // a generator nearby has a minute of fuel left (sent to the survivors round it)
   GEN_OUT: 49, // ...it has run dry: its floodlights are out
   POCKETS: 62, // (to whoever tried) the backpack cannot come off while its extra slots hold anything
-  NEED_HAMMER: 63, // (to whoever tried) a repair needs the hammer in hand
+  UNDO_GONE: 63, // (to whoever asked for an undo, ACT.UNDO_DROP) arg = why nothing came back (UNDO_NO in protocol.js)
+  NEED_HAMMER: 64, // (to whoever tried) a repair needs the hammer in hand
 };
 
 // killer kinds for killfeed
