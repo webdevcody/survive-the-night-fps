@@ -101,9 +101,9 @@ export class CarBash {
     this.group.name = 'car-bash';
     scene.add(this.group);
     this.box = new THREE.BoxGeometry(1, 1, 1);
-    this.dentGeo = new THREE.BoxGeometry(0.36, 0.22, 0.016);
-    this.dentBack = new THREE.BoxGeometry(0.58, 0.4, 0.016);
-    this.paint = lambert(0xc4a06a); // a torn panel: rusty steel, so it reads on grass
+    this.dentGeo = new THREE.BoxGeometry(0.62, 0.36, 0.02);
+    this.dentBack = new THREE.BoxGeometry(0.86, 0.54, 0.02);
+    this.paint = lambert(0xf0d7a0); // a torn panel: light steel, so it reads on the grass
     this.scrap = lambert(0x5c4632);
     this.dentMat = lambert(0xfff3dc); // bare metal
     this.dentDark = lambert(0x1a120c); // the paint torn back around it
@@ -137,7 +137,7 @@ export class CarBash {
     this.springOn = true;
     this.apply();
     for (const s of makeShards(x, y, z, nx, ny, nz, strength, rng)) this.addShard(s, pr);
-    if ((this.perCar.get(key) || 0) < DENTS_PER_CAR) this.addDent(makeDent(x, y, z, nx, ny, nz, rng), key);
+    if ((this.perCar.get(key) || 0) < DENTS_PER_CAR) this.addDent(makeDent(pr, x, y, z, rng), key);
   }
 
   retarget(pr) {

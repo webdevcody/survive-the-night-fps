@@ -136,9 +136,9 @@ export function makeShards(x, y, z, nx, ny, nz, strength, rng) {
   tz /= tl;
   for (let i = 0; i < n; i++) {
     const panel = i === 0;
-    const side = (i % 2 === 0 ? 1 : -1) * (0.75 + rng() * 0.55);
-    const outSp = (panel ? 0.55 : 0.9) * (0.75 + strength * 0.2);
-    const sideSp = (panel ? 1.05 : 1.55) * side;
+    const side = (i % 2 === 0 ? 1 : -1) * (0.85 + rng() * 0.7);
+    const outSp = (panel ? 0.45 : 0.75) * (0.75 + strength * 0.2);
+    const sideSp = (panel ? 1.35 : 1.7) * side;
     out.push({
       x: x + nx * 0.14,
       y: y + Math.max(0, ny) * 0.04 + 0.05,
@@ -152,9 +152,9 @@ export function makeShards(x, y, z, nx, ny, nz, strength, rng) {
       wx: (rng() - 0.5) * 14,
       wy: (rng() - 0.5) * 8,
       wz: (rng() - 0.5) * 14,
-      sx: panel ? 0.32 : 0.06 + rng() * 0.05,
-      sy: panel ? 0.016 : 0.008 + rng() * 0.008,
-      sz: panel ? 0.18 : 0.04 + rng() * 0.035,
+      sx: panel ? 0.42 : 0.07 + rng() * 0.05,
+      sy: panel ? 0.02 : 0.01 + rng() * 0.008,
+      sz: panel ? 0.24 : 0.045 + rng() * 0.035,
       nx, ny, nz,
       panel,
       sleep: false,
@@ -164,28 +164,47 @@ export function makeShards(x, y, z, nx, ny, nz, strength, rng) {
   return out;
 }
 
-// a scrape left in the panel, slid a little so two hits do not stack on one point
-export function makeDent(x, y, z, nx, ny, nz, rng) {
-  const len = Math.hypot(nx, ny, nz) || 1;
-  nx /= len;
-  ny /= len;
-  nz /= len;
-  let tx = rng() - 0.5;
-  let ty = rng() - 0.5;
-  let tz = rng() - 0.5;
-  const dot = tx * nx + ty * ny + tz * nz;
-  tx -= nx * dot;
-  ty -= ny * dot;
-  tz -= nz * dot;
-  const sc = 0.05;
-  // the swing stops on the collision box, a few centimetres outside the paint, so the scrape sits on the skin
-  const inset = 0.05;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// a scrape on the face that was hit, flat on the paint. The swing's own normal points back at the
+// player, and a plate built on that stands out of the door like a fin.
+export function makeDent(pr, x, y, z, rng) {
+  const local = worldToCar(pr, x, y, z);
+  const box = carBounds(pr.type) || { cx: 0, cy: 0.7, cz: 0, hx: 0.9, hy: 0.7, hz: 2.2 };
+  const ax = Math.abs(local.x - box.cx) / (box.hx || 1);
+  const ay = Math.abs(local.y - box.cy) / (box.hy || 1);
+  const az = Math.abs(local.z - box.cz) / (box.hz || 1);
+  let nx = 0, ny = 0, nz = 0, lx, ly, lz;
+  const j1 = (rng() - 0.5) * 0.18;
+  const j2 = (rng() - 0.5) * 0.1;
+  const skin = 0.04;
+  if (ax >= ay && ax >= az) {
+    nx = Math.sign(local.x - box.cx) || 1;
+    lx = box.cx + nx * (box.hx - skin);
+    ly = clamp(local.y + j1, 0.46, 0.8);
+    lz = clamp(local.z + j2, box.cz - box.hz + 0.4, box.cz + box.hz - 0.4);
+  } else if (az >= ay) {
+    nz = Math.sign(local.z - box.cz) || 1;
+    lz = box.cz + nz * (box.hz - skin);
+    lx = clamp(local.x + j1, box.cx - box.hx + 0.25, box.cx + box.hx - 0.25);
+    ly = clamp(local.y + j2, 0.4, 0.85);
+  } else {
+    ny = 1;
+    ly = box.cy + box.hy - skin;
+    lx = clamp(local.x + j1, box.cx - box.hx + 0.25, box.cx + box.hx - 0.25);
+    lz = clamp(local.z + j2, box.cz - box.hz + 0.4, box.cz + box.hz - 0.4);
+  }
+  const w = carToWorld(pr, lx, ly, lz);
+  const c = Math.cos(pr.ry);
+  const s = Math.sin(pr.ry);
   return {
-    x: x - nx * inset + tx * sc,
-    y: y - ny * inset + ty * sc,
-    z: z - nz * inset + tz * sc,
-    nx, ny, nz,
-    spin: (rng() - 0.5) * 0.5,
+    x: w.x,
+    y: w.y,
+    z: w.z,
+    nx: c * nx + s * nz,
+    ny,
+    nz: -s * nx + c * nz,
+    spin: (rng() - 0.5) * 0.15,
   };
 }
 
@@ -236,8 +255,8 @@ export function stepShard(s, groundY, dt, inside) {
         s.vx = s.vy = s.vz = 0;
         s.wx = s.wy = s.wz = 0;
         if (s.panel) {
-          s.rx = 0.12;
-          s.rz = 0.35;
+          s.rx = 0;
+          s.rz = 0;
         }
       }
     }

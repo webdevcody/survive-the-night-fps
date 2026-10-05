@@ -19,6 +19,7 @@ import {
   createSpring,
   springImpulse,
   springStep,
+  makeDent,
   makeShards,
   stepShard,
 } from '../shared/carbash.js';
@@ -49,7 +50,7 @@ const check = (name, ok, info = '') => {
   const soft = makeShards(1, 1, 1, 1, 0, 0, BASH_SOFT, rng);
   const hard = makeShards(1, 1, 1, 1, 0, 0, BASH_HARD, rng);
   check('a knife knocks one piece off and a bat knocks three', soft.length === 1 && hard.length === 3 && soft[0].panel && hard[0].panel, `${soft.length} / ${hard.length}`);
-  check('the piece is a scrap of metal, not a panel in the lens', soft[0].sx < 0.4 && soft[0].sz < 0.25 && Math.hypot(soft[0].vx, soft[0].vz) < 3.5, `${soft[0].sx.toFixed(2)}x${soft[0].sz.toFixed(2)} v ${Math.hypot(soft[0].vx, soft[0].vz).toFixed(2)}`);
+  check('the piece is a scrap of metal, not a panel in the lens', soft[0].sx < 0.5 && soft[0].sz < 0.3 && Math.hypot(soft[0].vx, soft[0].vz) < 3.5, `${soft[0].sx.toFixed(2)}x${soft[0].sz.toFixed(2)} v ${Math.hypot(soft[0].vx, soft[0].vz).toFixed(2)}`);
   const s = hard[0];
   const x0 = s.x;
   const z0 = s.z;
@@ -75,6 +76,8 @@ const check = (name, ok, info = '') => {
   check('a point on the car converts and converts back', Math.abs(local.x) < 1e-6 && Math.abs(local.y - 0.7) < 1e-6 && Math.abs(local.z) < 1e-6, `${local.x.toFixed(3)} ${local.y.toFixed(3)} ${local.z.toFixed(3)}`);
   check('the body counts as the car and the ground beside it does not', carContains(pr, back.x, back.y, back.z) && !carContains(pr, pr.x + 6, pr.y, pr.z));
   check('the nearest of two cars is the one that was hit', bashCarAt([pr, { type: 'car_wreck', x: 40, y: 2, z: -4, ry: 0 }], back.x, back.y, back.z) === pr);
+  const dent = makeDent({ type: 'car', x: 0, y: 0, z: 0, ry: 0 }, 0.95, 0.64, -0.2, () => 0.5);
+  check('the scrape lies flat on the door', Math.abs(dent.nx - 1) < 0.02 && Math.abs(dent.ny) < 0.02 && Math.abs(dent.nz) < 0.02 && dent.x > 0.85 && dent.x < 0.95 && dent.y > 0.4 && dent.y < 0.85, `${dent.nx.toFixed(2)} ${dent.ny.toFixed(2)} ${dent.nz.toFixed(2)} @ ${dent.x.toFixed(2)} ${dent.y.toFixed(2)}`);
   check('every bashed prop is one that gives scrap', [...CAR_BASH].every((t) => PROPS[t]?.salvage === true), [...CAR_BASH].filter((t) => !PROPS[t]?.salvage).join(','));
 }
 
