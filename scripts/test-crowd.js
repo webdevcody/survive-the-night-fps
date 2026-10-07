@@ -12,7 +12,8 @@ import { ZTYPE } from '../shared/defs.js';
 import { groundAt, raycastWorld } from '../shared/collision.js';
 
 const seeds = process.argv.slice(2).map(Number).filter((n) => n > 0);
-if (!seeds.length) seeds.push(1, 3, 4);
+const SOME = !seeds.length; // (by default: the first three seeds of these with open ground to try it on)
+if (SOME) seeds.push(1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
 const DT = 1 / SERVER_TICK_RATE;
 const N = 8;
 const ARRIVE = 3;
@@ -81,10 +82,17 @@ function findSpot(game, R = 34) {
           if (w.isDeepWater(px, pz) || game.nav.isBlocked(px, pz)) ok = false;
         }
         const y0 = w.heightAt(x, z);
-        for (const hh of [0.5, 1.4]) {
+        for (const hh of [0.25, 0.5, 1.4]) { // (a low rock in the way too)
           raycastWorld(w, x, y0 + hh, z, Math.sin(b), 0, Math.cos(b), R, _ray);
           if (_ray.t >= 0 && !_ray.terrain) ok = false;
         }
+      }
+      // (and nothing at all standing near the middle, where the rays fan out too far apart to see it: the column needs
+      // the room round the survivor to gather in)
+      if (ok) {
+        const y0 = w.heightAt(x, z);
+        ok = !w.staticGrid.query(x, z, 7, []).some((o) => o.y1 > y0 + 0.2 && Math.hypot(o.x - x, o.z - z) < 7 + (o.r || Math.hypot(o.hx || 0, o.hz || 0)));
+        for (let k = 0; k < 12 && ok; k++) ok = Math.abs(w.heightAt(x + Math.sin(k * 0.52) * 6, z + Math.cos(k * 0.52) * 6) - y0) < 1.5; // (level where they gather)
       }
       if (ok && mx - mn < 7) return { x, z };
     }
@@ -147,6 +155,7 @@ function trial(env, spot, a, spread) {
 const deg = (r) => Math.round((r * 180) / Math.PI);
 let ran = 0;
 for (const seed of seeds) {
+  if (SOME && ran >= 3) break;
   const env = setup(seed);
   const spot = findSpot(env.game);
   if (!spot) {

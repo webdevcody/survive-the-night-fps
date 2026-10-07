@@ -614,19 +614,30 @@ act 2, where the same loop is played with a plane and flying out wins.
     day's: a drum somebody keeps burning (a `barrel` and an `embers` light).
   - Props flagged `live` (the car, the plane) are drawn by the client's cutscene code, not the static world;
     `afloat` ones (boats) stand on water; parts flagged `across` are the one thing built in a road.
-- **The island's shore, and where the two maps lie** (`shared/coast.js`, issue #173: client only - nothing on the
-  server imports it, so no world and no fingerprint changes for it). The island's valley is the 640 m square that is
-  surveyed and walked; past its ring of hills the island goes on down to a shore of its own (`islandShore`: the reach
-  wanders with the bearing round a rounded square through the valley's corners, cliffs where it is short, beaches where
-  it is long) and the sea. The terrain draws that ground in its own material (`buildShore` in terrain.js) and the water
-  lays the sea round it, opaque past the shelf (`aSolid`). The bridge runs due east from a bluff on the island's east
-  shore to the Bridgehead: `geography(seed)` puts the two frames together (the mainland's bridge line is its plan's
-  first draw, `bridgeLine`, checked against the built mainland by `scripts/test-coast.js`), gives the bridge's plan in
-  either frame - the island draws it too (`Game.farBridge`, its last span still up) - and the widest view's extent.
-  The field map lays the shore and sea under its bake (`renderShore`), the bridge over it (`renderBridge`: its spans,
-  piers, wrecks, the broken half, the fallen span on the mainland), and zoomed out past a 1500 m view both maps
-  together (`renderOverview`: from the island the mainland is an unsurveyed outline, its shore guessed; from the
-  mainland the island as this page saw it, `ISLAND_SEEN`). The minimap draws the same layers (`MapScreen.layers`).
+- **No square: the ground past a map's edge, and where the two maps lie** (`shared/coast.js`, issue #173). A map's
+  square is only where the survey and the walking stop (the player simulation's edge): nothing in the ground follows
+  it. The island's valley sits in an island with a round, wandering outline (`shapeOf`: a coast kept off the valley
+  by a rounded square through its corners, cliffs where it comes close, beaches where it stands back, and a ring of
+  hills whose foot and crest wander between): world.js builds its ground with `islandLand` - the valley's relief, the
+  hills on it, the fall to the sea - inside the square and out alike. The mainland's far hills thicken out from the
+  middle by a rounded, noisy distance (`lift` in mainland.js), its woods with them (`treeOdds`), and its river runs in
+  from past the edge. Each world hands the client `world.far(x, z)` (its ground anywhere past the edge: no collider)
+  and `world.flora` (the odds its trees were planted by). Neither is on the wire; the heightfield is, so this changed
+  the worlds' fingerprints once (`scripts/worldprints.json`). The client draws what lies past the edge without a seam
+  and without much cost: the 3D ground as a ring of a few thousand triangles (client/render/farring.js: its first row
+  the terrain's own edge vertices, normals and layers; the island's sea a ring as few), the woods, scrub and grass
+  going on (`farFlora`, Foliage.addFar), and on the field map tiles at the bake's own resolution where there is land or
+  shallows (`shoreTiles`), the open sea being no canvas but the view's colour with the grid on it. All of that is made
+  when the page is idle after a load, a few milliseconds at a time (`Game.idleWork`; `farFieldPart`), or at once when
+  the map is opened first. The bridge runs due east from a bluff on the island's east shore to the Bridgehead:
+  `geography(seed)` puts the two frames together (the mainland's bridge line is its plan's first draw, `bridgeLine`,
+  checked against the built mainland by `scripts/test-coast.js`), gives the bridge's plan in either frame - the island
+  builds it when somebody comes within sight of it (`Game.nearBridge`) - and the widest view's extent. The field map
+  lays the bridge over its bake (`renderBridge`), and zoomed out past its detail both maps together
+  (`renderOverview`, a tenth of a pixel a metre: from the island the mainland is an unsurveyed outline, its shore
+  guessed; from the mainland the island as this page saw it, `ISLAND_SEEN`). The minimap draws the same layers.
+  test-coast holds the seams (no step or kink across an edge, no ridge along one), test-perf the costs (the ring's
+  triangles, the sea's).
 - **Positions on the wire** stay int16: 1/64 m on the island (+-512 m), 1/32 m on the mainland (+-1024 m).
   `usePos(world)` (protocol.js) sets which; the server calls it as a tick starts, a message comes in or the world
   changes, the client as it loads a world. Nothing on the wire says the scale: both ends know the world.

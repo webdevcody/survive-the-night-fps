@@ -90,13 +90,16 @@ const treeBy = (x0, z0, x1, z1, m) => {
 const open = (x, z) => Math.abs(x) < 250 && Math.abs(z) < 250 && !w.isDeepWater(x, z) && !game.nav.isBlocked(x, z);
 const cluttered = (x, z, r) => w.staticGrid.query(x, z, r, []).some((o) => o.y1 > w.heightAt(x, z) + 0.2 && Math.hypot(o.x - x, o.z - z) < r + o.r);
 let spot = null;
-for (let x = -200; x <= 200 && !spot; x += 16) {
-  for (let z = -200; z <= 200 && !spot; z += 16) {
+// (a fine search: a valley's open ground is wherever its places, roads and woods left it)
+for (let x = -200; x <= 200 && !spot; x += 8) {
+  for (let z = -200; z <= 200 && !spot; z += 8) {
     const dx = 0;
     const dz = -1;
     const h0 = w.heightAt(x, z);
     let ok = open(x, z) && !cluttered(x, z, 8) && game.nav.segClear(x, z, x + dx * 45, z + dz * 45) && !treeBy(x, z, x + dx * 45, z + dz * 45, 4) && !treeBy(x - 6, z, x + 6, z, 6);
     for (let d = 0; d <= 45 && ok; d += 2) ok = open(x + dx * d, z + dz * d) && Math.abs(w.heightAt(x + dx * d, z + dz * d) - h0) < 2 && !cluttered(x + dx * d, z + dz * d, 2.5);
+    // (and level where the two shades will stand, 30 m one way and 55 m the other: the light reaches further up a hill)
+    for (const d of [30, -55]) ok = ok && open(x + d, z) && Math.abs(w.heightAt(x + d, z) - h0) < 2;
     if (ok) spot = { x, z };
   }
 }

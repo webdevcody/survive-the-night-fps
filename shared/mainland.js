@@ -164,9 +164,14 @@ export function createMainland(seed) {
     }
     riverPts.push(ctrl[ctrl.length - 1][0], ctrl[ctrl.length - 1][1]);
   }
+  // ...and where it comes from: on out of the far hills past the edge of the survey (so it runs in across the edge,
+  // and does not start just short of it), wandering as it goes
+  const riverUp = [];
+  for (let d = 300; d > 0; d -= 4) riverUp.push(riverPts[0] + Math.sin(d * 0.012 + seed) * 26 * (d / 300), riverPts[1] + bside * d);
+  const riverAll = [...riverUp, ...riverPts];
   const riverD = new Float32Array(N * N).fill(1e4);
-  for (let s = 0; s < riverPts.length / 2 - 1; s++) {
-    const [ax, az, bx, bz] = [riverPts[s * 2], riverPts[s * 2 + 1], riverPts[s * 2 + 2], riverPts[s * 2 + 3]];
+  for (let s = 0; s < riverAll.length / 2 - 1; s++) {
+    const [ax, az, bx, bz] = [riverAll[s * 2], riverAll[s * 2 + 1], riverAll[s * 2 + 2], riverAll[s * 2 + 3]];
     const el2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
     const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - 110 + HALF) / GRID_STEP));
     const i1 = Math.min(N - 1, Math.ceil((Math.max(ax, bx) + 110 + HALF) / GRID_STEP));
@@ -183,6 +188,19 @@ export function createMainland(seed) {
     }
   }
   const riverAt = (x, z) => riverD[clamp(Math.round((z + HALF) / GRID_STEP), 0, N - 1) * N + clamp(Math.round((x + HALF) / GRID_STEP), 0, N - 1)];
+  // (past the edge of the survey, where riverD does not reach: how far from the river's upper reaches, worked out)
+  const upTo = riverUp.length / 2 + 12;
+  const riverFar = (x, z) => {
+    if (Math.abs(x - riverPts[0]) > 120) return 1e4;
+    let best = 1e4;
+    for (let s = 0; s < upTo - 1; s++) {
+      const [ax, az, bx, bz] = [riverAll[s * 2], riverAll[s * 2 + 1], riverAll[s * 2 + 2], riverAll[s * 2 + 3]];
+      const el2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
+      const t = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / el2, 0, 1);
+      best = Math.min(best, Math.hypot(x - ax - (bx - ax) * t, z - az - (bz - az) * t));
+    }
+    return best;
+  };
   const onField = (x, z, pad) => Math.abs(x - (field.x - 30)) < 80 + pad && Math.abs(z - field.z) < RUNWAY_LEN / 2 + 30 + pad;
 
   // ---- what lies about: the places out on the plain (mainland-places.js), each on ground of its own
@@ -382,7 +400,33 @@ export function createMainland(seed) {
     const a = (relief(x, z) - FLOOR) * 0.8;
     return FLOOR + 0.5 * (a + Math.sqrt(a * a + 9)) + micro;
   };
-  const edgeRise = (x, z) => smoothstep(HALF - 60, HALF - 2, Math.max(Math.abs(z), x)) * 26;
+  // The far hills: out from the middle of the plain the ground gathers into hills, more of them and higher the further
+  // out, to the north, the south and the east, and they go on past the edge of the survey. How far out that begins is
+  // a rounded distance from the middle (nothing like the square), thrown about by a wide wander, and the hills
+  // themselves are ridges and knolls of their own (a ridged noise), so no line of them runs along any edge: the edge is
+  // only where the survey, and the walking, stop. (They were a rise along the square once, which drew it on the map
+  // and on the skyline.)
+  // (Self-contained for issue #232, Layout 12, which rebuilds the mainland: what it would replace here is out, lift and
+  // treeOdds' far-hills term below, riverUp / riverFar above, and far / flora in what this returns. The client asks
+  // nothing of the mainland but those two - world.far(x, z), the ground past the edge, and world.flora, the odds its
+  // trees were planted by - so a new layout that gives them keeps the map and the far country drawn without a seam.)
+  const out = (x, z) => {
+    const ax = Math.abs(x);
+    const az = Math.abs(z);
+    const r = Math.cbrt(ax * ax * ax + az * az * az);
+    return r + 90 * nB(x * 0.0026 + 4.1, z * 0.0026 - 2.7) + 35 * nE(x * 0.008 - 1.3, z * 0.008 + 6.2);
+  };
+  const lift = (x, z) => {
+    const t = smoothstep(HALF - 150, HALF + 150, out(x, z));
+    if (t <= 0) return 0;
+    const ridge = 1 - Math.abs(nB(x * 0.0055 + 13.7, z * 0.0055 - 8.1));
+    return t * (8 + 30 * ridge * ridge + 6 * nE(x * 0.02 + 3, z * 0.02 - 5));
+  };
+  const G0 = (x, z) => H0(x, z) + lift(x, z);
+  // how likely a tree is to stand at (x, z): the woods thicken out onto the far hills (the same rounded distance as
+  // theirs: no band of them along the square), copses where the noise says (the client grows the same woods on past
+  // the edge of the survey: shared/coast.js farFlora)
+  const treeOdds = (x, z) => Math.max(smoothstep(HALF - 170, HALF + 30, out(x, z)), smoothstep(0.12, 0.42, fbm(nE, x * 0.009, z * 0.009, 3)) * 0.85);
   // the ground of the built-up places is one level each: the city's, the airfield's
   const cityH = Math.max(FLOOR + 1.4, H0(city.x, city.z) * 0.5 + 1);
   const fieldH = Math.max(FLOOR + 1.4, H0(field.x - 40, field.z) * 0.5 + 1);
@@ -391,7 +435,7 @@ export function createMainland(seed) {
     else if (zn.id === ZONE.CITY) zn.h = cityH;
     else if (zn.id === ZONE.TERMINAL || zn.id === ZONE.HANGARS || zn.id === ZONE.FUEL_DEPOT) zn.h = fieldH;
     else if (zn.id === ZONE.MARINA) zn.h = WATER_LEVEL + 1.5;
-    else zn.h = Math.max(FLOOR + 1, H0(zn.x, zn.z) * 0.55 + 0.8 + (zn.raise || 0));
+    else zn.h = Math.max(FLOOR + 1, H0(zn.x, zn.z) * 0.55 + 0.8 + (zn.raise || 0) + lift(zn.x, zn.z) * 0.85);
   }
   // rectangles of level ground [x, z, half x, half z, height, blend]: the runway with its apron, the city
   const flats = [
@@ -408,8 +452,9 @@ export function createMainland(seed) {
     const s = Math.sin(f.ry);
     flats.push([f.x - 48 * c, f.z + 48 * s, Math.abs(c) > 0.5 ? 16 : 22, Math.abs(c) > 0.5 ? 22 : 16, f.h, 16]);
   });
-  const H1 = (x, z) => {
-    let h = H0(x, z);
+  // river: how far (x, z) is from the river (the heightfield's own table inside the survey; worked out past it)
+  const H1 = (x, z, river = riverAt) => {
+    let h = G0(x, z);
     for (const zn of zones) {
       const d = Math.hypot(x - zn.x, z - zn.z);
       const lim = zn.flat + zn.blend;
@@ -443,7 +488,7 @@ export function createMainland(seed) {
       h = lerp(h, WATER_LEVEL - pd.depth, 1 - smoothstep(pd.r * 0.2, pd.r - 1, dp));
     }
     // the river: a valley let down to the water's edge, the bed cut below it (its banks wander a little)
-    const dRiver = riverAt(x, z);
+    const dRiver = river(x, z);
     if (dRiver < RIVER_HW + RIVER_BANK + 4) {
       const dn = dRiver + nE(x * 0.04, z * 0.04) * 2.4;
       h = lerp(h, Math.min(h, WATER_LEVEL + 0.9), 1 - smoothstep(RIVER_HW + 1.5, RIVER_HW + RIVER_BANK, dn));
@@ -455,7 +500,7 @@ export function createMainland(seed) {
     const beach = 1 - smoothstep(-6, lerp(60, 14, bluff), s);
     h = lerp(h, WATER_LEVEL + 0.6, beach * (1 - bluff * smoothstep(-2, 10, s)));
     h = lerp(h, WATER_LEVEL - 7, 1 - smoothstep(-34, lerp(-2, 4, bluff), s));
-    return h + edgeRise(x, z);
+    return h;
   };
 
   const heights = new Float32Array(N * N);
@@ -3307,10 +3352,8 @@ export function createMainland(seed) {
   for (let a = 0; a < 42000; a++) {
     const x = rng.range(-LIM, LIM);
     const z = rng.range(-LIM, LIM);
-    // woods on the rim, copses over the plain
-    const rim = smoothstep(HALF - 150, HALF - 40, Math.max(Math.abs(z), x));
-    const dens = fbm(nE, x * 0.009, z * 0.009, 3);
-    if (rng() > Math.max(rim, smoothstep(0.12, 0.42, dens) * 0.85)) continue;
+    // woods on the far hills, copses over the plain
+    if (rng() > treeOdds(x, z)) continue;
     if (zoneClear(x, z) || onRoad(x, z, 0.6) || inWater(x, z) || x < shoreX(z) + 8 || clearHit(x, z, 0.8)) continue;
     const scale = rng.range(0.75, 1.3);
     if (occupied(x, z, 1.5 * scale)) continue;
@@ -3424,6 +3467,10 @@ export function createMainland(seed) {
   return {
     seed,
     kind: WORLD.MAINLAND,
+    // the ground past the edge of the survey: the far hills, the far country, the sea (no collider, nothing walks it: the
+    // client draws it - shared/coast.js farField)
+    far: (x, z) => H1(x, z, Math.max(Math.abs(x), Math.abs(z)) > HALF ? riverFar : riverAt),
+    flora: { treeOdds, tries: 42000, kinds: [[0, 0.2], [1, 0.18], [2, 0.14], [5, 0.26], [6, 0.08], [3, 0.08], [4, 0.06]] },
     size: SIZE,
     half: HALF,
     gridN: N,

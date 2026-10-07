@@ -111,7 +111,7 @@ import { buildMine } from '../render/mine.js';
 import { buildClinic, disposeClinic } from '../render/clinic.js';
 import { Graves } from '../render/cemetery.js';
 import { buildRailway } from '../render/railway.js';
-import { BridgeView } from '../render/bridge.js';
+import { BridgeView, farBridgeSteps } from '../render/bridge.js';
 import { geography } from '../../shared/coast.js';
 import { Crossing, Takeoff, liveProps } from './cutscene.js';
 import { StaticWorld } from '../render/staticworld.js';
@@ -525,9 +525,10 @@ export class Game {
     this.railway = buildRailway(this.world); // (the ballast, sleepers and rails of the line)
     if (this.railway) this.scene.add(this.railway);
     this.bridge = this.world.bridge ? new BridgeView(this.scene, this.world) : null; // (the mainland: the bridge the car came over)
-    // (the island: the same bridge, standing off its east shore - shared/coast.js - with its last span still up)
-    this.farBridge = this.world.kind === WORLD.ISLAND ? new BridgeView(this.scene, { seed, bridge: geography(seed).bridge(true) }, { island: false }) : null;
-    this.farBridge?.setFall(0);
+    // (the island: the same bridge, standing off its east shore - shared/coast.js - with its last span still up. It is
+    // built when somebody comes near enough to see it: Game.nearBridge)
+    this.farBridge = null;
+    this.bridgeEnd = this.world.kind === WORLD.ISLAND ? geography(seed).end : null;
     this.live = liveProps(this.scene, this.world); // (...the car they came in and the plane: the props a cutscene moves)
     this.under = 0;
     const t2 = performance.now();
@@ -568,7 +569,46 @@ export class Game {
     this.ui.map.setWorld(this.world);
     this.ui.map.baked(); // (the minimap draws from it at once: bake it here, in the load, not on the first frame)
     this.prewarm();
+    // What is past the map's edge - the field map's layers round its bake, the woods and the scrub out there - is not
+    // wanted for the first frame: it is made when the page is idle, a piece at a time (Game.idleWork)
+    const world = this.world;
+    this.idleQueue = [['far ground mesh', () => this.terrain.userData.addShore()], ...this.ui.map.extraSteps(), ['far woods', () => this.foliage.addFar()]].map(([name, fn]) => ({ name, fn, world }));
+    this.idleWork();
     console.log(`[client] world ${seed}: gen ${(t1 - t0).toFixed(0)}ms, terrain ${(t2 - t1).toFixed(0)}ms, static ${(t3 - t2).toFixed(0)}ms, foliage ${(t4 - t3).toFixed(0)}ms, rest ${(performance.now() - t4).toFixed(0)}ms`);
+  }
+
+  // the next piece of idle work (loadWorld queues them), when the page is next idle; a piece of a world since unloaded is
+  // dropped
+  idleWork() {
+    if (this.idleBusy || !this.idleQueue?.length) return;
+    this.idleBusy = true;
+    const go = (deadline) => {
+      this.idleBusy = false;
+      const t0 = performance.now();
+      while (this.idleQueue.length) {
+        const job = this.idleQueue.shift();
+        if (job.world !== this.world) continue;
+        const t = performance.now();
+        job.fn();
+        (this.idleTimes ||= []).push([job.name, performance.now() - t]);
+        if (!deadline || deadline.timeRemaining() < 4 || performance.now() - t0 > 8) break;
+      }
+      this.idleWork();
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 1500 });
+    else setTimeout(go, 60);
+  }
+
+  // the island's bridge, built when the camera comes within sight of where it leaves the shore (from most of the valley
+  // there is no seeing it through the haze): a span at a time while the page is idle, then merged to a few meshes
+  // (render/bridge.js farBridgeSteps)
+  nearBridge(cam) {
+    if (this.bridgeEnd === null || this.farBridge) return;
+    if (Math.hypot(cam.x - this.bridgeEnd, cam.z) > 340) return;
+    const world = this.world;
+    const fb = (this.farBridge = farBridgeSteps(this.scene, geography(this.seed).bridge(true), this.seed));
+    (this.idleQueue ||= []).push(...fb.steps.map((fn, k) => ({ name: 'bridge ' + k, world, fn })));
+    this.idleWork();
   }
 
   // (the server deals a new map every playthrough, so worlds come and go for as long as the page is open)
@@ -581,6 +621,7 @@ export class Game {
     this.bridge = null;
     this.farBridge?.dispose();
     this.farBridge = null;
+    this.bridgeEnd = null;
     this.live?.dispose();
     this.live = null;
     if (this.mine) {
@@ -3002,6 +3043,7 @@ export class Game {
     this.viewDist = Math.max(cine ? cine.far : 0, this.env.fogVisibility + 40); // how far anything is drawn: past it the haze has it
     this.staticWorld.update(cam.position, this.viewDist);
     this.foliage.update(cam.position, this.env.fogVisibility, time, weather, cam);
+    this.nearBridge(cam.position);
     if (this.water) {
       const u = this.water.material.uniforms;
       u.uTime.value = time;

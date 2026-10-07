@@ -21,6 +21,7 @@ import { planRail } from './rail.js';
 import { createKit } from './worldkit.js';
 import { WORLD } from './acts.js';
 import { POS_SCALE } from './protocol.js';
+import { islandLand } from './coast.js';
 
 export { ROAD };
 
@@ -88,14 +89,53 @@ export function createWorld(seed) {
     const a = (h - FLOOR) * 0.8;
     return FLOOR + 0.5 * (a + Math.sqrt(a * a + 9)) + micro;
   };
+  // The island's own lie (shared/coast.js islandLand): a ring of hills round the valley floor, round and wandering, that
+  // falls past its crest to the island's shore and under the sea. It is the same ground inside the valley and out past
+  // its edge, so nothing marks where the one ends (no rim along the square, as the valley once had): the edge is only
+  // where the survey, and the walking, stop. The hills keep off the places (each stands on the valley's ground, as it
+  // always has, its hills rising behind it), so what is built and laid about them is as it was.
+  const isle = islandLand(seed);
   for (const z of zones) {
     if (z.id === ZONE.DOCK) z.h = WATER_LEVEL + 1.5;
     else z.h = Math.max(FLOOR + 0.8, H0(z.x, z.z) * 0.55 + (z.raise || 0) - (z.pit || 0));
   }
-  const edgeRise = (x, z) => smoothstep(MAP_HALF - 45, MAP_HALF - 2, Math.max(Math.abs(x), Math.abs(z))) * 22;
+  // how much of the hills stands at (x, z): none on a place's ground, nor for a way round it
+  const clearOf = (x, z) => {
+    let k = 1;
+    for (let i = 0; i < zones.length && k > 0; i++) {
+      const zn = zones[i];
+      const lim = zn.flat + zn.blend;
+      const d = Math.hypot(x - zn.x, z - zn.z);
+      if (d < lim + 60) k *= smoothstep(lim + 10, lim + 60, d);
+    }
+    return k;
+  };
+  // the rim the valley had along its edge: what its roads and its railway were laid out over, and what its tunnel mouths
+  // were dug into
+  const oldRim = (x, z) => smoothstep(MAP_HALF - 45, MAP_HALF - 2, Math.max(Math.abs(x), Math.abs(z))) * 22;
+  // round each tunnel mouth of the railway the hills stand at least as high as that rim did, so the mouths are dug into
+  // the hill they always were: [x, z] (filled once the line is planned, below; part of the ground inside the edge and out)
+  const mouths = [];
+  const mouthAt = (x, z) => {
+    let w = 0;
+    for (const [mx, mz] of mouths) w = Math.max(w, 1 - smoothstep(16, 40, Math.hypot(x - mx, z - mz)));
+    return w;
+  };
+  // the ground with the island's lie on it; G0.lift: how much of it was the hills, at the point asked last
+  const G0 = (x, z) => {
+    const h0 = H0(x, z);
+    const d = isle.land(x, z, h0) - h0;
+    let lift = d ? d * clearOf(x, z) : 0; // (d is 0 inside the foot of the hills: most of the valley)
+    if (mouths.length) {
+      const w = mouthAt(x, z);
+      if (w > 0) lift = lerp(lift, Math.max(lift, oldRim(x, z)), w);
+    }
+    G0.lift = lift;
+    return h0 + lift;
+  };
 
   const H1 = (x, z) => {
-    let h = H0(x, z);
+    let h = G0(x, z);
     for (let i = 0; i < zones.length; i++) {
       const zn = zones[i];
       const dx = x - zn.x;
@@ -125,7 +165,7 @@ export function createWorld(seed) {
       const bowl = 1 - smoothstep(pd.r * 0.2, pd.r - 1, dp);
       h = lerp(h, WATER_LEVEL - pd.depth, bowl);
     }
-    return h + edgeRise(x, z);
+    return h;
   };
 
   // raw heightfield (before roads): sampled by the road router and road grading instead of re-evaluating noise
@@ -135,11 +175,15 @@ export function createWorld(seed) {
   const roadKind = new Uint8Array(N * N);
   const roadH = new Float32Array(N * N);
   const roadDir = new Float32Array(N * N * 2); // unit tangent of the nearest road (road textures follow it)
+  // (and the ground as the roads are routed over: the valley's own, under the rim it had along its edge - so the island's
+  // roads, and all that is laid out about them, are where they always were; the hills only meet them near the edge)
+  const routeLift = new Float32Array(N * N);
   for (let j = 0; j < N; j++) {
     const z = -MAP_HALF + j * GRID_STEP;
     for (let i = 0; i < N; i++) {
       const x = -MAP_HALF + i * GRID_STEP;
       heights[j * N + i] = H1(x, z);
+      routeLift[j * N + i] = oldRim(x, z) - G0.lift;
     }
   }
   const rawH = (x, z) => {
@@ -161,7 +205,33 @@ export function createWorld(seed) {
 
   // the railway (rail.js; null on a map without one): the line gets its heights before any road does, since every
   // road that crosses it meets it on the level
-  const rail = planRail(railPlan, { seed, depot: zoneById[ZONE.STATION], rawH, edgeRise });
+  // (planned over the valley's own ground and the rim it had, as the roads are routed: so the line and its tunnel mouths
+  // are where they always were, and the hills only stand over them)
+  const routeAt = (x, z) => {
+    const fx = clamp((x + MAP_HALF) / GRID_STEP, 0, N - 1.001);
+    const fz = clamp((z + MAP_HALF) / GRID_STEP, 0, N - 1.001);
+    const i = fx | 0;
+    const j = fz | 0;
+    const k = j * N + i;
+    const a = routeLift[k] + (routeLift[k + 1] - routeLift[k]) * (fx - i);
+    const b = routeLift[k + N] + (routeLift[k + N + 1] - routeLift[k + N]) * (fx - i);
+    return a + (b - a) * (fz - j);
+  };
+  const rail = planRail(railPlan, { seed, depot: zoneById[ZONE.STATION], rawH: (x, z) => rawH(x, z) + routeAt(x, z), edgeRise: oldRim });
+  if (rail) {
+    for (const p of rail.portals) mouths.push([p.x + p.dx * 5, p.z + p.dz * 5]);
+    // (the ground round them worked out again with them, and the roads still routed over the ground as it was)
+    for (const [mx, mz] of mouths) {
+      for (let j = Math.max(0, Math.floor((mz - 42 + MAP_HALF) / GRID_STEP)); j <= Math.min(N - 1, Math.ceil((mz + 42 + MAP_HALF) / GRID_STEP)); j++) {
+        const z = -MAP_HALF + j * GRID_STEP;
+        for (let i = Math.max(0, Math.floor((mx - 42 + MAP_HALF) / GRID_STEP)); i <= Math.min(N - 1, Math.ceil((mx + 42 + MAP_HALF) / GRID_STEP)); i++) {
+          const x = -MAP_HALF + i * GRID_STEP;
+          heights[j * N + i] = H1(x, z);
+          routeLift[j * N + i] = oldRim(x, z) - G0.lift;
+        }
+      }
+    }
+  }
 
   // ---------------------------------------------------------------- roads
   const roads = [];
@@ -281,7 +351,7 @@ export function createWorld(seed) {
   const AN1 = AN + 1;
   const aH = new Float32Array(AN1 * AN1);
   const AS = AG / GRID_STEP;
-  for (let j = 0; j <= AN; j++) for (let i = 0; i <= AN; i++) aH[j * AN1 + i] = heights[Math.min(N - 1, j * AS) * N + Math.min(N - 1, i * AS)];
+  for (let j = 0; j <= AN; j++) for (let i = 0; i <= AN; i++) aH[j * AN1 + i] = heights[Math.min(N - 1, j * AS) * N + Math.min(N - 1, i * AS)] + routeLift[Math.min(N - 1, j * AS) * N + Math.min(N - 1, i * AS)];
   const aBase = new Float32Array(AN * AN);
   const aZone = new Int8Array(AN * AN).fill(-1);
   const aRoad = new Uint8Array(AN * AN);
@@ -2072,14 +2142,16 @@ export function createWorld(seed) {
     if (occupied(x, z, 1.2) || roadClear(x, z, 0) || inLake(x, z) || clearHit(x, z, 0.5)) continue;
     pushTree(x, z, v, s);
   }
+  // how likely a tree is to stand at (x, z) (the client grows the same forest on past the valley's edge, over the
+  // island's hills: shared/coast.js farFlora)
+  const treeOdds = (x, z) => 0.25 + 0.75 * smoothstep(-0.35, 0.3, fbm(nE, x * 0.012, z * 0.012, 3));
   const TREE_ATTEMPTS = 16000;
   const LIM = MAP_HALF - 4;
   const church = zoneById[ZONE.CHURCH];
   for (let a = 0; a < TREE_ATTEMPTS; a++) {
     const x = rng.range(-LIM, LIM);
     const z = rng.range(-LIM, LIM);
-    const dens = fbm(nE, x * 0.012, z * 0.012, 3);
-    if (rng() > 0.25 + 0.75 * smoothstep(-0.35, 0.3, dens)) continue;
+    if (rng() > treeOdds(x, z)) continue;
     if (zoneClear(x, z)) continue;
     if (roadClear(x, z, 0)) continue;
     if (inLake(x, z)) continue;
@@ -2269,6 +2341,10 @@ export function createWorld(seed) {
   return {
     seed,
     kind: WORLD.ISLAND, // which of the run's two maps this is (acts.js): the island, where the car broke down
+    // the ground past the edge of the valley, down to the island's shore and under the sea (no collider, nothing walks
+    // it: the client draws it - shared/coast.js farField)
+    far: H1,
+    flora: { treeOdds, tries: 16000, kinds: [[0, 0.26], [1, 0.24], [2, 0.2], [5, 0.1], [6, 0.07], [3, 0.07], [4, 0.06]] },
     size: MAP_SIZE, // metres a side: everything that walks, draws or maps the world reads these, not the constants
     half: MAP_HALF,
     gridN: GRID_N, // heightfield vertices a side (GRID_STEP m apart)

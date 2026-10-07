@@ -13,8 +13,20 @@ import { groundFields } from './terrain.js';
 import { grassRadius } from './renderer.js';
 import { FallingTrees } from './fallingtrees.js';
 import { isShadowFrustum } from './multimesh.js';
+import { farField, farFlora } from '../../shared/coast.js';
 
 const CELL = 32;
+const NEAR_PAST = 40; // m past the map's edge: the trees out there nearer than this are drawn as trees, the rest as cones
+// a tree as the haze shows it from a long way off: a dark cone on a stub (scale 1: a 20 m fir)
+let _cone = null;
+function farCone() {
+  if (_cone) return _cone;
+  const g = new THREE.ConeGeometry(3.2, 15, 6, 1, true);
+  g.translate(0, 4 + 7.5, 0);
+  _cone = { geometry: g, material: new THREE.MeshLambertMaterial({ color: 0x2c3a2b }) };
+  return _cone;
+}
+const GRASS_PAST = 18; // m: how far past the map's edge the grass goes on, thinning out
 const CELL_OFF = 1024; // added to a coordinate before it is put in a cell, so that none is negative (the mainland reaches +-640 m)
 
 // The view the instance buffers were last filled for, padded: what is outside it is not drawn at all (two thirds of
@@ -91,8 +103,8 @@ const upload = (mesh, n) => {
 class InstancedSet {
   // data: Float32Array stride 6 [x,y,z,scale,rot,variant]
   constructor(scene, data, variants, opts) {
-    this.data = data;
-    this.n = data.length / 6;
+    this.scene = scene;
+    this.opts = opts;
     this.variants = variants;
     this.radius = opts.radius;
     this.rebuildDist = opts.rebuildDist || 8;
@@ -101,6 +113,30 @@ class InstancedSet {
     this.lastX = 1e9;
     this.lastZ = 1e9;
     this.stamp = -1;
+    this.gone = null; // per instance: 1 while it is left out (a felled tree)
+    this._build(data);
+  }
+
+  // more instances after the ones it has (their indices follow on: those it has keep theirs, and whether they are left out)
+  grow(more) {
+    if (!more.length) return;
+    const data = new Float32Array(this.data.length + more.length);
+    data.set(this.data);
+    data.set(more, this.data.length);
+    const gone = this.gone;
+    this.dispose();
+    this._build(data);
+    if (gone) {
+      this.gone = new Uint8Array(this.n);
+      this.gone.set(gone);
+    }
+    this.lastX = 1e9;
+  }
+
+  _build(data) {
+    const { scene, opts, variants } = this;
+    this.data = data;
+    this.n = data.length / 6;
     this.cells = new Map();
     for (let i = 0; i < this.n; i++) {
       const key = Math.floor((data[i * 6] + CELL_OFF) / CELL) * 1000 + Math.floor((data[i * 6 + 2] + CELL_OFF) / CELL);
@@ -169,7 +205,6 @@ class InstancedSet {
     this._order = new Int32Array(this.n);
     this._bins = new Int32Array(BINS + 1);
     this._k = variants.map(() => [0, 0, 0]);
-    this.gone = null; // per instance: 1 while it is left out (a felled tree)
   }
 
   // leave instance i out (on: true) or draw it again; the buffers are rebuilt with the next update
@@ -296,6 +331,7 @@ class GrassField {
     this.scene = scene;
     this.world = world;
     this.fields = groundFields(world);
+    this.far = null; // (the ground past the map's edge, once Foliage.addFar has it: the grass goes on over it)
     this.patch = getGrassPatch();
     this.chunks = new Map();
     this.mesh = null;
@@ -389,14 +425,31 @@ class GrassField {
   // one clump at x, z (if the ground there grows one) onto out; salt keeps the infill's dice apart from the base's
   clump(out, gi, gj, salt, x, z) {
     const w = this.world;
-    if (Math.abs(x) > w.half - 2 || Math.abs(z) > w.half - 2) return;
-    const dens = this.density(x, z);
-    if (hash2(gi, gj, 91 + salt) > dens) return;
-    const y = w.heightAt(x, z);
+    // past the map's edge the grass goes on over the ground there (shared/coast.js farField), so no line of it marks
+    // where the map stops: meadow, thinner on the steep and gone on the sand
+    const past = Math.abs(x) > w.half - 1 || Math.abs(z) > w.half - 1;
+    let dens;
+    let y;
+    if (past) {
+      const F = this.far;
+      // (in a band past the edge, thinning out: near enough to be seen as grass from where anybody can stand)
+      const past = Math.max(Math.abs(x), Math.abs(z)) - w.half;
+      if (!F || past > GRASS_PAST || hash2(gi, gj, 57 + salt) < past / GRASS_PAST) return;
+      y = F.at(x, z);
+      if (y < WATER_LEVEL + 1.1) return;
+      const slope = Math.hypot(F.at(x + 2, z) - F.at(x - 2, z), F.at(x, z + 2) - F.at(x, z - 2)) / 4;
+      const n = Math.sin(x * 0.11 + Math.sin(z * 0.07) * 2.3) * Math.cos(z * 0.097 - x * 0.03 + Math.sin(x * 0.05));
+      dens = 0.95 * (1 - Math.min(1, Math.max(0, (slope - 0.3) / 0.25))) * (0.8 + 0.22 * n);
+      if (hash2(gi, gj, 91 + salt) > dens) return;
+    } else {
+      dens = this.density(x, z);
+      if (hash2(gi, gj, 91 + salt) > dens) return;
+      y = w.heightAt(x, z);
+    }
     if (y < WATER_LEVEL + 0.25) return;
     if (Math.hypot(x - w.car.x, z - w.car.z) < 4) return;
     // skip building floors / props footprints
-    const cell = w.staticGrid.cellAt(x, z);
+    const cell = past ? null : w.staticGrid.cellAt(x, z);
     if (cell) {
       for (const c of cell) {
         if (c.flags & 16) continue; // trees fine
@@ -492,7 +545,36 @@ export class Foliage {
     this.setQuality(quality, grassMul);
   }
 
+  // the woods and the scrub past the map's edge (shared/coast.js farFlora), after the world's own - a tree's index is
+  // still its record in world.trees, which felling goes by. Game does this when the page is idle after a load
+  addFar() {
+    if (this.farTrees) return;
+    // Out there the trees are only seen through the haze, and from no nearer than the map's edge: within NEAR_PAST m
+    // of it as the far copy of one kind (the old fir's: nobody is near enough to tell them apart), past that as dark
+    // cones, a dozen triangles each. One instanced draw each, no shadows, only as far as the haze lets anybody see.
+    const far = farFlora(this.world).trees;
+    const H = this.world.half;
+    const near = [];
+    const cone = [];
+    for (let i = 0; i < far.length; i += 6) {
+      const out = Math.max(Math.abs(far[i]), Math.abs(far[i + 2])) - H < NEAR_PAST ? near : cone;
+      out.push(far[i], far[i + 1], far[i + 2], far[i + 3], far[i + 4], 0);
+    }
+    const fir = getTreeVariants()[2];
+    this.farTrees = [
+      new InstancedSet(this.scene, new Float32Array(near), [{ parts: fir.far || fir.parts }], { radius: this.quality.treeDist, rebuildDist: 12, stretch: true, receive: false }),
+      new InstancedSet(this.scene, new Float32Array(cone), [{ parts: [farCone()] }], { radius: this.quality.treeDist, rebuildDist: 16, stretch: true, receive: false }),
+    ];
+    if (!this.grass.far && this.world.far) {
+      // (the grass past the edge: the chunks made before the far ground was known are made again, with it)
+      this.grass.far = farField(this.world);
+      this.grass.chunks.clear();
+      this.grass.lastX = 1e9;
+    }
+  }
+
   dispose() {
+    for (const set of this.farTrees || []) set.dispose();
     this.falling.dispose();
     for (const set of [this.trees, this.bushes, this.rocks]) set.dispose();
     this.grass.dispose();
@@ -543,6 +625,7 @@ export class Foliage {
     }
     const treeR = Math.min(this.quality.treeDist, fogVisibility + 30);
     this.trees.update(camPos.x, camPos.z, Math.round(treeR / 10) * 10, view);
+    for (const set of this.farTrees || []) set.update(camPos.x, camPos.z, Math.round(treeR / 10) * 10, view);
     this.bushes.update(camPos.x, camPos.z, Math.min(85, fogVisibility + 10), view);
     this.rocks.update(camPos.x, camPos.z, Math.round(treeR / 10) * 10, view);
     this.grass.update(camPos.x, camPos.z, view);

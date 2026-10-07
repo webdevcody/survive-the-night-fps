@@ -818,7 +818,9 @@ const { Effects } = await import('../client/render/effects.js').catch(() => ({ E
     let rem = -1;
     for (let i = 0; i < P.cap; i++) if (P.live[i] && P.owner[i] === cp && cellOf(i) === MARK.REMNANT) rem = i;
     const remFit = rem >= 0 && fit.every((v, k) => Math.abs(P.rest[rem * 12 + k] - v) < 1e-4);
-    check('out: the opening shows the cabin (a blow goes through it onto a seat or the lining), teeth of glass are left round the frame - drawn to the opening\'s own corners - and shards lie on the ground and inside', pk.state === 2 && CABIN_MATS.has(g2.name) && m2[MARK.REMNANT] === 1 && remFit && m2[MARK.SHARDS] === 2 && !m2[MARK.CRACK_PANE], `state ${pk.state}, the ray lands on ${g2.name}, marks ${JSON.stringify(m2)}, fit ${remFit}`);
+    // (onto a seat or the lining - or, in a stripped cabin with the door card off the far side, the bare door there:
+    // through the cabin all the same)
+    check('out: the opening shows the cabin (a blow goes through it onto a seat or the lining), teeth of glass are left round the frame - drawn to the opening\'s own corners - and shards lie on the ground and inside', pk.state === 2 && (CABIN_MATS.has(g2.name) || (g2.name === 'carpaint' && g2.t > g0.t + 0.6)) && m2[MARK.REMNANT] === 1 && remFit && m2[MARK.SHARDS] === 2 && !m2[MARK.CRACK_PANE], `state ${pk.state}, the ray lands on ${g2.name} at ${g2.t.toFixed(2)} m (the pane was at ${g0.t.toFixed(2)}), marks ${JSON.stringify(m2)}, fit ${remFit}`);
     // a blow through the opening: a mark on what it lands on, and no panel bent
     const paint = () => wk.pieces.map((pc, pi) => pc.names.filter((nm) => nm.name === 'carpaint').map((nm) => Array.from(wk.rest[pi].subarray(nm.first * 3, (nm.first + nm.count) * 3)).reduce((a, v, k) => a + v * ((k % 7) + 1), 0)).join()).join();
     const before2 = paint(), marks2 = Object.values(m2).reduce((a, v) => a + v, 0);

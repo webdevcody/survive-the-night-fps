@@ -15,6 +15,7 @@
 //   - how often a zombie is posed, and how often the shadow maps are drawn: every frame at ordinary frame rates.
 // usage: node scripts/test-perf.js [seed]
 import './clip/dom-stub.js';
+import { islandSea } from '../client/render/farring.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -31,6 +32,9 @@ const { Crowd, MAX_BONES } = await import('../client/render/crowd.js');
 const { createZombie, setZombieViewer } = await import('../client/render/models/characters.js');
 const { getCrowdMaterial, crowdBones } = await import('../client/render/models/skinning.js');
 const { POSE_NEAR, POSE_HZ, SHADOW_HZ, ShadowRate } = await import('../client/render/rates.js');
+const { farFlora, geography } = await import('../shared/coast.js');
+const { farBridgeSteps } = await import('../client/render/bridge.js');
+const { getTreeVariants } = await import('../client/render/models/vegetation.js');
 
 const seed = +(process.argv[2] || 1337);
 let failed = 0;
@@ -127,6 +131,7 @@ for (const [name, act, eyes] of [['island', WORLD.ISLAND, 60], ['mainland', WORL
   // the terrain
   if (act === WORLD.ISLAND || process.argv.includes('--all')) {
     const terrain = buildTerrain(world);
+    terrain.userData.addShore(); // (Game adds it when the page is idle after a load)
     const tm = terrain.children[0];
     const idx = tm.geometry.index.count;
     const sum = tm.runs.reduce((a, r) => a + r.count, 0);
@@ -134,16 +139,55 @@ for (const [name, act, eyes] of [['island', WORLD.ISLAND, 60], ['mainland', WORL
     let apart = true;
     const runs = tm.runs.slice().sort((a, b) => a.first - b.first);
     for (let i = 1; i < runs.length; i++) apart &&= runs[i].first === runs[i - 1].first + runs[i - 1].count;
-    // (on the island a second mesh draws the far side of its hills down to the shore: shared/coast.js, terrain.js buildShore)
+    // (a second mesh draws the ground past the map's edge: client/render/farring.js. It is a few thousand triangles at
+    // the most - seen at a distance and through the haze - and casts no shadow; and the island's sea round it as few)
     const shore = terrain.children.filter((m) => m.name === 'shore');
     check(`${name}: the terrain is one mesh, every cell of the heightfield in exactly one of its ${tm.runs.length} pieces`, terrain.children.length - shore.length === 1 && tm instanceof MultiMesh && sum === idx && apart && idx === (n - 1) * (n - 1) * 6 && tm.indexBytes === 4, `${sum} of ${idx} indices, grid ${n}`);
     const sm = shore[0];
     const sumS = sm ? sm.runs.reduce((a, r) => a + r.count, 0) : 0;
+    const SHORE_MAX = act === WORLD.ISLAND ? 5000 : 6000;
     check(
-      `${name}: ${act === WORLD.ISLAND ? 'its shore is one more mesh in the same ground, its pieces all of it, casting no shadow' : "no shore mesh (on the island only)"}`,
-      act === WORLD.ISLAND ? shore.length === 1 && sm instanceof MultiMesh && sm.material === tm.material && sumS === sm.geometry.index.count && sumS > 0 && !sm.castShadow : shore.length === 0,
+      `${name}: the ground past its edge is one more mesh in the same ground, all of it in its pieces, casting no shadow, under ${SHORE_MAX} triangles`,
+      shore.length === 1 && sm instanceof MultiMesh && sm.material === tm.material && sumS === sm.geometry.index.count && sumS > 0 && !sm.castShadow && sumS / 3 <= SHORE_MAX,
       sm ? `${sm.runs.length} pieces, ${(sumS / 3) | 0} triangles` : '',
     );
+    if (act === WORLD.ISLAND) {
+      const sea = [];
+      const op = [];
+      islandSea(world, sea, op);
+      check(`${name}: its sea is a ring round the shore of under 2000 triangles`, sea.length > 0 && sea.length / 9 <= 2000 && op.length === sea.length / 3, `${sea.length / 9} triangles`);
+      // the bridge seen from the island: its near spans merged into a mesh a material, built a span at a time
+      const scene = new THREE.Scene();
+      const fb = farBridgeSteps(scene, geography(world.seed).bridge(true), world.seed);
+      for (const step of fb.steps) step();
+      let bt = 0;
+      let bm = 0;
+      scene.traverse((o) => {
+        if (!o.isMesh) return;
+        bm++;
+        bt += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+      });
+      check(`${name}: the bridge off its shore is ${bm} meshes and under 20000 triangles, in ${fb.steps.length} steps`, bm <= 4 && bt <= 20000 && fb.steps.length <= 6, `${bm} meshes, ${bt} triangles`);
+      fb.dispose();
+    }
+    // the woods past the edge: round any point of it, what the haze lets be seen (260 m) is few triangles (the near
+    // band as the fir's far copy, the rest as cones)
+    {
+      const T = farFlora(world).trees;
+      const firFar = getTreeVariants()[2].far[0].geometry;
+      const firTris = (firFar.index ? firFar.index.count : firFar.attributes.position.count) / 3;
+      let worst = 0;
+      for (let k = 0; k < 64; k++) {
+        const [ex, ez] = [[1, 0], [0, 1], [-1, 0], [0, -1]][k % 4].map((v, i) => (v ? v * (world.half - 3) : ((k >> 2) / 16 - 0.5) * 2 * world.half * (i ? 1 : 1)));
+        let tris = 0;
+        for (let i = 0; i < T.length; i += 6) {
+          if (Math.hypot(T[i] - ex, T[i + 2] - ez) > 260) continue;
+          tris += Math.max(Math.abs(T[i]), Math.abs(T[i + 2])) - world.half < 40 ? firTris : 6;
+        }
+        worst = Math.max(worst, tris);
+      }
+      check(`${name}: the woods past its edge are at most 45000 triangles round any point of it (all round, before the view is culled)`, worst <= 45000, `${worst}`);
+    }
     const cam = cameraAt(world.start.x, world.heightAt(world.start.x, world.start.z) + 1.62, world.start.z, 1, 0);
     const fr = frustumOf(cam);
     tm.intersectsFrustum(fr);

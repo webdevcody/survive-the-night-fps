@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { BRIDGE, DAMAGED } from '../../shared/bridge.js';
 import { MeshBuilder, partsToGroup } from './materials.js';
 import { createProp } from './models/props.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const { SPAN, PANEL, DECK, TRUSS, PIER, FALL } = BRIDGE;
 const PANELS = SPAN / PANEL;
@@ -296,4 +297,61 @@ export class BridgeView {
       if (o.isMesh && (o.parent?.name === 'bridge-span' || o.parent?.name === 'bridge-pier' || o.name === 'bridge-island')) o.geometry.dispose();
     });
   }
+}
+
+// The bridge as the island sees it: a hundred metres and more off its shore, through the haze. Its first four spans and
+// their piers and nothing on the deck (too small to make out from there; the spans past them are lost in the haze), built a span at a time (steps: Game runs them when the
+// page is idle) and then merged into one mesh per material, so the whole bridge is a handful of draw calls. It casts
+// no shadow: it stands out in the sea. { steps: [fn], dispose() }
+export function farBridgeSteps(scene, plan, seed) {
+  const root = new THREE.Group();
+  root.name = 'bridge-far';
+  scene.add(root);
+  // (only the spans nearest the island: from its shore the haze has the rest - they stand 250 m and more out)
+  const near = plan.spans.map((sp, k) => [sp, k]).filter(([sp]) => sp.x0 < plan.x0 + 4 * SPAN - 1);
+  const steps = near.map(([sp, k]) => () => {
+    const holes = plan.holes.filter((h) => h.x >= sp.x0 && h.x < sp.x1).map((h) => ({ x: h.x - sp.x0, lz: h.lz, len: h.len, w: h.w }));
+    const g = buildSpan(sp, holes, seed + k * 17);
+    g.position.set(sp.x0, plan.deckY, plan.z);
+    root.add(g);
+    const pier = buildPier(seed + k);
+    pier.position.set(sp.x0, plan.deckY, plan.z);
+    root.add(pier);
+  });
+  steps.push(() => {
+    root.updateMatrixWorld(true);
+    const byMat = new Map();
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+      if (!byMat.has(o.material)) byMat.set(o.material, []);
+      byMat.get(o.material).push(g);
+      o.geometry.dispose();
+    });
+    root.clear();
+    for (const [mat, list] of byMat) {
+      // (a part lacking an attribute another of its material has cannot be merged with it: those go on their own)
+      const sig = (g) => Object.keys(g.attributes).sort().join(',') + (g.index ? '+i' : '');
+      const groups = new Map();
+      for (const g of list) {
+        if (!groups.has(sig(g))) groups.set(sig(g), []);
+        groups.get(sig(g)).push(g);
+      }
+      for (const gl of groups.values()) {
+        const merged = gl.length === 1 ? gl[0] : mergeGeometries(gl, false);
+        for (const g of gl) if (g !== merged) g.dispose();
+        const m = new THREE.Mesh(merged, mat);
+        m.matrixAutoUpdate = false;
+        root.add(m);
+      }
+    }
+  });
+  return {
+    steps,
+    dispose() {
+      scene.remove(root);
+      root.traverse((o) => o.isMesh && o.geometry.dispose());
+    },
+  };
 }

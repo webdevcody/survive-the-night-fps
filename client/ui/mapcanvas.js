@@ -5,7 +5,7 @@ import { MAP_HALF, MAP_SIZE, GRID_STEP, WATER_LEVEL } from '../../shared/constan
 import { WHEEL } from '../../shared/fair.js';
 import { WORLD } from '../../shared/acts.js';
 import { BRIDGE, DAMAGED } from '../../shared/bridge.js';
-import { SHORE, geography, islandShore, mainlandShoreGuess, edgeProfile, edgeFromProfile } from '../../shared/coast.js';
+import { SHORE, geography, islandLand, mainlandShoreGuess, farField, farFlora, mapMargin } from '../../shared/coast.js';
 
 // The map is baked at MAP_PPM px per metre, whatever the size of the world: 1280 px for the island, 2560 for the
 // mainland (which is twice as far across). mapX / mapY are of the map baked last: the client has one world at a time.
@@ -51,7 +51,58 @@ export function renderMapCanvas(world) {
   };
   const hs = new Float32Array(R * R);
   for (let py = 0; py < R; py++) for (let px = 0; px < R; px++) hs[py * R + px] = hAt(px - MAP_HALF + 0.5, py - MAP_HALF + 0.5);
-  shadeRaster(hs, R, R, d, noise(1234567));
+  // (the survey's look, as shadeRaster below draws it, written out here for the speed of the one big raster)
+  let seed = 1234567;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let py = 0; py < R; py++) {
+    for (let px = 0; px < R; px++) {
+      const k = py * R + px;
+      const h = hs[k];
+      const hl = hs[py * R + Math.max(0, px - 1)];
+      const hr = hs[py * R + Math.min(R - 1, px + 1)];
+      const hu = hs[Math.max(0, py - 1) * R + px];
+      const hd = hs[Math.min(R - 1, py + 1) * R + px];
+      // light from the north-west
+      const shade = Math.max(-1, Math.min(1, ((hl - hr) + (hu - hd)) * 0.55));
+      let r = 214;
+      let gg = 199;
+      let b = 164;
+      // elevation tint: valleys a touch greener, heights paler
+      const e = Math.max(0, Math.min(1, (h + 6) / 36));
+      r += (e - 0.4) * 22;
+      gg += (e - 0.4) * 16;
+      b += (e - 0.4) * 6;
+      r += shade * 34;
+      gg += shade * 30;
+      b += shade * 24;
+      // contour lines every 2.5 m (index line every 10 m)
+      const c0 = Math.floor(h / 2.5);
+      if (Math.floor(hr / 2.5) !== c0 || Math.floor(hd / 2.5) !== c0) {
+        const idx = Math.floor(Math.max(h, hr, hd) / 2.5) % 4 === 0;
+        const a = idx ? 0.34 : 0.18;
+        r = r * (1 - a) + 96 * a;
+        gg = gg * (1 - a) + 64 * a;
+        b = b * (1 - a) + 38 * a;
+      }
+      let n = (rnd() - 0.5) * 10;
+      if (h < WATER_LEVEL) {
+        const depth = Math.min(1, (WATER_LEVEL - h) / 5);
+        r = 118 - depth * 34;
+        gg = 136 - depth * 30;
+        b = 138 - depth * 20;
+        // shoreline ink
+        if (hr >= WATER_LEVEL || hd >= WATER_LEVEL || hl >= WATER_LEVEL || hu >= WATER_LEVEL) {
+          r = 70;
+          gg = 78;
+          b = 80;
+        } else if (depth === 1) n = 0; // (deep water: the open sea's flat colour, SEA, which the view lays where no raster is)
+      }
+      d[k * 4] = r + n;
+      d[k * 4 + 1] = gg + n;
+      d[k * 4 + 2] = b + n;
+      d[k * 4 + 3] = 255;
+    }
+  }
   rg.putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true;
   g.drawImage(raster, 0, 0, MAP_PX, MAP_PX);
@@ -243,7 +294,8 @@ export function renderMapCanvas(world) {
   // ---- grid + border (1 square = 80 m)
   g.strokeStyle = 'rgba(70, 48, 30, 0.16)';
   g.lineWidth = 1;
-  for (let v = 0; v <= MAP_SIZE; v += 80) {
+  // (not along the map's own edges: the layer round it draws those, as it draws every line past them)
+  for (let v = 80; v < MAP_SIZE; v += 80) {
     g.beginPath();
     g.moveTo(v * S, 0);
     g.lineTo(v * S, MAP_PX);
@@ -253,7 +305,6 @@ export function renderMapCanvas(world) {
   }
   // (no vignette baked in: the sheet goes on past the survey now - the shore, the sea, the bridge, the other map - so
   // the age is the view's, darkening its edges wherever it is: ui2.css .map-view)
-  if (world.kind === WORLD.ISLAND) ISLAND_SEEN.set(world.seed, { edge: edgeProfile(world.heightAt), thumb: thumbOf(cv) });
   return cv;
 }
 
@@ -269,7 +320,7 @@ function noise(seed) {
 // round a map leaves the map's own square to the map. d: RGBA out. contours: draw them (the widest view does not: at
 // its scale they would be a smudge). shadeK: how dark a metre of rise from one pixel to the next shades (0.55 at a
 // pixel a metre; a coarser raster's pixels are further apart, so less).
-export function shadeRaster(hs, w, h, d, rnd, { contours = true, shadeK = 0.55 } = {}) {
+export function shadeRaster(hs, w, h, d, rnd, { contours = true, shadeK = 0.55, contourK = 1 } = {}) {
   for (let py = 0; py < h; py++) {
     for (let px = 0; px < w; px++) {
       const k = py * w + px;
@@ -301,7 +352,7 @@ export function shadeRaster(hs, w, h, d, rnd, { contours = true, shadeK = 0.55 }
       const c0 = Math.floor(z / 2.5);
       if (contours && (Math.floor(hr / 2.5) !== c0 || Math.floor(hd / 2.5) !== c0)) {
         const idx = Math.floor(Math.max(z, hr, hd) / 2.5) % 4 === 0;
-        const a = idx ? 0.34 : 0.18;
+        const a = (idx ? 0.34 : 0.18) * contourK;
         r = r * (1 - a) + 96 * a;
         gg = gg * (1 - a) + 64 * a;
         b = b * (1 - a) + 38 * a;
@@ -318,7 +369,9 @@ export function shadeRaster(hs, w, h, d, rnd, { contours = true, shadeK = 0.55 }
           b = 80;
         }
       }
-      const n = (rnd() - 0.5) * 10;
+      // (no speckle on deep water: it is the open sea's flat colour, which the map screen and the minimap lay
+      // where no raster is - SEA)
+      const n = r === 84 && gg === 106 && b === 118 ? 0 : (rnd() - 0.5) * 10;
       d[k * 4] = r + n;
       d[k * 4 + 1] = gg + n;
       d[k * 4 + 2] = b + n;
@@ -356,98 +409,175 @@ function grid(g, x0, z0, wm, hm, ppm, width) {
   g.stroke();
 }
 
-// ---------------------------------------------------------------- round the map: the shore and the sea
-// A layer of the map screen and the minimap, laid under the baked map: { cv, x0, z0, w, h, ppm } (x0 / z0: the world
-// point of its top-left corner, w / h: metres across and down, ppm: its pixels a metre). Its middle, the map's own
-// square, is left transparent.
-//
-// shoreImage(world) is its pixels, with no canvas (scripts/test-coast.js reads them): the island's are the shore past
-// the valley's edge (shared/coast.js) - the far side of the hills, the cliffs and beaches, the shallows, the sea - in
-// the survey's own look at its own resolution (a pixel a metre, as the map's raster), so nothing marks where the
-// survey ends. The mainland's are the sea off its west edge and, past the other three, ground it does not cover.
-export function shoreImage(world) {
-  const island = world.kind === WORLD.ISLAND;
+// ---------------------------------------------------------------- round the map: the land past its edge
+// Layers of the map screen and the minimap, laid under the baked map: tiles of TILE m round its square, at the bake's
+// own raster resolution (a pixel a metre), of the ground past the edge of the survey (world.far, sampled by
+// shared/coast.js farField) in the survey's own look - on the island its hills running on down to the shore and the
+// shallows, on the mainland its far country. Only the tiles with land or shallows in them are made: the open sea is no
+// canvas at all, but the view's own colour (SEA, which the deep water of every raster here is drawn in exactly, with
+// no speckle) and the grid drawn over it (MapScreen's map-sea). Each tile is { cv, x0, z0, w, h, ppm }; one that runs
+// in over the map's square is transparent there, but for SHORE_IN m under the bake's rim (so no hairline shows).
+export const SHORE_PPM = 1;
+export const TILE = 64;
+const SHORE_IN = 2;
+export const SEA = [84, 106, 118]; // (the deep water of shadeRaster)
+
+// the tiles wanted: [{ x0, z0, w, h }]
+export function shoreTiles(world) {
   const H = world.half;
-  const ppm = island ? 1 : 0.5;
-  const M = island ? SHORE.MARGIN + 8 : 160;
-  const x0 = -H - M;
-  const z0 = -H - M;
-  const wm = world.size + 2 * M;
-  const w = Math.round(wm * ppm);
-  const shore = island ? islandShore(world.seed, world.heightAt) : null;
-  const guess = island ? null : mainlandShoreGuess(world.seed);
-  const hs = new Float32Array(w * w);
-  const IN = H - 2.5 / ppm; // (inside this the map's own square covers it: a pixel or two of the valley's ground is
-  // worked out beyond, so the shading of the first pixels outside is as the map's last ones inside)
-  const blank = new Uint8Array(w * w);
-  // The island's ground is worked out every GS m and read between those as the valley's heightfield is (bilinearly,
-  // from its own 2 m grid): as smooth, at a quarter of the work.
-  const GS = 2;
-  const gn = island ? Math.ceil(wm / GS) + 2 : 0;
-  const gh = new Float32Array(gn * gn);
-  for (let j = 0; j < gn; j++) {
-    for (let i = 0; i < gn; i++) {
-      const x = x0 + i * GS;
-      const z = z0 + j * GS;
-      gh[j * gn + i] = Math.abs(x) < IN - GS && Math.abs(z) < IN - GS ? NaN : Math.abs(x) <= H && Math.abs(z) <= H ? world.heightAt(x, z) : shore.heightAt(x, z);
+  const M = mapMargin(world);
+  const F = farField(world);
+  const DEEP = WATER_LEVEL - 5 + 0.01; // (as deep as shadeRaster's water gets dark)
+  // (tile edges on the map's edge, so none of them is half a hole: bands of up to TILE m out from it, and of TILE m
+  // along it; those next to it reach SHORE_IN m in under the bake's rim)
+  const nOut = Math.ceil(M / TILE);
+  const cuts = [];
+  for (let k = 0; k <= nOut; k++) cuts.push(-H - M + (k * M) / nOut);
+  for (let v = -H + TILE; v < H; v += TILE) cuts.push(v);
+  for (let k = 0; k <= nOut; k++) cuts.push(H + (k * M) / nOut);
+  const out = [];
+  for (let tj = 0; tj + 1 < cuts.length; tj++) {
+    for (let ti = 0; ti + 1 < cuts.length; ti++) {
+      let x0 = cuts[ti], x1 = cuts[ti + 1], z0 = cuts[tj], z1 = cuts[tj + 1];
+      const outX = x1 <= -H || x0 >= H;
+      const outZ = z1 <= -H || z0 >= H;
+      if (!outX && !outZ) continue; // (under the bake)
+      if (x1 === -H) x1 += SHORE_IN;
+      if (x0 === H) x0 -= SHORE_IN;
+      if (z1 === -H) z1 += SHORE_IN;
+      if (z0 === H) z0 -= SHORE_IN;
+      // (each runs a metre on under its east and south neighbours: no hairline between two drawn scaled)
+      if (x1 < H + M) x1 += 1;
+      if (z1 < H + M) z1 += 1;
+      // (open sea through and through, and a sample's width round it: none)
+      let wet = true;
+      for (let z = z0 - F.step; z <= z1 + F.step && wet; z += F.step / 2) for (let x = x0 - F.step; x <= x1 + F.step && wet; x += F.step / 2) if (F.at(x, z) > DEEP) wet = false;
+      if (!wet) out.push({ x0, z0, w: x1 - x0, h: z1 - z0 });
     }
   }
-  const ground = (x, z) => {
-    const fx = (x - x0) / GS;
-    const fz = (z - z0) / GS;
-    const i = fx | 0;
-    const j = fz | 0;
-    const tx = fx - i;
-    const tz = fz - j;
-    const k = j * gn + i;
-    const a = gh[k] + (gh[k + 1] - gh[k]) * tx;
-    const b = gh[k + gn] + (gh[k + gn + 1] - gh[k + gn]) * tx;
-    return a + (b - a) * tz;
-  };
-  for (let py = 0; py < w; py++) {
-    const z = z0 + (py + 0.5) / ppm;
-    const gz = guess ? guess(z) : 0; // (the guessed shore of the mainland past its survey, on this row)
-    for (let px = 0; px < w; px++) {
-      const k = py * w + px;
-      const x = x0 + (px + 0.5) / ppm;
-      if (Math.abs(x) < IN && Math.abs(z) < IN) {
-        hs[k] = NaN;
-        continue;
-      }
-      if (Math.abs(x) <= H && Math.abs(z) <= H) hs[k] = world.heightAt(x, z);
-      else if (island) hs[k] = ground(x, z);
-      else if (x < -H || x < gz) hs[k] = WATER_LEVEL - SHORE.DEPTH; // (the open sea)
-      else {
-        hs[k] = NaN;
-        blank[k] = 1;
-      }
-    }
-  }
-  const d = new Uint8ClampedArray(w * w * 4);
-  shadeRaster(hs, w, w, d, noise(7654321), { shadeK: 0.55 * ppm });
-  // ...and the valley's own ground worked out beyond its edge is the map's: transparent, as the map covers it
-  for (let py = 0; py < w; py++) {
-    const z = z0 + (py + 0.5) / ppm;
-    for (let px = 0; px < w; px++) {
-      const k = py * w + px;
-      const x = x0 + (px + 0.5) / ppm;
-      if (blank[k]) blankPixel(d, k, px, py, 6);
-      else if (Math.abs(x) < H && Math.abs(z) < H) d[k * 4 + 3] = 0;
-    }
-  }
-  return { data: d, x0, z0, w: wm, h: wm, px: w, ppm };
+  return out;
 }
 
-export function renderShore(world) {
-  const s = shoreImage(world);
+// A tile's pixels, with no canvas (scripts/test-coast.js reads them)
+export function shoreTile(world, R) {
+  const H = world.half;
+  const F = farField(world);
+  const ppm = SHORE_PPM;
+  // (a pixel more all round, so the shading at the tile's edge is worked out from its true neighbours)
+  const w = Math.round(R.w * ppm);
+  const h = Math.round(R.h * ppm);
+  const W = w + 2;
+  const Hh = h + 2;
+  const hs = new Float32Array(W * Hh);
+  const IN = H - SHORE_IN - 2;
+  for (let py = 0; py < Hh; py++) {
+    const z = R.z0 + (py - 0.5) / ppm;
+    for (let px = 0; px < W; px++) {
+      const x = R.x0 + (px - 0.5) / ppm;
+      hs[py * W + px] = Math.abs(x) < IN && Math.abs(z) < IN ? NaN : Math.abs(x) <= H && Math.abs(z) <= H ? world.heightAt(x, z) : F.cubic(x, z);
+    }
+  }
+  const full = new Uint8ClampedArray(W * Hh * 4);
+  shadeRaster(hs, W, Hh, full, noise(7654321 + ((R.x0 * 31 + R.z0 * 17) | 0)), { shadeK: 0.55 * ppm, contourK: ppm });
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let py = 0; py < h; py++) data.set(full.subarray(((py + 1) * W + 1) * 4, ((py + 1) * W + 1 + w) * 4), py * w * 4);
+  // (the band's outer rim fades out into the widest view's coarser picture under it, on a map whose band ends on land:
+  // so no line marks where the detail stops - on the island it ends in open sea, the same either side)
+  const OUT = H + mapMargin(world);
+  const FEATHER = world.kind === WORLD.MAINLAND ? 36 : 0;
+  if (FEATHER) {
+    for (let py = 0; py < h; py++) {
+      const z = R.z0 + (py + 0.5) / ppm;
+      for (let px = 0; px < w; px++) {
+        const m = OUT - Math.max(Math.abs(R.x0 + (px + 0.5) / ppm), Math.abs(z));
+        if (m < FEATHER) data[(py * w + px) * 4 + 3] = Math.round(255 * Math.max(0, m / FEATHER) ** 1.5);
+      }
+    }
+  }
+  // (the map's own square is the bake's: transparent, but for a sliver under its rim)
+  const HOLE = H - SHORE_IN + 0.5;
+  for (let py = 0; py < h; py++) {
+    const z = R.z0 + (py + 0.5) / ppm;
+    if (Math.abs(z) >= HOLE) continue;
+    for (let px = 0; px < w; px++) if (Math.abs(R.x0 + (px + 0.5) / ppm) < HOLE) data[(py * w + px) * 4 + 3] = 0;
+  }
+  // (and only as much of the tile as has something in it but the open sea, which the view under it is already: a coast
+  // tile is mostly sea, and memory is pixels)
+  let cx0 = w, cy0 = h, cx1 = -1, cy1 = -1;
+  for (let py = 0; py < h; py++) {
+    for (let px = 0, k = py * w * 4; px < w; px++, k += 4) {
+      if (data[k + 3] === 0 || (data[k + 3] === 255 && data[k] === SEA[0] && data[k + 1] === SEA[1] && data[k + 2] === SEA[2])) continue;
+      if (px < cx0) cx0 = px;
+      if (px > cx1) cx1 = px;
+      if (py < cy0) cy0 = py;
+      if (py > cy1) cy1 = py;
+    }
+  }
+  if (cx1 < 0) cx0 = cx1 = cy0 = cy1 = 0;
+  // (a couple of pixels round it, for the woods' dots on the shore)
+  cx0 = Math.max(0, cx0 - 2);
+  cy0 = Math.max(0, cy0 - 2);
+  cx1 = Math.min(w - 1, cx1 + 2);
+  cy1 = Math.min(h - 1, cy1 + 2);
+  const cw = cx1 - cx0 + 1;
+  const ch = cy1 - cy0 + 1;
+  if (cw === w && ch === h) return { data, x0: R.x0, z0: R.z0, w: R.w, h: R.h, pw: w, ph: h, ppm };
+  const crop = new Uint8ClampedArray(cw * ch * 4);
+  for (let py = 0; py < ch; py++) crop.set(data.subarray(((cy0 + py) * w + cx0) * 4, ((cy0 + py) * w + cx0 + cw) * 4), py * cw * 4);
+  return { data: crop, x0: R.x0 + cx0 / ppm, z0: R.z0 + cy0 / ppm, w: cw / ppm, h: ch / ppm, pw: cw, ph: ch, ppm };
+}
+
+export function renderShoreTile(world, R) {
+  const s = shoreTile(world, R);
   const cv = document.createElement('canvas');
-  cv.width = cv.height = s.px;
+  cv.width = s.pw;
+  cv.height = s.ph;
   const g = cv.getContext('2d');
-  const img = g.createImageData(s.px, s.px);
+  const img = g.createImageData(s.pw, s.ph);
   img.data.set(s.data);
   g.putImageData(img, 0, 0);
+  stipple(g, farFlora(world).trees, s.x0, s.z0, s.ppm, s);
   grid(g, s.x0, s.z0, s.w, s.h, s.ppm, 0.5 * s.ppm);
   return { cv, x0: s.x0, z0: s.z0, w: s.w, h: s.h, ppm: s.ppm };
+}
+
+// ...and all of them: { strips: tiles, x0, z0, w, h }. baked: the map's own canvas (on the island a small copy of the
+// two together is kept, for the mainland's widest view: keepIsland)
+export function shoreLayers(world, strips, baked = null) {
+  const H = world.half;
+  const M = mapMargin(world);
+  const L = { strips, x0: -H - M, z0: -H - M, w: 2 * (H + M), h: 2 * (H + M) };
+  if (world.kind === WORLD.ISLAND && baked) keepIsland(world, L, baked);
+  return L;
+}
+
+// the woods as the bake draws them (a dot a tree, and a darker one for every other), on a raster of ppm px a metre; R:
+// only those in this rectangle (and a little round it)
+function stipple(g, T, x0, z0, ppm, R = null, k = 1) {
+  const f = ppm / MAP_PPM; // (the bake's dots are sized in its own pixels, two a metre)
+  const inR = (x, z) => !R || (x > R.x0 - 4 && x < R.x0 + R.w + 4 && z > R.z0 - 4 && z < R.z0 + R.h + 4);
+  g.fillStyle = 'rgba(58, 74, 52, 0.42)';
+  g.beginPath();
+  for (let i = 0; i < T.length; i += 6) {
+    if (!inR(T[i], T[i + 2])) continue;
+    const x = (T[i] - x0) * ppm;
+    const y = (T[i + 2] - z0) * ppm;
+    const r = Math.max(0.35, (1.1 + T[i + 3] * 1.3) * f * k);
+    g.moveTo(x + r, y);
+    g.arc(x, y, r, 0, Math.PI * 2);
+  }
+  g.fill();
+  g.fillStyle = 'rgba(40, 52, 36, 0.35)';
+  g.beginPath();
+  for (let i = 0; i < T.length; i += 12) {
+    if (!inR(T[i], T[i + 2])) continue;
+    const x = (T[i] - x0) * ppm + 0.8 * f;
+    const y = (T[i + 2] - z0) * ppm + 0.8 * f;
+    const r = Math.max(0.3, 0.9 * f * k);
+    g.moveTo(x + r, y);
+    g.arc(x, y, r, 0, Math.PI * 2);
+  }
+  g.fill();
 }
 
 // ---------------------------------------------------------------- the bridge
@@ -599,9 +729,11 @@ export function renderBridge(world) {
   const plan = island ? geo.bridge(true) : world.bridge || geo.bridge(false);
   const m = bridgeMarks(plan, !island);
   const pad = 14;
-  const x0 = Math.min(plan.x0, plan.x1) - pad;
+  // (only as far as the map's strips reach: past them the widest view draws it, and the closer views cannot pan there)
+  const reach = world.half + mapMargin(world);
+  const x0 = Math.max(Math.min(plan.x0, plan.x1) - pad, -reach);
   const z0 = plan.z - BRIDGE.DECK / 2 - pad;
-  const wm = Math.abs(plan.x1 - plan.x0) + 2 * pad;
+  const wm = Math.min(Math.max(plan.x0, plan.x1) + pad, reach) - x0;
   const hm = BRIDGE.DECK + 2 * pad;
   const ppm = MAP_PPM;
   const cv = document.createElement('canvas');
@@ -613,25 +745,28 @@ export function renderBridge(world) {
 
 // ---------------------------------------------------------------- both maps
 // The field map's widest view (MapScreen zoomed out past its own map): the island and the mainland where they lie to
-// each other (shared/coast.js geography), the sea between them and the bridge across it, at a fraction of the map's
-// resolution. The map in hand is drawn from its bake. The other: on the island, the mainland nobody has been to is
-// an outline - its shore as it might be guessed from the sea, unsurveyed paper, no names; on the mainland, the island
-// the team came from, from what this page saw of it (ISLAND_SEEN), or its shape alone if it saw nothing (a rejoin).
-export const OVERVIEW_PPM = 0.4;
-// what was kept of the island when its map was baked, for the mainland's widest view: seed -> { edge, thumb }
+// each other (shared/coast.js geography), the sea between them and the bridge across it. The map in hand is its bake
+// and its strips, shown small; this is only what lies past them, at OVERVIEW_PPM: the sea, the bridge, the other map
+// (on the island the mainland nobody has been to - its shore as it might be guessed from the sea, unsurveyed paper, no
+// names; on the mainland the island the team came from, from what this page saw of it, ISLAND_SEEN, or its shape alone
+// if it saw nothing: a rejoin), and on the mainland its far country past the strips.
+export const OVERVIEW_PPM = 0.1;
+// what was kept of the island when its map was baked, for the mainland's widest view: seed -> { thumb, x0, w }
 const ISLAND_SEEN = new Map();
-function thumbOf(cv) {
-  const n = Math.round(MAP_SIZE * OVERVIEW_PPM * 1.5);
+function keepIsland(world, L, baked) {
+  const n = Math.round(L.w * OVERVIEW_PPM);
   const t = document.createElement('canvas');
   t.width = t.height = n;
   const g = t.getContext('2d');
   g.imageSmoothingQuality = 'high';
-  g.drawImage(cv, 0, 0, n, n);
-  for (const k of [...ISLAND_SEEN.keys()]) ISLAND_SEEN.delete(k); // (one run's island at a time)
-  return t;
+  const k = n / L.w;
+  for (const s of L.strips) g.drawImage(s.cv, (s.x0 - L.x0) * k, (s.z0 - L.z0) * k, s.w * k, s.h * k);
+  g.drawImage(baked, (-world.half - L.x0) * k, (-world.half - L.z0) * k, world.size * k, world.size * k);
+  ISLAND_SEEN.clear(); // (one run's island at a time)
+  ISLAND_SEEN.set(world.seed, { thumb: t, x0: L.x0, w: L.w });
 }
 
-export function renderOverview(world, baked) {
+export function renderOverview(world) {
   const island = world.kind === WORLD.ISLAND;
   const geo = geography(world.seed);
   const ext = geo.extent(island);
@@ -640,42 +775,90 @@ export function renderOverview(world, baked) {
   const hm = ext.z1 - ext.z0;
   const W = Math.round(wm * ppm);
   const Hpx = Math.round(hm * ppm);
-  const H = world.half;
-  // the other map's middle in this one's frame, and the island's shore (wherever the island is)
+  const D = world.half + mapMargin(world) - 4; // (the map in hand and its strips reach this far: they are drawn over this)
   const [ox, oz] = island ? geo.toIsland(0, 0) : [geo.island.x, geo.island.z];
   const seen = island ? null : ISLAND_SEEN.get(world.seed);
-  const edgeAt = island ? world.heightAt : seen ? edgeFromProfile(seen.edge) : () => 26;
-  const shore = islandShore(world.seed, edgeAt);
+  const isle = island ? null : islandLand(world.seed); // (the island's shape, where this page never saw it)
   const guess = mainlandShoreGuess(world.seed);
-  const IH = MAP_SIZE / 2; // (the island's half)
-  const MH = geo.mainland.half;
+  const IH = MAP_SIZE / 2;
+  const IM = IH + SHORE.MARGIN;
+  // the mainland's far country, from world.far every 32 m (only on the mainland: from the island nobody has seen it)
+  const CS = 32;
+  const cn = Math.ceil(Math.max(wm, hm) / CS) + 2;
+  const coarse = island ? null : new Float32Array(cn * cn).fill(NaN);
+  const far = (x, z) => {
+    const fx = (x - ext.x0) / CS;
+    const fz = (z - ext.z0) / CS;
+    const i = fx | 0;
+    const j = fz | 0;
+    const v = (ii, jj) => {
+      const k = jj * cn + ii;
+      if (coarse[k] !== coarse[k]) coarse[k] = world.far(ext.x0 + ii * CS, ext.z0 + jj * CS);
+      return coarse[k];
+    };
+    const tx = fx - i;
+    const tz = fz - j;
+    const a = v(i, j) + (v(i + 1, j) - v(i, j)) * tx;
+    const b = v(i, j + 1) + (v(i + 1, j + 1) - v(i, j + 1)) * tx;
+    return a + (b - a) * tz;
+  };
+  const DEEP = NaN; // (the open sea: transparent - the view's own colour, SEA, shows through)
   const hs = new Float32Array(W * Hpx);
   const blank = new Uint8Array(W * Hpx);
   for (let py = 0; py < Hpx; py++) {
     const z = ext.z0 + (py + 0.5) / ppm;
-    const gz = guess(island ? z - oz : z); // (the mainland's guessed shore on this row, in its frame)
-    const nearIsland = Math.abs(island ? z : z - oz) < IH + SHORE.MARGIN;
+    const gz = guess(island ? z - oz : z);
+    const iz = island ? z : z - oz;
     for (let px = 0; px < W; px++) {
       const x = ext.x0 + (px + 0.5) / ppm;
       const k = py * W + px;
-      // where this pixel is on the island (its frame) and on the mainland (its frame)
       const ix = island ? x : x - ox;
-      const iz = island ? z : z - oz;
       const mx = island ? x - ox : x;
-      const mz = island ? z - oz : z;
-      if (island && Math.abs(x) < H && Math.abs(z) < H) hs[k] = NaN; // (the map in hand: its bake goes over it)
-      else if (!island && Math.abs(x) < H && Math.abs(z) < H) hs[k] = NaN;
-      else if (Math.abs(ix) < IH && Math.abs(iz) < IH) hs[k] = island ? world.heightAt(ix, iz) : seen ? NaN : edgeAt(ix, iz) - 6;
-      else if (nearIsland && Math.abs(ix) < IH + SHORE.MARGIN && shore.coast(ix, iz) < SHORE.SHELF + 4) hs[k] = shore.heightAt(ix, iz);
-      else if (mx >= gz && (island || Math.abs(mz) > MH || mx > MH)) {
-        hs[k] = NaN; // the mainland nobody has surveyed (from the island: all of it; from the mainland: past its edges)
-        blank[k] = 1;
-      } else hs[k] = WATER_LEVEL - SHORE.DEPTH;
+      if (Math.abs(x) < D && Math.abs(z) < D) hs[k] = NaN; // (under the map and its strips)
+      else if (!island && Math.abs(ix) < IM && Math.abs(iz) < IM) hs[k] = seen ? DEEP : isle.land(ix, iz, 3);
+      else if (island) {
+        if (mx >= gz) {
+          hs[k] = NaN; // the mainland nobody has surveyed
+          blank[k] = 1;
+        } else hs[k] = DEEP;
+      } else hs[k] = mx < gz - 60 ? DEEP : far(x, z);
     }
   }
   const d = new Uint8ClampedArray(W * Hpx * 4);
-  shadeRaster(hs, W, Hpx, d, noise(24681357), { contours: false, shadeK: 0.55 * ppm });
-  for (let k = 0; k < W * Hpx; k++) if (blank[k]) blankPixel(d, k, k % W, (k / W) | 0, 5);
+  shadeRaster(hs, W, Hpx, d, noise(24681357), { shadeK: 0.55 * ppm, contours: false });
+  // (contours too fine to draw at this scale, as the tone they give the map in hand when it is drawn this small: the
+  // share of its pixels a contour runs through, a line every 2.5 m of rise, one in four an index line)
+  for (let py = 1; py < Hpx - 1; py++) {
+    for (let px = 1; px < W - 1; px++) {
+      const k = py * W + px;
+      const h = hs[k];
+      if (h !== h || h < WATER_LEVEL) continue;
+      const gx = hs[k + 1] - hs[k - 1];
+      const gz = hs[k + W] - hs[k - W];
+      if (gx !== gx || gz !== gz) continue;
+      const slope = (Math.hypot(gx, gz) * ppm) / 2;
+      const a = Math.min(1, slope / 2.5) * 0.22;
+      d[k * 4] += (96 - d[k * 4]) * a;
+      d[k * 4 + 1] += (64 - d[k * 4 + 1]) * a;
+      d[k * 4 + 2] += (38 - d[k * 4 + 2]) * a;
+    }
+  }
+  // (the woods, too small to dot at this scale, as the tone the bake's dots give them)
+  const odds = !island && world.flora ? world.flora.treeOdds : null;
+  if (odds) {
+    for (let py = 0; py < Hpx; py += 1) {
+      const z = ext.z0 + (py + 0.5) / ppm;
+      for (let px = 0; px < W; px++) {
+        const k = py * W + px;
+        if (hs[k] !== hs[k] || hs[k] < WATER_LEVEL + 1) continue;
+        const t = 0.22 * odds(ext.x0 + (px + 0.5) / ppm, z);
+        d[k * 4] += (58 - d[k * 4]) * t;
+        d[k * 4 + 1] += (74 - d[k * 4 + 1]) * t;
+        d[k * 4 + 2] += (52 - d[k * 4 + 2]) * t;
+      }
+    }
+  }
+  for (let k = 0; k < W * Hpx; k++) if (blank[k]) blankPixel(d, k, k % W, (k / W) | 0, 3);
   const cv = document.createElement('canvas');
   cv.width = W;
   cv.height = Hpx;
@@ -687,37 +870,24 @@ export function renderOverview(world, baked) {
   const Y = (z) => (z - ext.z0) * ppm;
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = 'high';
-  // the map in hand, from its bake; on the mainland, the island as this page saw it
-  if (baked) g.drawImage(baked, X(-H), Y(-H), world.size * ppm, world.size * ppm);
-  if (seen) g.drawImage(seen.thumb, X(ox - IH), Y(oz - IH), MAP_SIZE * ppm, MAP_SIZE * ppm);
-  grid(g, ext.x0, ext.z0, wm, hm, ppm, 1);
-  // the unsurveyed mainland's shore, as a guess: dashed
-  g.strokeStyle = 'rgba(70, 52, 36, 0.75)';
-  g.lineWidth = 1.2;
-  g.setLineDash([4, 3]);
-  g.beginPath();
-  let first = true;
-  for (let mz = ext.z0 - (island ? oz : 0); mz <= ext.z1 - (island ? oz : 0); mz += 6) {
-    const x = guess(mz) + (island ? ox : 0);
-    const z = mz + (island ? oz : 0);
-    if (!island && Math.abs(mz) <= MH) {
-      first = true; // (the mainland's own survey draws its shore)
-      continue;
+  if (seen) g.drawImage(seen.thumb, X(ox + seen.x0), Y(oz + seen.x0), seen.w * ppm, seen.w * ppm);
+  grid(g, ext.x0, ext.z0, wm, hm, ppm, 0.6);
+  // from the island: the unsurveyed mainland's shore, as a guess, dashed
+  if (island) {
+    g.strokeStyle = 'rgba(70, 52, 36, 0.75)';
+    g.lineWidth = 0.8;
+    g.setLineDash([2, 2]);
+    g.beginPath();
+    for (let mz = ext.z0 - oz, first = true; mz <= ext.z1 - oz; mz += 16, first = false) {
+      if (first) g.moveTo(X(guess(mz) + ox), Y(mz + oz));
+      else g.lineTo(X(guess(mz) + ox), Y(mz + oz));
     }
-    if (first) g.moveTo(X(x), Y(z));
-    else g.lineTo(X(x), Y(z));
-    first = false;
+    g.stroke();
+    g.setLineDash([]);
   }
-  g.stroke();
-  g.setLineDash([]);
-  // ...and the survey's edge round the mainland, once it is the map in hand (on the island: nobody has surveyed it)
-  if (!island) {
-    g.strokeStyle = 'rgba(70, 52, 36, 0.45)';
-    g.strokeRect(X(-MH), Y(-MH), MH * 2 * ppm, MH * 2 * ppm);
-  }
-  // the bridge between them
+  // the bridge between them, drawn wide enough to be seen at this scale
   const plan = geo.bridge(island);
-  drawBridge(g, bridgeMarks(plan, !island), ext.x0, ext.z0, ppm, 2.6);
+  drawBridge(g, bridgeMarks(plan, !island), ext.x0, ext.z0, ppm, 4);
   return { cv, x0: ext.x0, z0: ext.z0, w: wm, h: hm, ppm, other: { x: ox, z: oz }, bridge: plan };
 }
 

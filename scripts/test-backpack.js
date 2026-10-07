@@ -372,8 +372,13 @@ check('a survivor has 24 slots, and an inventory is always 34 long', invCap(a) =
   check('a survivor who dies drops everything, the worn backpack and what was in its slots too', packs.length === 1 && dropped.some((e) => e.item === ITEM.ROPE && e.count === 2) && dropped.some((e) => e.item === ITEM.BANDAGE) && a.backpackItem === 0 && a.inv.every((x) => !x), dropped.map((e) => `${ITEM_DEFS[e.item].name}x${e.count}`).join(' '));
   const bag = packs[0];
   // Bob comes over and takes it up ([E]: it is gear, not something walked over)
-  game.handleChat(b, `/tp ${bag.x} ${bag.z}`);
-  run(4);
+  // (beside it, on its own level: whatever else stands about there - a rock, a bush - is no part of this)
+  for (let k = 0; k < 9; k++) {
+    const r = k ? 1.2 : 0;
+    game.handleChat(b, `/tp ${bag.x + Math.cos(k) * r} ${bag.z + Math.sin(k) * r}`);
+    run(4);
+    if (Math.abs(b.state.y - bag.y) < 1) break;
+  }
   pack(b, [ITEM.BANDAGE, 1]);
   B.act(ACT.INTERACT, bag.id);
   run(2);

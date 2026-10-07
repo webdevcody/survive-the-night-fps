@@ -9,9 +9,9 @@ import { ZONE, ZONE_NAMES, ITEM, ITEM_DEFS, SCHEMATICS, SCHEM_BIT, supplyRumours
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
-import { renderMapCanvas, renderShore, renderBridge, renderOverview, MAP_PX } from './mapcanvas.js';
+import { renderMapCanvas, shoreTiles, renderShoreTile, shoreLayers, renderBridge, renderOverview, MAP_PX } from './mapcanvas.js';
 import { WORLD } from '../../shared/acts.js';
-import { geography } from '../../shared/coast.js';
+import { geography, farFieldPart, FAR_PARTS, farFlora, mapMargin } from '../../shared/coast.js';
 import { MAP_SIZE } from '../../shared/constants.js';
 import { bindLabel, liveText } from '../game/binds.js';
 
@@ -19,6 +19,7 @@ const TEAM_BESIDE = 14; // m: a teammate's waypoint on your own waypoint's spot 
 const MAX_ZOOM = 4; // the baked map is 2 px a metre: past this it is a blur
 const FAR_VIEW = 1500; // m: a view wider than this is the widest one (both maps): the overview alone, no place names
 const MIN_ZOOM = 0.1; // (the least any world's widest view needs: setWorld works out each one's)
+const TILE_STEPS = 16; // (the tiles round the bake are made in this many steps of the idle work)
 const DRAG_PX = 5; // a press that moves this far is a pan, not a click for the waypoint
 const START_ZOOM = 2.5; // the first opening starts this close in on you (about 256 m across), the wheel zooms out to all of it
 const HEADING_KEY = 'stn.mapHeadingUp';
@@ -261,22 +262,28 @@ export class MapScreen {
   _layout() {
     const rot = this.headingUp ? this.yaw : 0;
     const m = this.headingUp ? 0 : 0.5 / this.zoom;
-    const { u0, v0, u1, v1 } = this.bounds;
+    // (zoomed in, what can be panned to is the detailed ground round the map - its shore layer - and at the widest both
+    // maps: so the coarse picture of both never shows beside the fine one, except as open sea)
+    const wide0 = this.world ? this.world.size / this.zoom : 0;
+    const L0 = this.near;
+    const fr = (v) => (v + this.world.half) / this.world.size;
+    const { u0, v0, u1, v1 } = wide0 > FAR_VIEW || !L0 ? this.bounds : { u0: fr(L0.x0), v0: fr(L0.z0), u1: fr(L0.x0 + L0.w), v1: fr(L0.z0 + L0.h) };
     this.cx = u1 - u0 > 2 * m ? Math.max(u0 + m, Math.min(u1 - m, this.fx)) : (u0 + u1) / 2;
     this.cy = v1 - v0 > 2 * m ? Math.max(v0 + m, Math.min(v1 - m, this.fy)) : (v0 + v1) / 2;
     const wide = this.world ? this.world.size / this.zoom : 0; // (metres across the view)
-    const far = wide > FAR_VIEW;
+    // (on the mainland, past its band of far country the coarse picture shows: that is the widest view already)
+    const far = wide > (this.world && this.world.kind === WORLD.MAINLAND && this.near ? Math.min(FAR_VIEW, this.near.w) : FAR_VIEW);
     if (far !== this.far) {
       this.far = far;
       this.view.classList.toggle('far', far);
     }
-    // (the widest view's picture is the open sea round the shore's layer too: baked once the view reaches past that)
-    if (!this.over && this.shore) {
+    // (the widest view's picture is the open sea round the strips too: made once the view reaches past them)
+    if (!this.over && this.near && this.open) {
       const W = this.world;
       const r = (wide / 2) * (rot ? Math.SQRT2 : 1);
       const vx = this.cx * W.size - W.half;
       const vz = this.cy * W.size - W.half;
-      const L = this.shore;
+      const L = this.near;
       if (far || vx - r < L.x0 || vx + r > L.x0 + L.w || vz - r < L.z0 || vz + r > L.z0 + L.h) this._ensureOverview();
     }
     const st = this.pane.style;
@@ -370,6 +377,24 @@ export class MapScreen {
     if (this.zoom < this.minZoom) this.zoom = this.minZoom;
     this.far = null;
     this.over = null;
+    this.shore = null;
+    this.tilesWanted = null;
+    this.tilesMade = null;
+    this.bridgeL = null;
+    // the open sea under everything (no raster: the view's colour, and the survey's grid drawn over it, a square every
+    // 80 m on world lines as every raster's own grid is)
+    const se = geo.extent(world.kind === WORLD.ISLAND);
+    const gx0 = Math.floor(se.x0 / 80) * 80, gz0 = Math.floor(se.z0 / 80) * 80;
+    const gx1 = Math.ceil(se.x1 / 80) * 80, gz1 = Math.ceil(se.z1 / 80) * 80;
+    const sea = el('div', 'map-sea', this.canvasWrap);
+    sea.style.left = ((gx0 + world.half) / world.size) * 100 + '%';
+    sea.style.top = ((gz0 + world.half) / world.size) * 100 + '%';
+    sea.style.width = ((gx1 - gx0) / world.size) * 100 + '%';
+    sea.style.height = ((gz1 - gz0) / world.size) * 100 + '%';
+    sea.style.backgroundSize = `${(80 / (gx1 - gx0)) * 100}% ${(80 / (gz1 - gz0)) * 100}%`;
+    // (what the closer views can pan to: the map and its strips)
+    const NM = mapMargin(world);
+    this.near = { x0: -world.half - NM, z0: -world.half - NM, w: world.size + 2 * NM, h: world.size + 2 * NM };
     this.farLabs.textContent = '';
     const far = (x, z, txt, cls = '') => {
       const l = el('div', 'map-far ' + cls, this.farLabs, txt);
@@ -413,10 +438,11 @@ export class MapScreen {
   // the widest view's picture (both maps), the first time it is zoomed out to (it takes a moment, once)
   _ensureOverview() {
     if (this.over || !this.canvas) return;
+    this._ensureExtras();
     const t0 = performance.now();
-    this.over = renderOverview(this.world, this.canvas);
-    this.canvasWrap.insertBefore(this._lay(this.over, 'map-over'), this.canvasWrap.firstChild);
-    console.log(`[map] both maps baked in ${(performance.now() - t0).toFixed(0)}ms (${this.over.cv.width}x${this.over.cv.height}px)`);
+    this.over = renderOverview(this.world);
+    this.canvasWrap.insertBefore(this._lay(this.over, 'map-over'), this.canvasWrap.querySelector('.map-shore') || this.canvas); // (over the sea, under the rest)
+    console.log(`[map] both maps in ${(performance.now() - t0).toFixed(0)}ms (${this.over.cv.width}x${this.over.cv.height}px)`);
   }
 
   _ensureCanvas() {
@@ -424,13 +450,60 @@ export class MapScreen {
     const t0 = performance.now();
     this.canvas = renderMapCanvas(this.world);
     this.canvas.className = 'map-cv';
-    const t1 = performance.now();
-    // what is round it - the shore and the sea, under it - and the bridge, over it
-    this.shore = renderShore(this.world);
+    this.canvasWrap.append(this.canvas);
+    console.log(`[map] baked in ${(performance.now() - t0).toFixed(0)}ms (${MAP_PX}px)`);
+  }
+
+  // What lies round the bake - the strips of ground and sea past its edge under it, the bridge over it - in steps the
+  // game does when the page is idle after a load (Game.idleWork), or all at once when the map is opened before then
+  extraSteps() {
+    const world = this.world;
+    const mine = () => this.world === world && this.canvas;
+    const steps = [];
+    if (world.far) for (let k = 0; k < FAR_PARTS; k++) steps.push(['far ground ' + k, () => farFieldPart(world, k)]);
+    if (world.far) steps.push(['far woods', () => farFlora(world)]);
+    // (the tiles round the bake, a few to a step: which they are is known once the far ground is)
+    if (world.far) for (let i = 0; i < TILE_STEPS; i++) steps.push(['map tiles ' + i, () => mine() && this._bakeShore(i)]);
+    steps.push(['map bridge', () => mine() && this._bakeBridge()]);
+    return steps;
+  }
+  _ensureExtras() {
+    this._ensureCanvas();
+    for (const [, fn] of this.extraSteps()) fn();
+  }
+  // share i of TILE_STEPS of the tiles round the bake (they show as they come; the minimap has them once all are there)
+  _bakeShore(i) {
+    if (this.shore || !this.world.far) return;
+    const t0 = performance.now();
+    if (!this.tilesWanted) {
+      this.tilesWanted = shoreTiles(this.world);
+      this.tilesMade = [];
+      this.tilesDone = new Array(TILE_STEPS).fill(false);
+      this.tilesMs = 0;
+    }
+    if (this.tilesDone[i]) return;
+    this.tilesDone[i] = true;
+    const T = this.tilesWanted;
+    for (let k = Math.floor((i * T.length) / TILE_STEPS); k < Math.floor(((i + 1) * T.length) / TILE_STEPS); k++) {
+      const s = renderShoreTile(this.world, T[k]);
+      this.tilesMade.push(s);
+      this.canvasWrap.insertBefore(this._lay(s, 'map-shore'), this.canvas);
+    }
+    this.tilesMs += performance.now() - t0;
+    if (this.tilesDone.every(Boolean)) {
+      this.shore = shoreLayers(this.world, this.tilesMade, this.canvas);
+      this.layerStamp = (this.layerStamp || 0) + 1;
+      const px = this.tilesMade.reduce((a, s) => a + s.cv.width * s.cv.height, 0);
+      console.log(`[map] ${this.tilesMade.length} tiles round it in ${this.tilesMs.toFixed(0)}ms over ${TILE_STEPS} steps (${(px / 1e3).toFixed(0)}k px)`);
+    }
+  }
+  _bakeBridge() {
+    if (this.bridgeL) return;
+    const t0 = performance.now();
     this.bridgeL = renderBridge(this.world);
-    this.canvasWrap.append(this._lay(this.shore, 'map-shore'), this.canvas, this._lay(this.bridgeL, 'map-bridge'));
-    console.log(`[map] baked in ${(t1 - t0).toFixed(0)}ms (${MAP_PX}px), its shore and bridge in ${(performance.now() - t1).toFixed(0)}ms`);
-    if (this.far) this._ensureOverview();
+    this.canvasWrap.append(this._lay(this.bridgeL, 'map-bridge'));
+    this.layerStamp = (this.layerStamp || 0) + 1;
+    console.log(`[map] bridge in ${(performance.now() - t0).toFixed(0)}ms`);
   }
 
   // the baked map, for the minimap to draw from (baked now if the map has not been opened yet), or null before a world
@@ -439,10 +512,9 @@ export class MapScreen {
     return this.canvas;
   }
 
-  // ...and what the minimap lays round it and over it: { shore, bridge } (layers: { cv, x0, z0, w, h })
+  // ...and what the minimap lays round it and over it, once made: { shore: { strips } | null, bridge | null, stamp }
   layers() {
-    this._ensureCanvas();
-    return { shore: this.shore, bridge: this.bridgeL };
+    return { shore: this.shore, bridge: this.bridgeL, stamp: this.layerStamp || 0 };
   }
 
   setOpen(open) {
@@ -450,10 +522,15 @@ export class MapScreen {
     if (open === this.open) return;
     this.open = open;
     if (open) {
-      this._ensureCanvas();
+      this._ensureExtras();
       this.follow = true;
     } else {
       lsSet(ZOOM_KEY, String(this.zoom));
+      // (the widest view's picture is let go of while the map is shut: made again in a few milliseconds when wanted)
+      if (this.over) {
+        this.over.cv.remove();
+        this.over = null;
+      }
       this.ptrs.clear();
       this.press = null;
       this.gesture = null;

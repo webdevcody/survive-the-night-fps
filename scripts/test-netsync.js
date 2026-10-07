@@ -807,6 +807,9 @@ function runPin(LAG) {
   // a leaper comes down on them
   const s = pl.state;
   const z = game.zm.spawn(ZTYPE.LEAPER, s.x - Math.sin(s.yaw) * 0.55, s.z - Math.cos(s.yaw) * 0.55, { horde: true });
+  // (where it lands on them: the spawn steps a newcomer clear of whatever stands there, which is no part of this)
+  z.x = s.x - Math.sin(s.yaw) * 0.55;
+  z.z = s.z - Math.cos(s.yaw) * 0.55;
   z.y = s.y;
   const took = game.zm.leapPin(z, 2);
   advance(settle);

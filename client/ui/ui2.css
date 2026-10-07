@@ -1732,13 +1732,17 @@
   position: absolute;
   display: block;
 }
-/* (past everything there is to show: the open sea) */
+/* (past everything there is to show: the open sea, in the colour every raster draws deep water in: mapcanvas.js SEA) */
 .stn-ui .map-view {
-  background: #54697a;
+  background: rgb(84, 106, 118);
 }
-/* zoomed out to both maps: the overview alone (the map's own bake, its shore and the place names are too fine there) */
-.stn-ui .map-view.far .map-cv,
-.stn-ui .map-view.far .map-shore,
+/* ...and under the map and what lies round it, the open sea with the survey's grid on it (sized by mapscreen.js) */
+.stn-ui .map-sea {
+  position: absolute;
+  background-color: rgb(84, 106, 118);
+  background-image: linear-gradient(to right, rgba(70, 48, 30, 0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(70, 48, 30, 0.16) 1px, transparent 1px);
+}
+/* zoomed out to both maps: the place names are too fine there, and the overview draws the bridge wider */
 .stn-ui .map-view.far .map-bridge,
 .stn-ui .map-view.far .map-labels {
   display: none;

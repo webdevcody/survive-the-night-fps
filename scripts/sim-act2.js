@@ -152,12 +152,13 @@ const nearHead = (game) => game.zombies.filter((z) => !z.dead && Math.hypot(z.x 
   a.armorMax = 120;
   a.backpackItem = ITEM.BACKPACK;
   a.perks = 5;
+  game.killPlayer(c, { kind: 3 });
+  ticks(game, 12); // (it rises)
+  // (stripped once it has: whatever the dead one dropped is not to be walked over and taken up first)
   b.state.weapons = [0, 0, 0, 0, 0];
   b.state.mags = [0, 0];
   b.state.ammo = b.state.ammo.map(() => 0);
   b.inv = b.inv.map(() => null);
-  game.killPlayer(c, { kind: 3 });
-  ticks(game, 12); // (it rises)
   check('one of the three is dead and turned before the car leaves', c.zombie && c.alive && game.humans().length === 2);
   const car = game.world.car;
   for (const p of [a, b]) put(game, p, car.x + 2, car.z + 2);
