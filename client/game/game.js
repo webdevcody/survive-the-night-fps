@@ -112,6 +112,7 @@ import { buildClinic, disposeClinic } from '../render/clinic.js';
 import { Graves } from '../render/cemetery.js';
 import { buildRailway } from '../render/railway.js';
 import { BridgeView } from '../render/bridge.js';
+import { geography } from '../../shared/coast.js';
 import { Crossing, Takeoff, liveProps } from './cutscene.js';
 import { StaticWorld } from '../render/staticworld.js';
 import { Crowd } from '../render/crowd.js';
@@ -524,6 +525,9 @@ export class Game {
     this.railway = buildRailway(this.world); // (the ballast, sleepers and rails of the line)
     if (this.railway) this.scene.add(this.railway);
     this.bridge = this.world.bridge ? new BridgeView(this.scene, this.world) : null; // (the mainland: the bridge the car came over)
+    // (the island: the same bridge, standing off its east shore - shared/coast.js - with its last span still up)
+    this.farBridge = this.world.kind === WORLD.ISLAND ? new BridgeView(this.scene, { seed, bridge: geography(seed).bridge(true) }, { island: false }) : null;
+    this.farBridge?.setFall(0);
     this.live = liveProps(this.scene, this.world); // (...the car they came in and the plane: the props a cutscene moves)
     this.under = 0;
     const t2 = performance.now();
@@ -575,6 +579,8 @@ export class Game {
     this.water.material.dispose();
     this.bridge?.dispose();
     this.bridge = null;
+    this.farBridge?.dispose();
+    this.farBridge = null;
     this.live?.dispose();
     this.live = null;
     if (this.mine) {

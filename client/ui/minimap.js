@@ -68,11 +68,19 @@ export class Minimap {
       const g = this.g;
       const k = n / (2 * RANGE) / MAP_PPM;
       g.setTransform(1, 0, 0, 1, 0, 0);
-      g.fillStyle = '#3a2f22'; // past the edge of the survey
+      g.fillStyle = '#3a2f22'; // past the edge of all there is
       g.fillRect(0, 0, n, n);
       // turned so your facing is up: the same turn as the field map's "facing up" (rotate by your yaw)
       g.setTransform(k * c, k * s, -k * s, k * c, n / 2, n / 2);
+      // round the map, the shore and the sea, while the disc reaches past its edge; over it, the bridge while it is
+      // in reach (the field map's layers: MapScreen.layers)
+      const L = screen.layers();
+      const lay = (l) => g.drawImage(l.cv, mapX(l.x0) - mapX(x), mapY(l.z0) - mapY(z), l.w * MAP_PPM, l.h * MAP_PPM);
+      const reach = RANGE * 1.5; // (the corners of the square the disc is cut from)
+      if (L.shore && Math.max(Math.abs(x), Math.abs(z)) > world.half - reach) lay(L.shore);
       g.drawImage(map, -mapX(x), -mapY(z));
+      const b = L.bridge;
+      if (b && x > b.x0 - reach && x < b.x0 + b.w + reach && z > b.z0 - reach && z < b.z0 + b.h + reach) lay(b);
     }
 
     // world -> px from the middle of the disc

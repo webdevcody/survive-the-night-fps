@@ -134,7 +134,16 @@ for (const [name, act, eyes] of [['island', WORLD.ISLAND, 60], ['mainland', WORL
     let apart = true;
     const runs = tm.runs.slice().sort((a, b) => a.first - b.first);
     for (let i = 1; i < runs.length; i++) apart &&= runs[i].first === runs[i - 1].first + runs[i - 1].count;
-    check(`${name}: the terrain is one mesh, every cell of the heightfield in exactly one of its ${tm.runs.length} pieces`, terrain.children.length === 1 && tm instanceof MultiMesh && sum === idx && apart && idx === (n - 1) * (n - 1) * 6 && tm.indexBytes === 4, `${sum} of ${idx} indices, grid ${n}`);
+    // (on the island a second mesh draws the far side of its hills down to the shore: shared/coast.js, terrain.js buildShore)
+    const shore = terrain.children.filter((m) => m.name === 'shore');
+    check(`${name}: the terrain is one mesh, every cell of the heightfield in exactly one of its ${tm.runs.length} pieces`, terrain.children.length - shore.length === 1 && tm instanceof MultiMesh && sum === idx && apart && idx === (n - 1) * (n - 1) * 6 && tm.indexBytes === 4, `${sum} of ${idx} indices, grid ${n}`);
+    const sm = shore[0];
+    const sumS = sm ? sm.runs.reduce((a, r) => a + r.count, 0) : 0;
+    check(
+      `${name}: ${act === WORLD.ISLAND ? 'its shore is one more mesh in the same ground, its pieces all of it, casting no shadow' : "no shore mesh (on the island only)"}`,
+      act === WORLD.ISLAND ? shore.length === 1 && sm instanceof MultiMesh && sm.material === tm.material && sumS === sm.geometry.index.count && sumS > 0 && !sm.castShadow : shore.length === 0,
+      sm ? `${sm.runs.length} pieces, ${(sumS / 3) | 0} triangles` : '',
+    );
     const cam = cameraAt(world.start.x, world.heightAt(world.start.x, world.start.z) + 1.62, world.start.z, 1, 0);
     const fr = frustumOf(cam);
     tm.intersectsFrustum(fr);

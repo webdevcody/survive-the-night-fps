@@ -237,7 +237,9 @@ function buildIsland(x, z) {
 }
 
 export class BridgeView {
-  constructor(scene, world) {
+  // world: what it is built from (its seed and its bridge: the plan, in the frame it is drawn in). island: the
+  // island's silhouette off its far end (the mainland's view: from the island the island is the ground underfoot)
+  constructor(scene, world, { island = true } = {}) {
     const br = (this.plan = world.bridge);
     this.scene = scene;
     const root = (this.group = new THREE.Group());
@@ -261,7 +263,7 @@ export class BridgeView {
       p.rotation.y = w.ry;
       root.add(p);
     }
-    root.add(buildIsland(br.x0, br.z));
+    if (island) root.add(buildIsland(br.x0, br.z));
     root.traverse((o) => {
       if (!o.isMesh) return;
       o.receiveShadow = true;

@@ -614,6 +614,19 @@ act 2, where the same loop is played with a plane and flying out wins.
     day's: a drum somebody keeps burning (a `barrel` and an `embers` light).
   - Props flagged `live` (the car, the plane) are drawn by the client's cutscene code, not the static world;
     `afloat` ones (boats) stand on water; parts flagged `across` are the one thing built in a road.
+- **The island's shore, and where the two maps lie** (`shared/coast.js`, issue #173: client only - nothing on the
+  server imports it, so no world and no fingerprint changes for it). The island's valley is the 640 m square that is
+  surveyed and walked; past its ring of hills the island goes on down to a shore of its own (`islandShore`: the reach
+  wanders with the bearing round a rounded square through the valley's corners, cliffs where it is short, beaches where
+  it is long) and the sea. The terrain draws that ground in its own material (`buildShore` in terrain.js) and the water
+  lays the sea round it, opaque past the shelf (`aSolid`). The bridge runs due east from a bluff on the island's east
+  shore to the Bridgehead: `geography(seed)` puts the two frames together (the mainland's bridge line is its plan's
+  first draw, `bridgeLine`, checked against the built mainland by `scripts/test-coast.js`), gives the bridge's plan in
+  either frame - the island draws it too (`Game.farBridge`, its last span still up) - and the widest view's extent.
+  The field map lays the shore and sea under its bake (`renderShore`), the bridge over it (`renderBridge`: its spans,
+  piers, wrecks, the broken half, the fallen span on the mainland), and zoomed out past a 1500 m view both maps
+  together (`renderOverview`: from the island the mainland is an unsurveyed outline, its shore guessed; from the
+  mainland the island as this page saw it, `ISLAND_SEEN`). The minimap draws the same layers (`MapScreen.layers`).
 - **Positions on the wire** stay int16: 1/64 m on the island (+-512 m), 1/32 m on the mainland (+-1024 m).
   `usePos(world)` (protocol.js) sets which; the server calls it as a tick starts, a message comes in or the world
   changes, the client as it loads a world. Nothing on the wire says the scale: both ends know the world.

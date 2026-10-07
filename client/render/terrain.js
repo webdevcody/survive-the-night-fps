@@ -9,6 +9,8 @@ import { GRID_STEP, WATER_LEVEL } from '../../shared/constants.js';
 import { smoothstep } from '../../shared/rng.js';
 import { ROAD } from '../../shared/world.js';
 import { MINE_R, PORTAL } from '../../shared/mine.js';
+import { WORLD } from '../../shared/acts.js';
+import { SHORE, islandShore } from '../../shared/coast.js';
 import { getTexture } from './textures.js';
 import { MultiMesh, ALWAYS } from './multimesh.js';
 import { GROUND_MACRO_GLSL, groundNoiseTexture, VEG } from './materials.js';
@@ -535,13 +537,117 @@ export function buildTerrain(world) {
   // of texture - is then run only where the ground shows)
   mesh.renderOrder = 1;
   group.add(mesh);
-  // (what Game does with it: the hills shade the valleys on the presets with sun shadows; a world comes and goes)
-  group.userData.setShadows = (on) => group.children.forEach((m) => (m.castShadow = on));
+  // the island past the valley's edge, down to its shore (in the same ground: it is the same hills)
+  const shore = world.kind === WORLD.ISLAND ? buildShore(world, mat) : null;
+  if (shore) group.add(shore);
+  // (what Game does with it: the hills shade the valleys on the presets with sun shadows; a world comes and goes.
+  // The shore casts none: nobody is out there for it to shade)
+  group.userData.setShadows = (on) => (mesh.castShadow = on);
   group.userData.dispose = () => {
     geo.dispose();
+    shore?.geometry.dispose();
     mat.dispose();
   };
   return group;
+}
+
+// The far side of the island's hills (shared/coast.js islandShore): from the valley's edge, where nobody can walk on,
+// down to the cliffs and beaches of its shore and the shelf of sea bed under the shallows. A grid of SHORE_STEP m in the
+// terrain's own ground (the same material, so its grass, rock and wet are the valley's), from a cell inside the
+// valley's edge (tucked under the valley's ground there, so no crack shows between the two) out to where the sea bed
+// is as deep as it goes. It is seen from the crest of the hills, from the bridge and from the sea; it has no collider
+// and is no part of the world (nothing on the server knows of it).
+const SHORE_STEP = 4;
+function buildShore(world, mat) {
+  const H = world.half;
+  const M = Math.ceil(SHORE.MARGIN / SHORE_STEP) * SHORE_STEP;
+  const lo = -H - M;
+  const n = (2 * (H + M)) / SHORE_STEP + 1;
+  const shore = islandShore(world.seed, world.heightAt);
+  const hs = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const x = lo + i * SHORE_STEP;
+      const z = lo + j * SHORE_STEP;
+      hs[j * n + i] = Math.abs(x) < H && Math.abs(z) < H ? world.heightAt(x, z) - 0.4 : shore.heightAt(x, z);
+    }
+  }
+  const DEEP = WATER_LEVEL - SHORE.DEPTH + 0.05;
+  const inner = (x, z) => Math.abs(x) < H - SHORE_STEP - 0.5 && Math.abs(z) < H - SHORE_STEP - 0.5; // (wholly under the valley's own ground)
+  // a cell is drawn unless it is all under the valley or all at the sea bed's full depth well out from the shore
+  const keep = (i, j) => {
+    const x = lo + i * SHORE_STEP;
+    const z = lo + j * SHORE_STEP;
+    if (inner(x, z) && inner(x + SHORE_STEP, z + SHORE_STEP)) return false;
+    const k = j * n + i;
+    if (Math.max(hs[k], hs[k + 1], hs[k + n], hs[k + n + 1]) > DEEP) return true;
+    return shore.coast(x + SHORE_STEP / 2, z + SHORE_STEP / 2) < SHORE.SHELF + 8;
+  };
+  const count = n * n;
+  const pos = new Float32Array(count * 3);
+  const nrm = new Float32Array(count * 3);
+  const splat = new Float32Array(count * 4);
+  const extra = new Float32Array(count * 4);
+  const road = new Float32Array(count * 4);
+  const at = (i, j) => hs[Math.max(0, Math.min(n - 1, j)) * n + Math.max(0, Math.min(n - 1, i))];
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      const h = hs[k];
+      pos[k * 3] = lo + i * SHORE_STEP;
+      pos[k * 3 + 1] = h;
+      pos[k * 3 + 2] = lo + j * SHORE_STEP;
+      const nx = at(i - 1, j) - at(i + 1, j);
+      const ny = 2 * SHORE_STEP;
+      const nz = at(i, j - 1) - at(i, j + 1);
+      const l = Math.hypot(nx, ny, nz);
+      nrm[k * 3] = nx / l;
+      nrm[k * 3 + 1] = ny / l;
+      nrm[k * 3 + 2] = nz / l;
+      // as groundFields lays the valley's open ground: grass, the shore's mud by the water, rock where it is steep
+      const mud = smoothstep(WATER_LEVEL + 1.3, WATER_LEVEL + 0.2, h);
+      splat[k * 4] = 1 - mud;
+      splat[k * 4 + 2] = mud;
+      extra[k * 4 + 1] = 1; // (no trees out there to shade it)
+      extra[k * 4 + 2] = smoothstep(WATER_LEVEL + 2.5, WATER_LEVEL + 0.4, h);
+      extra[k * 4 + 3] = smoothstep(0.16, 0.27, 1 - ny / l);
+      road[k * 4] = FRAME_REACH * 4; // (no road)
+    }
+  }
+  const CH = 24; // cells a side of a run
+  const idx = [];
+  const runs = [];
+  for (let cj = 0; cj < n - 1; cj += CH) {
+    for (let ci = 0; ci < n - 1; ci += CH) {
+      const first = idx.length;
+      let lo2 = Infinity;
+      let hi = -Infinity;
+      for (let j = cj; j < Math.min(n - 1, cj + CH); j++) {
+        for (let i = ci; i < Math.min(n - 1, ci + CH); i++) {
+          if (!keep(i, j)) continue;
+          const k00 = j * n + i;
+          idx.push(k00, k00 + n, k00 + 1, k00 + 1, k00 + n, k00 + n + 1);
+          lo2 = Math.min(lo2, hs[k00], hs[k00 + 1], hs[k00 + n], hs[k00 + n + 1]);
+          hi = Math.max(hi, hs[k00], hs[k00 + 1], hs[k00 + n], hs[k00 + n + 1]);
+        }
+      }
+      if (idx.length === first) continue;
+      const s = (CH * SHORE_STEP) / 2;
+      runs.push({ first, count: idx.length - first, x: lo + ci * SHORE_STEP + s, y: (lo2 + hi) / 2, z: lo + cj * SHORE_STEP + s, r: Math.hypot(s, s, (hi - lo2) / 2), chunk: ALWAYS, maxDist: Infinity });
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 4));
+  geo.setAttribute('aExtra', new THREE.BufferAttribute(extra, 4));
+  geo.setAttribute('aRoad', new THREE.BufferAttribute(road, 4));
+  geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+  const mesh = new MultiMesh(geo, mat, runs);
+  mesh.name = 'shore';
+  mesh.receiveShadow = true;
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 // Water surface (lake + ponds): dark murky water with animated ripples, fresnel sky reflection and
@@ -551,7 +657,7 @@ export function buildWater(world) {
   const N = world.gridN;
   const MAP_HALF = world.half;
   const H = world.heights;
-  const quads = [];
+  let quads = [];
   for (let j = 0; j < N - 1; j++) {
     for (let i = 0; i < N - 1; i++) {
       const k = j * N + i;
@@ -571,8 +677,49 @@ export function buildWater(world) {
     // (and round the corners of the map, where the shore runs out through its north and south edges)
     for (const [za, zb] of [[z0, -MAP_HALF], [MAP_HALF, z1]]) quads.push(x1, 0, za, x1, 0, zb, world.sea.x, 0, za, world.sea.x, 0, za, x1, 0, zb, world.sea.x, 0, zb);
   }
+  // how much of what is under the water shows through it, per vertex: everything above (0) but the island's open sea,
+  // past the shelf of its shore, where there is no sea bed under the sheet to see (1: opaque)
+  let solid = new Float32Array(quads.length / 3);
+  // the sea round the island (shared/coast.js): a grid over its shore out to where the sea bed is as deep as it goes
+  // (the shallows over the shelf let it show, as the lakes do), and on past it, opaque, as far as anybody can see
+  if (world.kind === WORLD.ISLAND) {
+    const shore = islandShore(world.seed, world.heightAt);
+    const S = 8;
+    const R = Math.ceil(SHORE.MARGIN / S) * S + MAP_HALF;
+    const far = 2600;
+    const sea = [];
+    const op = [];
+    const put = (x, z, o) => {
+      sea.push(x, 0, z);
+      op.push(o);
+    };
+    // (worked out once a grid point: every point is a corner of four cells)
+    const gn = (2 * R) / S + 1;
+    const og = new Float32Array(gn * gn);
+    for (let j = 0; j < gn; j++) for (let i = 0; i < gn; i++) og[j * gn + i] = i === 0 || j === 0 || i === gn - 1 || j === gn - 1 ? 1 : smoothstep(2, SHORE.SHELF, shore.coast(-R + i * S, -R + j * S));
+    const opq = (x, z) => og[Math.round((z + R) / S) * gn + Math.round((x + R) / S)];
+    for (let z = -R; z < R; z += S) {
+      for (let x = -R; x < R; x += S) {
+        if (x >= -MAP_HALF && x + S <= MAP_HALF && z >= -MAP_HALF && z + S <= MAP_HALF) continue; // (the valley: its lakes are above)
+        const c = [[x, z], [x, z + S], [x + S, z], [x + S, z], [x, z + S], [x + S, z + S]];
+        for (const [px, pz] of c) put(px, pz, opq(px, pz));
+      }
+    }
+    // (out past the grid: four bands to the horizon)
+    for (const [xa, za, xb, zb] of [[-far, -far, far, -R], [-far, R, far, far], [-far, -R, -R, R], [R, -R, far, R]]) {
+      for (const [px, pz] of [[xa, za], [xa, zb], [xb, za], [xb, za], [xa, zb], [xb, zb]]) put(px, pz, 1);
+    }
+    const all = new Float32Array(quads.length + sea.length);
+    all.set(quads);
+    all.set(sea, quads.length);
+    quads = all;
+    const s2 = new Float32Array(solid.length + op.length);
+    s2.set(op, solid.length);
+    solid = s2;
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(quads, 3));
+  geo.setAttribute('aSolid', new THREE.BufferAttribute(solid, 1));
   geo.computeBoundingSphere();
   const mat = new THREE.ShaderMaterial({
     transparent: true,
@@ -593,10 +740,13 @@ export function buildWater(world) {
     ]),
     vertexShader: /* glsl */ `
       #include <fog_pars_vertex>
+      attribute float aSolid;
       varying vec3 vW;
+      varying float vSolid;
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vW = wp.xyz;
+        vSolid = aSolid;
         vec4 mvPosition = viewMatrix * wp;
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -605,6 +755,7 @@ export function buildWater(world) {
       #include <fog_pars_fragment>
       uniform float uTime; uniform vec3 uSky; uniform vec3 uDeep; uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uCam; uniform float uEdge;
       varying vec3 vW;
+      varying float vSolid;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
       void main() {
@@ -625,6 +776,7 @@ export function buildWater(world) {
         // sea as a straight line. So the sheet thickens to opaque over the last metres before the edge.
         float alpha = 0.9;
         if (uEdge > 0.0) alpha = mix(1.0, 0.9, smoothstep(0.0, 70.0, uEdge - max(abs(vW.x), abs(vW.z))));
+        alpha = mix(alpha, 1.0, vSolid); // (the island's open sea, past the shelf of its shore: aSolid)
         gl_FragColor = vec4(col, alpha);
         #include <fog_fragment>
       }`,

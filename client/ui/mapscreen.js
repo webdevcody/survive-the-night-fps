@@ -2,16 +2,23 @@
 // car, pings, where the car supplies and the schematics are rumoured to be, and the places you have discovered.
 // A click sets your own waypoint (the game keeps it, shows it on the compass and in the world, and shares it:
 // the team's waypoints are flags here too, with who set them). A pinch or the wheel zooms, a drag pans, and [R] turns
-// the map with you, the way you face up (a compass in its corner keeps north).
+// the map with you, the way you face up (a compass in its corner keeps north). Zoomed out past its own map it goes on:
+// the shore and the sea round it, the bridge, and at the widest both maps where they lie to each other, the sea between
+// them and the bridge across it (mapcanvas.js renderShore / renderBridge / renderOverview; shared/coast.js).
 import { ZONE, ZONE_NAMES, ITEM, ITEM_DEFS, SCHEMATICS, SCHEM_BIT, supplyRumours, schematicRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
-import { renderMapCanvas, MAP_PX } from './mapcanvas.js';
+import { renderMapCanvas, renderShore, renderBridge, renderOverview, MAP_PX } from './mapcanvas.js';
+import { WORLD } from '../../shared/acts.js';
+import { geography } from '../../shared/coast.js';
+import { MAP_SIZE } from '../../shared/constants.js';
 import { bindLabel, liveText } from '../game/binds.js';
 
 const TEAM_BESIDE = 14; // m: a teammate's waypoint on your own waypoint's spot is drawn this far east of it
 const MAX_ZOOM = 4; // the baked map is 2 px a metre: past this it is a blur
+const FAR_VIEW = 1500; // m: a view wider than this is the widest one (both maps): the overview alone, no place names
+const MIN_ZOOM = 0.1; // (the least any world's widest view needs: setWorld works out each one's)
 const DRAG_PX = 5; // a press that moves this far is a pan, not a click for the waypoint
 const START_ZOOM = 2.5; // the first opening starts this close in on you (about 256 m across), the wheel zooms out to all of it
 const HEADING_KEY = 'stn.mapHeadingUp';
@@ -36,6 +43,16 @@ export class MapScreen {
     svgEl('i', 'map-rot-ico', this.rotBtn, glyph('compass'));
     this.rotTxt = el('span', '', this.rotBtn);
     this.rotBtn.addEventListener('click', () => this.setHeadingUp(!this.headingUp));
+    // all the way out, to both maps (and back in to where it was)
+    this.farBtn = el('button', 'map-rot map-far-btn', head, 'Both maps');
+    this.farBtn.type = 'button';
+    this.farBtn.title = 'Zoom out to the island and the mainland together';
+    this.farBtn.addEventListener('click', () => {
+      if (this.zoom > this.minZoom * 1.05) {
+        this.nearZoom = this.zoom;
+        this._zoomTo(this.minZoom);
+      } else this._zoomTo(this.nearZoom || START_ZOOM);
+    });
     const close = svgEl('button', 'set-close btn-icon map-close', head, glyph('xmark'));
     close.type = 'button';
     close.title = 'Close (M)';
@@ -47,6 +64,7 @@ export class MapScreen {
     this.pane = el('div', 'map-pane', this.view);
     this.canvasWrap = el('div', 'map-canvas', this.pane);
     this.labels = el('div', 'map-labels', this.pane);
+    this.farLabs = el('div', 'map-far-labs', this.pane); // (the bridge's name, and the two maps' when zoomed out to both)
     this.markers = el('div', 'map-markers', this.pane);
     // where north is, turned with the map; a click on it turns the map too
     this.north = el('button', 'map-north', this.view);
@@ -85,7 +103,7 @@ export class MapScreen {
     for (const [k, t] of [
       ['LMB', 'set waypoint'],
       ['X', 'clear it'],
-      ['Wheel', 'zoom (or pinch)'],
+      ['Wheel', 'zoom (out: both maps)'],
       ['Drag', 'pan'],
       ['R', 'facing up / north up'],
       [() => bindLabel('map'), 'close'], // (keybinds, game/binds.js; X and R above are the map's own)
@@ -113,7 +131,9 @@ export class MapScreen {
     // spot of the map (a fraction across / down) held in the middle of the view as far as the map's edges allow: you,
     // as you move, until a drag moves it somewhere else (an opening puts it back on you). cx / cy is the middle shown
     const z = parseFloat(lsGet(ZOOM_KEY, ''));
-    this.zoom = z >= 1 && z <= MAX_ZOOM ? z : START_ZOOM;
+    this.zoom = z >= MIN_ZOOM && z <= MAX_ZOOM ? z : START_ZOOM;
+    this.minZoom = 1;
+    this.bounds = { u0: 0, v0: 0, u1: 1, v1: 1 }; // what can be panned to, in fractions of the map (the widest view's)
     this.fx = this.fy = 0.5;
     this.follow = true;
     this.cx = this.cy = 0.5;
@@ -158,7 +178,9 @@ export class MapScreen {
       const pr = this.press;
       this.press = null;
       // a click: on the waypoint itself it takes it back, anywhere else it sets it
-      if (e.type === 'pointerup' && pr?.id === e.pointerId) this.onWaypoint?.(pr.target.closest('.mm.way') ? null : this._pick(pr.x, pr.y, pr.target));
+      // (not on the other map, or out at sea: nowhere a waypoint could be walked to)
+      const at = e.type === 'pointerup' && pr?.id === e.pointerId ? (pr.target.closest('.mm.way') ? null : this._pick(pr.x, pr.y, pr.target)) : false;
+      if (at !== false) this.onWaypoint?.(at);
     };
     this.view.addEventListener('pointerup', release);
     this.view.addEventListener('pointercancel', release);
@@ -215,14 +237,13 @@ export class MapScreen {
   }
 
   _zoomTo(z) {
-    this.zoom = Math.max(1, Math.min(MAX_ZOOM, z));
+    this.zoom = Math.max(this.minZoom, Math.min(MAX_ZOOM, z));
     this._layout();
   }
 
-  // a drag: the focus becomes the middle shown, moved with the pointer (all the map is in view at 1x north up:
-  // nothing to move). The move on screen is turned back onto the map when the map is turned
+  // a drag: the focus becomes the middle shown, moved with the pointer. The move on screen is turned back onto the map
+  // when the map is turned
   _panBy(dx, dy) {
-    if (this.zoom <= 1 && !this.headingUp) return;
     this.follow = false;
     const c = Math.cos(this.rot);
     const s = Math.sin(this.rot);
@@ -234,13 +255,30 @@ export class MapScreen {
     this.fy = this.cy;
   }
 
-  // the focus in the middle, but north up the map never pulls away from the view's edges. Turned, it turns about the
-  // middle and its corners come into view anyway: then only the focus stays on the map
+  // the focus in the middle, but north up the view never pulls away past the edges of what there is to show (the
+  // widest view's: both maps and the sea round them), and is centred on it where all of it is in view. Turned, it
+  // turns about the middle and its corners come into view anyway: then only the focus stays on it
   _layout() {
     const rot = this.headingUp ? this.yaw : 0;
     const m = this.headingUp ? 0 : 0.5 / this.zoom;
-    this.cx = Math.max(m, Math.min(1 - m, this.fx));
-    this.cy = Math.max(m, Math.min(1 - m, this.fy));
+    const { u0, v0, u1, v1 } = this.bounds;
+    this.cx = u1 - u0 > 2 * m ? Math.max(u0 + m, Math.min(u1 - m, this.fx)) : (u0 + u1) / 2;
+    this.cy = v1 - v0 > 2 * m ? Math.max(v0 + m, Math.min(v1 - m, this.fy)) : (v0 + v1) / 2;
+    const wide = this.world ? this.world.size / this.zoom : 0; // (metres across the view)
+    const far = wide > FAR_VIEW;
+    if (far !== this.far) {
+      this.far = far;
+      this.view.classList.toggle('far', far);
+    }
+    // (the widest view's picture is the open sea round the shore's layer too: baked once the view reaches past that)
+    if (!this.over && this.shore) {
+      const W = this.world;
+      const r = (wide / 2) * (rot ? Math.SQRT2 : 1);
+      const vx = this.cx * W.size - W.half;
+      const vz = this.cy * W.size - W.half;
+      const L = this.shore;
+      if (far || vx - r < L.x0 || vx + r > L.x0 + L.w || vz - r < L.z0 || vz + r > L.z0 + L.h) this._ensureOverview();
+    }
     const st = this.pane.style;
     st.width = st.height = this.zoom * 100 + '%';
     st.left = (0.5 - this.cx * this.zoom) * 100 + '%';
@@ -269,8 +307,11 @@ export class MapScreen {
     const u = this.cx + (dx * c + dy * s) / w;
     const v = this.cy + (dy * c - dx * s) / w;
     const lim = this.world.half - 3; // the playable ground stops short of the map's edge
-    const x = Math.max(-lim, Math.min(lim, u * this.world.size - this.world.half));
-    const z = Math.max(-lim, Math.min(lim, v * this.world.size - this.world.half));
+    const wx = u * this.world.size - this.world.half;
+    const wz = v * this.world.size - this.world.half;
+    if (!lab && Math.max(Math.abs(wx), Math.abs(wz)) > this.world.half + 30) return false;
+    const x = Math.max(-lim, Math.min(lim, wx));
+    const z = Math.max(-lim, Math.min(lim, wz));
     if (!zone) {
       let best = Infinity;
       for (const zn of this.world.zones) {
@@ -319,6 +360,63 @@ export class MapScreen {
       this.cemLab.style.left = ((world.cemetery.x + world.half) / this.world.size) * 100 + '%';
       this.cemLab.style.top = ((world.cemetery.z + world.half) / this.world.size) * 100 + '%';
     }
+    // past the map: the widest view takes in both maps (shared/coast.js geography), and the bridge between them
+    const island = world.kind === WORLD.ISLAND;
+    const geo = geography(world.seed);
+    const ext = geo.extent(island);
+    const fr = (v) => (v + world.half) / world.size;
+    this.bounds = { u0: fr(ext.x0), v0: fr(ext.z0), u1: fr(ext.x1), v1: fr(ext.z1) };
+    this.minZoom = Math.min(1, 1 / Math.max(this.bounds.u1 - this.bounds.u0, this.bounds.v1 - this.bounds.v0));
+    if (this.zoom < this.minZoom) this.zoom = this.minZoom;
+    this.far = null;
+    this.over = null;
+    this.farLabs.textContent = '';
+    const far = (x, z, txt, cls = '') => {
+      const l = el('div', 'map-far ' + cls, this.farLabs, txt);
+      l.style.left = fr(x) * 100 + '%';
+      l.style.top = fr(z) * 100 + '%';
+      return l;
+    };
+    const plan = geo.bridge(island);
+    const [ox, oz] = island ? geo.toIsland(0, 0) : [geo.island.x, geo.island.z];
+    // (the names of the maps over their north shores, clear of whoever is in the middle; the bridge's by its end on
+    // this map close in, over its middle at the widest)
+    const mid = (plan.x0 + plan.x1) / 2;
+    if (island) {
+      far(0, -world.half - 70, 'The island', 'big');
+      far(0, -world.half - 30, 'Harlan Valley', 'sub');
+      far(ox, oz - 200, 'The mainland', 'big other');
+      far(ox, oz - 160, 'not yet reached', 'sub other');
+      far(plan.x0 + 64, plan.z - 22, 'Bridge to the mainland', 'bridge near');
+      far(mid, plan.z - 70, 'the bridge', 'far-only');
+    } else {
+      far(0, -world.half + 70, 'The Calder Coast', 'big');
+      far(ox, oz - MAP_SIZE / 2 - 70, 'The island', 'big other');
+      far(ox, oz - MAP_SIZE / 2 - 30, 'Harlan Valley', 'sub other');
+      far(plan.x1 - 40, plan.z - 22, 'Bridge to the island', 'bridge near');
+      far(mid, plan.z - 70, 'the bridge', 'far-only');
+    }
+  }
+
+  // a layer of the map laid in its pane: L's world rectangle, in the map's own fractions
+  _lay(L, cls) {
+    const w = this.world;
+    const cv = L.cv;
+    cv.className = 'map-layer ' + cls;
+    cv.style.left = ((L.x0 + w.half) / w.size) * 100 + '%';
+    cv.style.top = ((L.z0 + w.half) / w.size) * 100 + '%';
+    cv.style.width = (L.w / w.size) * 100 + '%';
+    cv.style.height = (L.h / w.size) * 100 + '%';
+    return cv;
+  }
+
+  // the widest view's picture (both maps), the first time it is zoomed out to (it takes a moment, once)
+  _ensureOverview() {
+    if (this.over || !this.canvas) return;
+    const t0 = performance.now();
+    this.over = renderOverview(this.world, this.canvas);
+    this.canvasWrap.insertBefore(this._lay(this.over, 'map-over'), this.canvasWrap.firstChild);
+    console.log(`[map] both maps baked in ${(performance.now() - t0).toFixed(0)}ms (${this.over.cv.width}x${this.over.cv.height}px)`);
   }
 
   _ensureCanvas() {
@@ -326,14 +424,25 @@ export class MapScreen {
     const t0 = performance.now();
     this.canvas = renderMapCanvas(this.world);
     this.canvas.className = 'map-cv';
-    this.canvasWrap.appendChild(this.canvas);
-    console.log(`[map] baked in ${(performance.now() - t0).toFixed(0)}ms (${MAP_PX}px)`);
+    const t1 = performance.now();
+    // what is round it - the shore and the sea, under it - and the bridge, over it
+    this.shore = renderShore(this.world);
+    this.bridgeL = renderBridge(this.world);
+    this.canvasWrap.append(this._lay(this.shore, 'map-shore'), this.canvas, this._lay(this.bridgeL, 'map-bridge'));
+    console.log(`[map] baked in ${(t1 - t0).toFixed(0)}ms (${MAP_PX}px), its shore and bridge in ${(performance.now() - t1).toFixed(0)}ms`);
+    if (this.far) this._ensureOverview();
   }
 
   // the baked map, for the minimap to draw from (baked now if the map has not been opened yet), or null before a world
   baked() {
     this._ensureCanvas();
     return this.canvas;
+  }
+
+  // ...and what the minimap lays round it and over it: { shore, bridge } (layers: { cv, x0, z0, w, h })
+  layers() {
+    this._ensureCanvas();
+    return { shore: this.shore, bridge: this.bridgeL };
   }
 
   setOpen(open) {
@@ -451,7 +560,7 @@ export class MapScreen {
     put(d.car.x, d.car.z, 'car', glyph(W.glyph), W.thing);
     for (const m of d.mates) put(m.x, m.z, 'mate ' + m.status, glyph(m.status === 'downed' ? 'downed' : 'person'), m.name);
     // (the marker stands upright on screen, so its arrow turns with the map as well as with you)
-    put(d.self.x, d.self.z, 'you', glyph('arrowUp'), '', this.rot - d.self.yaw);
+    put(d.self.x, d.self.z, 'you', glyph('arrowUp'), this.far ? 'you are here' : '', this.rot - d.self.yaw);
     for (let i = n; i < this.pool.length; i++) if (!this.pool[i].e.hidden) this.pool[i].e.hidden = true;
     this.coords.textContent = `${Math.round(d.self.x)} E · ${Math.round(-d.self.z)} N`;
     // supply checklist
