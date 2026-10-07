@@ -16,6 +16,7 @@ import { join, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import uWS from 'uWebSockets.js';
 import { Lobby, rejectBytes, defaultMaxGames } from './rooms.js';
+import { Allowance } from './allowance.js';
 import { chosenDifficulty } from '../shared/difficulty.js';
 import { PlayerStats } from './stats.js';
 import { openDb, describeUrl } from './db/index.js';
@@ -355,9 +356,11 @@ app.get('/api/version', (res) => json(res, 200, { protocol: PROTOCOL_VERSION, bu
 
 // makes a game: { name, host, inviteOnly, maxPlayers, difficulty } -> its info, code included.
 // difficulty is ember, nightfall or blackout (shared/difficulty.js). Left off, it is Nightfall, which plays as the valley always has.
+const gameCreations = new Allowance(5, 10); // per address: 5 in a row, then one every 10 s
 app.post('/api/games', (res, req) => {
   const ip = clientAddress(res, req);
   const token = sessionToken(req);
+  if (!gameCreations.take(ip)) return json(res, 429, { error: 'Too many games made. Try again shortly.' });
   // (JSON only: a form on another site cannot post that without the browser asking this server first)
   if (!/^application\/json\b/i.test(req.getHeader('content-type'))) return json(res, 415, { error: 'Send JSON' });
   let body = Buffer.alloc(0);
