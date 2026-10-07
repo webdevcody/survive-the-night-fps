@@ -6,6 +6,7 @@
 // the shore and the sea round it, the bridge, and at the widest both maps where they lie to each other, the sea between
 // them and the bridge across it (mapcanvas.js renderShore / renderBridge / renderOverview; shared/coast.js).
 import { ZONE, ZONE_NAMES, ITEM, ITEM_DEFS, SCHEMATICS, SCHEM_BIT, supplyRumours, schematicRumours } from '../../shared/defs.js';
+const VEH_LABEL = { 1: 'moped', 2: 'car', 3: 'bicycle' }; // (shared/vehicles.js VEH)
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
@@ -86,6 +87,7 @@ export class MapScreen {
       ['you', 'arrowUp', 'You'],
       ['mate', 'person', 'Survivor'],
       ['car', 'car', 'Your car'],
+      ['veh', itemIcon(ITEM.MOPED_KIT), 'A vehicle of the team’s (mainland)'],
       ['hint', 'fuel', 'Rumoured supply'],
       ['part', 'fuel', 'Dropped supply'],
       ['schem', itemIcon(ITEM.SCHEM_SHOTGUN), 'Rumoured schematic'],
@@ -630,6 +632,8 @@ export class MapScreen {
       put(z.x + n * 10, z.z + 26, 'schem', itemIcon(rm.item));
     }
     for (const b of d.benches) put(b.x, b.z, 'bench', glyph('wrench'), 'bench');
+    // the team's vehicles: where each was left (a parked car is easy to lose)
+    for (const v of d.vehicles || []) if (!v.mine) put(v.x, v.z, 'veh' + (v.down ? ' down' : ''), v.kind === 2 ? glyph('car') : itemIcon(v.kind === 1 ? ITEM.MOPED_KIT : ITEM.BIKE_KIT), VEH_LABEL[v.kind] + (v.down ? ' (not running)' : ''));
     // car supplies on the ground where someone dropped them or fell, named for what they are
     for (const p of d.parts) put(p.x, p.z, 'part', itemIcon(p.item), ITEM_DEFS[p.item].name);
     for (const c of d.crates) put(c.x, c.z, 'crate', glyph('hazard'), 'drop');
