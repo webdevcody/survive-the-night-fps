@@ -10,7 +10,7 @@ const VEH_LABEL = { 1: 'moped', 2: 'car', 3: 'bicycle' }; // (shared/vehicles.js
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
-import { renderMapCanvas, shoreTiles, renderShoreTile, shoreLayers, renderBridge, renderOverview, MAP_PX } from './mapcanvas.js';
+import { renderMapCanvas, shoreTiles, renderShoreTile, shoreLayers, renderBridge, renderOverview, MAP_PX, SHORE_FEATHER } from './mapcanvas.js';
 import { WORLD } from '../../shared/acts.js';
 import { geography, farFieldPart, FAR_PARTS, farFlora, mapMargin } from '../../shared/coast.js';
 import { MAP_SIZE } from '../../shared/constants.js';
@@ -394,8 +394,9 @@ export class MapScreen {
     sea.style.width = ((gx1 - gx0) / world.size) * 100 + '%';
     sea.style.height = ((gz1 - gz0) / world.size) * 100 + '%';
     sea.style.backgroundSize = `${(80 / (gx1 - gx0)) * 100}% ${(80 / (gz1 - gz0)) * 100}%`;
-    // (what the closer views can pan to: the map and its strips)
-    const NM = mapMargin(world);
+    // (what the closer views can pan to: the map and its strips - on the mainland short of their outer rim, which fades
+    // into the widest view's picture and so is only seen with it under it)
+    const NM = mapMargin(world) - (world.kind === WORLD.MAINLAND ? SHORE_FEATHER : 0);
     this.near = { x0: -world.half - NM, z0: -world.half - NM, w: world.size + 2 * NM, h: world.size + 2 * NM };
     this.farLabs.textContent = '';
     const far = (x, z, txt, cls = '') => {

@@ -1366,7 +1366,10 @@ function laggy(LAG, JIT, vk) {
         if (ps.drive) {
           // a figure: off, a long right-hander, hard on the brakes, a left with the handbrake, on again, the horn
           const u = t - WHEN.drive / SEC;
-          if (tick >= WHEN.dead) buttons = BTN.FWD;
+          // (on through the dead, then brought to a stop for the crowd: the server stops it there, and a car still
+          // rolling would have the driver's view put back by the stop, not by anything the dead did)
+          if (tick >= WHEN.crowd - 3 * SEC && tick < WHEN.crowd) buttons = -Math.sin(ps.dyaw) * ps.vx - Math.cos(ps.dyaw) * ps.vz > 0.3 ? BTN.BACK : 0;
+          else if (tick >= WHEN.dead) buttons = BTN.FWD;
           else buttons = u < 5 ? BTN.FWD : u < 9 ? BTN.FWD | BTN.RIGHT : u < 10.5 ? BTN.BACK : u < 13 ? BTN.FWD | BTN.LEFT : u < 14 ? BTN.LEFT | BTN.JUMP : u < 19 ? BTN.FWD | (Math.sin(u * 3) > 0 ? BTN.RIGHT : BTN.LEFT) | BTN.HORN : u < 22 ? BTN.BACK : 0;
         }
         const yaw = Math.sin(frame / 40) * 0.8;

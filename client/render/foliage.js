@@ -26,7 +26,7 @@ function farCone() {
   _cone = { geometry: g, material: new THREE.MeshLambertMaterial({ color: 0x2c3a2b }) };
   return _cone;
 }
-const GRASS_PAST = 18; // m: how far past the map's edge the grass goes on, thinning out
+const GRASS_PAST = 9; // m: how far past the map's edge the grass goes on, thinning out (fast: a blade is costly, and a few read as grass)
 const CELL_OFF = 1024; // added to a coordinate before it is put in a cell, so that none is negative (the mainland reaches +-640 m)
 
 // The view the instance buffers were last filled for, padded: what is outside it is not drawn at all (two thirds of
@@ -434,7 +434,7 @@ class GrassField {
       const F = this.far;
       // (in a band past the edge, thinning out: near enough to be seen as grass from where anybody can stand)
       const past = Math.max(Math.abs(x), Math.abs(z)) - w.half;
-      if (!F || past > GRASS_PAST || hash2(gi, gj, 57 + salt) < past / GRASS_PAST) return;
+      if (!F || past > GRASS_PAST || hash2(gi, gj, 57 + salt) < Math.sqrt(past / GRASS_PAST)) return;
       y = F.at(x, z);
       if (y < WATER_LEVEL + 1.1) return;
       const slope = Math.hypot(F.at(x + 2, z) - F.at(x - 2, z), F.at(x, z + 2) - F.at(x, z - 2)) / 4;

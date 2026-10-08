@@ -173,8 +173,12 @@ export function islandLand(seed) {
     return smoothstep(0, 1, u) * (read(shape.hill, f) + nz(x * 0.012, z * 0.012) * 6 * u);
   };
   const lift = (x, z) => hillsAt(x, z, Math.hypot(x, z), at(x, z));
+  // (inside the foot of the hills whichever way: the valley's own ground, and most of the valley is)
+  let footMin = Infinity;
+  for (let i = 0; i < LUT; i++) footMin = Math.min(footMin, shape.foot[i]);
   const land = (x, z, h0) => {
     const r = Math.hypot(x, z);
+    if (r <= footMin && x <= H) return h0;
     const f = at(x, z);
     const rc = read(shape.coast, f);
     const rk = read(shape.crest, f);
@@ -283,10 +287,23 @@ export function farField(world) {
  * stride 6 [x, y, z, scale, rot, variant], as world.trees is.
  */
 const FLORA = new WeakMap();
+// (as thick as inside at the edge, thinning out to THIN of it by FADE m past it: nobody comes near any of it, and
+// through the haze a few trees read as woods; the scrub is left out - too small to see from inside)
+const THIN = 0.22;
+const FADE = 140;
+const farThin = (d) => 1 - (1 - THIN) * smoothstep(0, FADE, d);
+// how many trees a square metre stand past the edge at (x, z), on average (the widest view's woods, too small to dot:
+// the same woods as farFlora's, and on past them)
+export function farTreeDensity(world) {
+  const fl = world.flora;
+  if (!fl) return () => 0;
+  const k = (fl.tries / (2 * (world.half - 4)) ** 2) * farFlora(world).kT;
+  return (x, z) => fl.treeOdds(x, z) * k * farThin(Math.max(Math.abs(x), Math.abs(z)) - world.half);
+}
 export function farFlora(world) {
   let out = FLORA.get(world);
   if (out) return out;
-  out = { trees: new Float32Array(0) };
+  out = { trees: new Float32Array(0), kT: 0 };
   FLORA.set(world, out);
   const fl = world.flora;
   if (!fl || !world.far) return out;
@@ -314,6 +331,7 @@ export function farFlora(world) {
   let have = 0;
   for (let i = 0; i < world.trees.length; i += 6) if (band(world.trees[i], world.trees[i + 2])) have++;
   const kT = want > 0 ? Math.min(1, have / want) : 0;
+  out.kT = kT;
   const reach = H + F.margin - 6;
   const ground = (x, z) => {
     const y = F.at(x, z);
@@ -328,17 +346,13 @@ export function farFlora(world) {
   };
   // every so many square metres a try, as inside, over the ring between the edge and the far field's margin
   const ring = (2 * reach) ** 2 - (2 * H) ** 2;
-  // (as thick as inside at the edge, thinning out to THIN of it by FADE m past it: nobody comes near any of it, and
-  // through the haze a few trees read as woods; the scrub is left out - too small to see from inside)
-  const THIN = 0.22;
-  const FADE = 140;
   const trees = [];
   for (let n = Math.round((ring * fl.tries) / area), a = 0; a < n; a++) {
     const x = (rng() * 2 - 1) * reach;
     const z = (rng() * 2 - 1) * reach;
     const d = Math.max(Math.abs(x), Math.abs(z)) - H;
     if (d <= 0.5) continue;
-    if (rng() > fl.treeOdds(x, z) * kT * (1 - (1 - THIN) * smoothstep(0, FADE, d))) continue;
+    if (rng() > fl.treeOdds(x, z) * kT * farThin(d)) continue;
     const y = ground(x, z);
     if (y === null) continue;
     trees.push(x, y, z, 0.75 + rng() * 0.55, rng() * Math.PI * 2, pick());

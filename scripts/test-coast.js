@@ -19,8 +19,8 @@ import { WORLD, MAINLAND_SIZE } from '../shared/acts.js';
 import { MAP_HALF, WATER_LEVEL } from '../shared/constants.js';
 import { BRIDGE } from '../shared/bridge.js';
 import { SHORE, BRIDGE_DECK, BRIDGE_LEN, MAINLAND_COAST, geography, islandLand } from '../shared/coast.js';
-import { shoreTiles, shoreTile, bridgeMarks, SEA } from '../client/ui/mapcanvas.js';
-import { farField, mapMargin } from '../shared/coast.js';
+import { shoreTiles, shoreTile, bridgeMarks, overviewRaster, SEA, SHORE_FEATHER } from '../client/ui/mapcanvas.js';
+import { farField, farFlora, mapMargin } from '../shared/coast.js';
 
 // the field map's tiles round a map (shoreTiles), read as one picture: the pixel at (x, z); where no tile is, the open
 // sea's own colour (the view's: SEA) outside the map's square, null inside it
@@ -41,6 +41,76 @@ function stripsOf(world) {
 }
 const wetPx = (p) => !!p && p[3] === 255 && p[2] > p[0] + 8;
 const landPx = (p) => !!p && p[3] === 255 && p[0] > p[2] + 8;
+
+// The mainland's widest view: its far country goes on from the band round the map with no rectangle where the band
+// ends. Under the band's feathered rim the view has ground of its own (no sea showing through between them), and where
+// both are drawn the view's tone is the band's - its paper, shading, contours and woods' dots - taken a view's pixel at
+// a time (mean colour by distance out, within a few levels)
+function overviewChecks(seed, world, img) {
+  const H = world.half;
+  const M = mapMargin(world);
+  const O = overviewRaster(world, { all: true });
+  const U = overviewRaster(world);
+  const B = 1 / O.ppm;
+  const T = farFlora(world).trees;
+  const at = (R, x, z) => {
+    const i = Math.floor((x - R.ext.x0) * R.ppm), j = Math.floor((z - R.ext.z0) * R.ppm);
+    return R.d.subarray((j * R.W + i) * 4, (j * R.W + i) * 4 + 4);
+  };
+  // (under the rim: every point of it on the north, south and east, on land)
+  let holes = 0;
+  let n = 0;
+  for (let v = -H; v <= H; v += 7) {
+    for (let d = M - SHORE_FEATHER + B; d < M; d += 4) {
+      for (const [x, z] of [[v, -H - d], [v, H + d], [H + d, v]]) {
+        if (x >= U.ext.x1 - B || (world.far(x, z) ?? 0) < WATER_LEVEL + 1) continue; // (the view ends 40 m east of the survey)
+        n++;
+        if (at(U, x, z)[3] !== 255) holes++;
+      }
+    }
+  }
+  check(`seed ${seed} (mainland): the widest view has ground under all of the band's feathered rim`, n > 100 && holes === 0, `${holes} of ${n} points with nothing under the rim`);
+  // (the band's tone a block at a time, with its dots)
+  const bands = [0, 0, 0].map(() => ({ n: 0, d: [0, 0, 0] }));
+  for (let qz = 0; qz < O.Hpx; qz++) {
+    for (let qx = 0; qx < O.W; qx++) {
+      const x0 = O.ext.x0 + qx * B, z0 = O.ext.z0 + qz * B;
+      const out = Math.max(Math.abs(x0 + B / 2), Math.abs(z0 + B / 2)) - H;
+      if (out < 3 || out >= M - SHORE_FEATHER || x0 < -H) continue;
+      const o = O.d.subarray((qz * O.W + qx) * 4, (qz * O.W + qx) * 4 + 4);
+      if (o[3] !== 255) continue;
+      const sum = [0, 0, 0];
+      let k = 0;
+      for (let z = z0 + 0.5; z < z0 + B; z++) {
+        for (let x = x0 + 0.5; x < x0 + B; x++) {
+          const p = img.at(x, z);
+          if (!p || p[3] !== 255) continue;
+          for (let c = 0; c < 3; c++) sum[c] += p[c];
+          k++;
+        }
+      }
+      if (k < B * B * 0.9) continue;
+      let a1 = 0, a2 = 0;
+      for (let i = 0; i < T.length; i += 6) {
+        if (T[i] < x0 || T[i] >= x0 + B || T[i + 2] < z0 || T[i + 2] >= z0 + B) continue;
+        a1 += Math.PI * Math.max(0.35, (1.1 + 1.3 * T[i + 3]) * 0.5) ** 2;
+        if ((i / 6) % 2 === 0) a2 += Math.PI * 0.45 ** 2;
+      }
+      const c1 = 0.42 * (1 - Math.exp(-a1 / (B * B)));
+      const c2 = 0.35 * (1 - Math.exp(-a2 / (B * B)));
+      const b = bands[Math.min(2, Math.floor(out / 20))];
+      b.n++;
+      for (let c = 0; c < 3; c++) {
+        let t = sum[c] / k;
+        t += ([58, 74, 52][c] - t) * c1;
+        t += ([40, 52, 36][c] - t) * c2;
+        b.d[c] += o[c] - t;
+      }
+    }
+  }
+  const worst = Math.max(...bands.flatMap((b) => b.d.map((v) => Math.abs(v / Math.max(1, b.n)))));
+  check(`seed ${seed} (mainland): where the band and the widest view are both drawn their tone is the same (no rectangle)`, bands.every((b) => b.n > 200) && worst < 4, bands.map((b, i) => `${i * 20}-${i * 20 + 20} m out: ${b.d.map((v) => (v / Math.max(1, b.n)).toFixed(1)).join('/')} (${b.n})`).join('; '));
+}
 
 const ISLANDS = [1, 7, 42, 1337];
 const MAINLANDS = [1, 1337];
@@ -202,6 +272,7 @@ for (const seed of MAINLANDS) {
   check(`seed ${seed}: the mainland's map is sea off its west edge and land past its east one`, dry === 0 && landE === nE, `${dry} dry in the west, ${nE - landE} not land in the east`);
   check(`seed ${seed}: the mainland's tiles are few: ${img.S.length}, ${img.pixels} pixels`, img.pixels < 450000 && img.S.length < 140, `${((img.pixels * 4) / 1048576).toFixed(2)} MB`);
   edgeChecks(`seed ${seed} (mainland)`, m, ['N', 'S', 'E']);
+  overviewChecks(seed, m, img);
 
   // ---- what the field map draws of the bridge, on either map
   for (const [plan, fallen, where] of [[pi, false, 'island'], [b, true, 'mainland']]) {

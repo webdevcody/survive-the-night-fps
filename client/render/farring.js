@@ -181,7 +181,7 @@ export function buildRing(world, mat, fields, MultiMesh, ALWAYS, roadReach) {
   const mesh = new MultiMesh(geo, mat, runs);
   mesh.name = 'shore';
   mesh.receiveShadow = true;
-  mesh.renderOrder = 1;
+  mesh.renderOrder = 2; // (after the terrain inside the edge, which hides much of it: its shader runs only where it shows)
   return mesh;
 }
 

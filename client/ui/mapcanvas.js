@@ -5,7 +5,8 @@ import { MAP_HALF, MAP_SIZE, GRID_STEP, WATER_LEVEL } from '../../shared/constan
 import { WHEEL } from '../../shared/fair.js';
 import { WORLD } from '../../shared/acts.js';
 import { BRIDGE, DAMAGED } from '../../shared/bridge.js';
-import { SHORE, geography, islandLand, mainlandShoreGuess, farField, farFlora, mapMargin } from '../../shared/coast.js';
+import { SHORE, geography, islandLand, mainlandShoreGuess, farField, farFlora, farTreeDensity, mapMargin } from '../../shared/coast.js';
+import { smoothstep } from '../../shared/rng.js';
 
 // The map is baked at MAP_PPM px per metre, whatever the size of the world: 1280 px for the island, 2560 for the
 // mainland (which is twice as far across). mapX / mapY are of the map baked last: the client has one world at a time.
@@ -419,6 +420,7 @@ function grid(g, x0, z0, wm, hm, ppm, width) {
 // in over the map's square is transparent there, but for SHORE_IN m under the bake's rim (so no hairline shows).
 export const SHORE_PPM = 1;
 export const TILE = 64;
+export const SHORE_FEATHER = 36; // m: the mainland band's outer rim fades out over this, into the widest view under it
 const SHORE_IN = 2;
 export const SEA = [84, 106, 118]; // (the deep water of shadeRaster)
 
@@ -484,7 +486,7 @@ export function shoreTile(world, R) {
   // (the band's outer rim fades out into the widest view's coarser picture under it, on a map whose band ends on land:
   // so no line marks where the detail stops - on the island it ends in open sea, the same either side)
   const OUT = H + mapMargin(world);
-  const FEATHER = world.kind === WORLD.MAINLAND ? 36 : 0;
+  const FEATHER = world.kind === WORLD.MAINLAND ? SHORE_FEATHER : 0;
   if (FEATHER) {
     for (let py = 0; py < h; py++) {
       const z = R.z0 + (py + 0.5) / ppm;
@@ -746,15 +748,17 @@ export function renderBridge(world) {
 // ---------------------------------------------------------------- both maps
 // The field map's widest view (MapScreen zoomed out past its own map): the island and the mainland where they lie to
 // each other (shared/coast.js geography), the sea between them and the bridge across it. The map in hand is its bake
-// and its strips, shown small; this is only what lies past them, at OVERVIEW_PPM: the sea, the bridge, the other map
+// and its strips, shown small; this is only what lies past them, at overviewPpm: the sea, the bridge, the other map
 // (on the island the mainland nobody has been to - its shore as it might be guessed from the sea, unsurveyed paper, no
 // names; on the mainland the island the team came from, from what this page saw of it, ISLAND_SEEN, or its shape alone
 // if it saw nothing: a rejoin), and on the mainland its far country past the strips.
-export const OVERVIEW_PPM = 0.1;
+// (px a metre: on the mainland about as fine as the view shows it, so its far country goes on from the band round the
+// map in the same grain; from the island it is the sea and paper nobody has surveyed, and half that does)
+export const overviewPpm = (world) => (world.kind === WORLD.MAINLAND ? 0.2 : 0.1);
 // what was kept of the island when its map was baked, for the mainland's widest view: seed -> { thumb, x0, w }
 const ISLAND_SEEN = new Map();
 function keepIsland(world, L, baked) {
-  const n = Math.round(L.w * OVERVIEW_PPM);
+  const n = Math.round(L.w * 0.2); // (drawn in the mainland's)
   const t = document.createElement('canvas');
   t.width = t.height = n;
   const g = t.getContext('2d');
@@ -766,16 +770,20 @@ function keepIsland(world, L, baked) {
   ISLAND_SEEN.set(world.seed, { thumb: t, x0: L.x0, w: L.w });
 }
 
-export function renderOverview(world) {
+// The widest view's pixels, with no canvas (scripts/test-coast.js reads them): { d (RGBA), W, Hpx, ext, ppm, ox, oz,
+// seen }. all: the map's own square and band too (which the view leaves to them), so a test can hold the two alike.
+export function overviewRaster(world, { all = false } = {}) {
   const island = world.kind === WORLD.ISLAND;
   const geo = geography(world.seed);
   const ext = geo.extent(island);
-  const ppm = OVERVIEW_PPM;
+  const ppm = overviewPpm(world);
   const wm = ext.x1 - ext.x0;
   const hm = ext.z1 - ext.z0;
   const W = Math.round(wm * ppm);
   const Hpx = Math.round(hm * ppm);
-  const D = world.half + mapMargin(world) - 4; // (the map in hand and its strips reach this far: they are drawn over this)
+  // (the map in hand and its strips reach this far: they are drawn over this; on the mainland it runs on in under the
+  // band's feathered rim, which fades into it)
+  const D = all ? -1 : world.half + mapMargin(world) - (island ? 4 : SHORE_FEATHER + 1 / ppm);
   const [ox, oz] = island ? geo.toIsland(0, 0) : [geo.island.x, geo.island.z];
   const seen = island ? null : ISLAND_SEEN.get(world.seed);
   const isle = island ? null : islandLand(world.seed); // (the island's shape, where this page never saw it)
@@ -784,26 +792,66 @@ export function renderOverview(world) {
   const IM = IH + SHORE.MARGIN;
   // the mainland's far country, from world.far every 32 m (only on the mainland: from the island nobody has seen it)
   const CS = 32;
-  const cn = Math.ceil(Math.max(wm, hm) / CS) + 2;
+  const cn = Math.ceil(Math.max(wm, hm) / CS) + 4;
   const coarse = island ? null : new Float32Array(cn * cn).fill(NaN);
+  const cr = (p0, p1, p2, p3, t) => {
+    const u = 1 - t;
+    const t2 = t * t;
+    return (p0 * u * u * u + p1 * (3 * t2 * t - 6 * t2 + 4) + p2 * (-3 * t2 * t + 3 * t2 + 3 * t + 1) + p3 * t2 * t) / 6;
+  };
+  const v = (ii, jj) => {
+    const k = (jj + 1) * cn + ii + 1; // (a sample's margin all round)
+    if (coarse[k] !== coarse[k]) coarse[k] = world.far(ext.x0 + ii * CS, ext.z0 + jj * CS);
+    return coarse[k];
+  };
+  // (a cubic B-spline through them: smooth enough to shade - its slope and its bend run on across the samples, where
+  // straight lines between them would shade in squares, and an interpolating curve in streaks along the rows of them;
+  // down each column of samples once a row of pixels, then along the row)
+  const col = new Float32Array(cn);
+  let colZ = NaN;
   const far = (x, z) => {
-    const fx = (x - ext.x0) / CS;
     const fz = (z - ext.z0) / CS;
-    const i = fx | 0;
     const j = fz | 0;
-    const v = (ii, jj) => {
-      const k = jj * cn + ii;
-      if (coarse[k] !== coarse[k]) coarse[k] = world.far(ext.x0 + ii * CS, ext.z0 + jj * CS);
-      return coarse[k];
-    };
-    const tx = fx - i;
+    if (z !== colZ) {
+      colZ = z;
+      col.fill(NaN);
+    }
+    const fx = (x - ext.x0) / CS;
+    const i = fx | 0;
     const tz = fz - j;
-    const a = v(i, j) + (v(i + 1, j) - v(i, j)) * tx;
-    const b = v(i, j + 1) + (v(i + 1, j + 1) - v(i, j + 1)) * tx;
-    return a + (b - a) * tz;
+    const c = (ii) => {
+      if (col[ii + 1] !== col[ii + 1]) col[ii + 1] = cr(v(ii, j - 1), v(ii, j), v(ii, j + 1), v(ii, j + 2), tz);
+      return col[ii + 1];
+    };
+    return cr(c(i - 1), c(i), c(i + 1), c(i + 2), fx - i);
   };
   const DEEP = NaN; // (the open sea: transparent - the view's own colour, SEA, shows through)
   const hs = new Float32Array(W * Hpx);
+  // (along the mainland's river where it runs in from past the edge, the ground itself, not the coarse picture: a
+  // valley too narrow for it, and the water in it)
+  const exact = new Float32Array(W * Hpx).fill(1e9); // (how far from it)
+  const RX = 40;
+  const up = !island && world.river && world.river.up;
+  if (up && up.length >= 2) {
+    const P = [...up, world.river.pts[0], world.river.pts[1]];
+    const R = RX;
+    for (let s = 0; s + 3 < P.length; s += 2) {
+      const [ax, az, bx, bz] = [P[s], P[s + 1], P[s + 2], P[s + 3]];
+      const l2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
+      const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - R - ext.x0) * ppm));
+      const i1 = Math.min(W - 1, Math.ceil((Math.max(ax, bx) + R - ext.x0) * ppm));
+      const j0 = Math.max(0, Math.floor((Math.min(az, bz) - R - ext.z0) * ppm));
+      const j1 = Math.min(Hpx - 1, Math.ceil((Math.max(az, bz) + R - ext.z0) * ppm));
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const x = ext.x0 + (i + 0.5) / ppm;
+          const z = ext.z0 + (j + 0.5) / ppm;
+          const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / l2));
+          exact[j * W + i] = Math.min(exact[j * W + i], Math.hypot(x - ax - (bx - ax) * t, z - az - (bz - az) * t));
+        }
+      }
+    }
+  }
   const blank = new Uint8Array(W * Hpx);
   for (let py = 0; py < Hpx; py++) {
     const z = ext.z0 + (py + 0.5) / ppm;
@@ -821,13 +869,19 @@ export function renderOverview(world) {
           hs[k] = NaN; // the mainland nobody has surveyed
           blank[k] = 1;
         } else hs[k] = DEEP;
-      } else hs[k] = mx < gz - 60 ? DEEP : far(x, z);
+      } else if (mx < gz - 60) hs[k] = DEEP;
+      else if (exact[k] < RX) {
+        // (and into the coarse picture round it, with no line where the one gives way to the other)
+        const e = world.far(x, z);
+        hs[k] = e + (far(x, z) - e) * smoothstep(RX * 0.4, RX, exact[k]);
+      } else hs[k] = far(x, z);
     }
   }
   const d = new Uint8ClampedArray(W * Hpx * 4);
   shadeRaster(hs, W, Hpx, d, noise(24681357), { shadeK: 0.55 * ppm, contours: false });
   // (contours too fine to draw at this scale, as the tone they give the map in hand when it is drawn this small: the
-  // share of its pixels a contour runs through, a line every 2.5 m of rise, one in four an index line)
+  // share of its pixels a contour runs through - a line every 2.5 m of rise, across a pixel's rows and its columns -
+  // one in four an index line)
   for (let py = 1; py < Hpx - 1; py++) {
     for (let px = 1; px < W - 1; px++) {
       const k = py * W + px;
@@ -836,29 +890,61 @@ export function renderOverview(world) {
       const gx = hs[k + 1] - hs[k - 1];
       const gz = hs[k + W] - hs[k - W];
       if (gx !== gx || gz !== gz) continue;
-      const slope = (Math.hypot(gx, gz) * ppm) / 2;
-      const a = Math.min(1, slope / 2.5) * 0.22;
+      const a = Math.min(1, ((Math.abs(gx) + Math.abs(gz)) * ppm) / 2 / 2.5) * CONTOUR_TONE;
       d[k * 4] += (96 - d[k * 4]) * a;
       d[k * 4 + 1] += (64 - d[k * 4 + 1]) * a;
       d[k * 4 + 2] += (38 - d[k * 4 + 2]) * a;
     }
   }
-  // (the woods, too small to dot at this scale, as the tone the bake's dots give them)
-  const odds = !island && world.flora ? world.flora.treeOdds : null;
-  if (odds) {
+  // (the woods, too small to dot at this scale, as the band's dots look drawn this small - a pixel of it is a point of
+  // the band's picture, on a dot or not: on a light one as often as they cover the ground, a tree's each, and on a dark
+  // one as often as theirs do, every other tree's)
+  const dens = !island && world.flora ? farTreeDensity(world) : null;
+  if (dens) {
+    // (worked out every DS pixels and taken between: the odds change over a hundred metres, not a pixel)
+    const DS = 4;
+    const woods = noise(13572468);
+    const gw = Math.ceil(W / DS) + 2;
+    const gd = new Float32Array(gw * (Math.ceil(Hpx / DS) + 2)).fill(NaN);
+    const gv = (i, j) => {
+      const q = j * gw + i;
+      if (gd[q] !== gd[q]) gd[q] = dens(ext.x0 + (i * DS + 0.5) / ppm, ext.z0 + (j * DS + 0.5) / ppm);
+      return gd[q];
+    };
     for (let py = 0; py < Hpx; py += 1) {
-      const z = ext.z0 + (py + 0.5) / ppm;
+      const j = (py / DS) | 0;
+      const tz = py / DS - j;
       for (let px = 0; px < W; px++) {
         const k = py * W + px;
-        if (hs[k] !== hs[k] || hs[k] < WATER_LEVEL + 1) continue;
-        const t = 0.22 * odds(ext.x0 + (px + 0.5) / ppm, z);
+        if (hs[k] !== hs[k] || hs[k] < WATER_LEVEL + 1.6) continue;
+        const i = (px / DS) | 0;
+        const tx = px / DS - i;
+        const a0 = gv(i, j) + (gv(i + 1, j) - gv(i, j)) * tx;
+        const n = a0 + (gv(i, j + 1) + (gv(i + 1, j + 1) - gv(i, j + 1)) * tx - a0) * tz;
+        if (n <= 0) continue;
+        const t = woods() < 1 - Math.exp(-n * DOT_AREA) ? 0.42 : 0;
         d[k * 4] += (58 - d[k * 4]) * t;
         d[k * 4 + 1] += (74 - d[k * 4 + 1]) * t;
         d[k * 4 + 2] += (52 - d[k * 4 + 2]) * t;
+        const t2 = woods() < 1 - Math.exp(-n * 0.5 * DOT2_AREA) ? 0.35 : 0;
+        d[k * 4] += (40 - d[k * 4]) * t2;
+        d[k * 4 + 1] += (52 - d[k * 4 + 1]) * t2;
+        d[k * 4 + 2] += (36 - d[k * 4 + 2]) * t2;
       }
     }
   }
   for (let k = 0; k < W * Hpx; k++) if (blank[k]) blankPixel(d, k, k % W, (k / W) | 0, 3);
+  return { d, W, Hpx, ext, ppm, ox, oz, seen, wm, hm };
+}
+// (the stipple's dots, in square metres: a tree's light dot at its mean size, and the dark one)
+const DOT_AREA = Math.PI * ((1.1 + 1.3 * 1.025) / MAP_PPM) ** 2;
+const DOT2_AREA = Math.PI * (0.9 / MAP_PPM) ** 2;
+const CONTOUR_TONE = 0.13;
+
+export function renderOverview(world) {
+  const island = world.kind === WORLD.ISLAND;
+  const geo = geography(world.seed);
+  const { d, W, Hpx, ext, ppm, ox, oz, seen, wm, hm } = overviewRaster(world);
   const cv = document.createElement('canvas');
   cv.width = W;
   cv.height = Hpx;
@@ -874,6 +960,7 @@ export function renderOverview(world) {
   grid(g, ext.x0, ext.z0, wm, hm, ppm, 0.6);
   // from the island: the unsurveyed mainland's shore, as a guess, dashed
   if (island) {
+    const guess = mainlandShoreGuess(world.seed);
     g.strokeStyle = 'rgba(70, 52, 36, 0.75)';
     g.lineWidth = 0.8;
     g.setLineDash([2, 2]);

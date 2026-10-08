@@ -19,6 +19,10 @@ import { GROUND_MACRO_GLSL, groundNoiseTexture, VEG } from './materials.js';
 const TERRAIN_CHUNK = 48; // cells a side of a piece of the terrain mesh (96 m): see buildTerrain
 // the road frame is kept this far (m) past a road's edge, so its fade-out stays well clear of the road
 const FRAME_REACH = 12;
+// m from the eye: past LOD_NEAR the ground's layers give way to their average colours, all of it by LOD_FAR (the haze
+// is most of what shows there by then; buildTerrain's shader)
+const LOD_NEAR = 120;
+const LOD_FAR = 180;
 
 /**
  * Per-vertex road frame: signed lateral offset from the nearest road's centre line, distance along that
@@ -420,6 +424,14 @@ export function buildTerrain(world) {
         vec2 wx = dFdx(wp), wy = dFdy(wp);
         const mat2 ROT = mat2(0.8, -0.6, 0.6, 0.8);
         vec2 rwx = ROT * wx, rwy = ROT * wy;
+        // (far off, the layers' textures are drawn so small that each is its own average colour, and the haze is over them:
+        // there the ground is those averages, mixed as the layers are, which is a texel or so a layer, not five layers'
+        // worth of samples and blending - most of what is in view of somebody looking out over the land, and past the
+        // edge of the map all its far country. Between LOD_NEAR and LOD_FAR m the one gives way to the other)
+        float lodK = smoothstep(${LOD_NEAR.toFixed(1)}, ${LOD_FAR.toFixed(1)}, length(vWPos - cameraPosition));
+        vec3 ground = vec3(0.0);
+        float road = vSplat.w;
+        if (lodK < 1.0) {
         vec4 nz = texture2D(tGroundNoise, wp * (1.0 / 29.0));
         float n1 = nz.r * 0.6 + nz.g * 0.4;
         float n2 = nz.g * 0.5 + nz.b * 0.5;
@@ -439,7 +451,7 @@ export function buildTerrain(world) {
         float edgeN = (nFine.g - 0.5) * mix(1.3, 0.3, asph) + (nMid.b - 0.5) * mix(0.8, 0.0, asph);
         float soft = mix(0.55, 0.12, asph);
         float pixRoad = 1.0 - smoothstep(hw + asph * 0.7 - soft, hw + asph * 0.7 + soft * 0.3, aLat + edgeN);
-        float road = mix(vSplat.w, pixRoad, conf);
+        road = mix(vSplat.w, pixRoad, conf);
         vec2 ruv = vec2(lat * 0.7, vRoad.y * 0.06);
         vec2 rux = dFdx(ruv), ruy = dFdy(ruv);
 
@@ -466,7 +478,7 @@ export function buildTerrain(world) {
         float ma = max(max(b.x, b.y), b.z) - 0.14;
         w = max(b - ma, 0.0);
         w /= max(w.x + w.y + w.z, 1e-4);
-        vec3 ground = cG.rgb * w.x + cF.rgb * w.y + cM.rgb * w.z;
+        ground = cG.rgb * w.x + cF.rgb * w.y + cM.rgb * w.z;
         // steep slopes: rock breaks through (height-aware too)
         float rk = 0.0;
         if (vExtra.w > 0.01) {
@@ -523,12 +535,26 @@ export function buildTerrain(world) {
           }
           ground = mix(ground, dirt, road);
         }
+        }
+        if (lodK > 0.0) {
+          vec3 sw = vSplat.xyz / max(vSplat.x + vSplat.y + vSplat.z, 1e-4);
+          vec3 aG = textureLod(tGrass, vec2(0.5), 14.0).rgb;
+          aG = mix(aG, dot(aG, vec3(0.333)) * vec3(1.45, 1.2, 0.66), groundDry(wp) * 0.3);
+          vec3 aF = textureLod(tForest, vec2(0.5), 14.0).rgb * vec3(0.93, 1.0, 0.9); // (and its moss, on average)
+          vec3 farG = aG * sw.x + aF * sw.y + textureLod(tMud, vec2(0.5), 14.0).rgb * sw.z;
+          float rk0 = smoothstep(0.3, 0.7, vExtra.w);
+          farG = mix(farG, textureLod(tRock, vec2(0.5), 14.0).rgb * vec3(0.95, 0.97, 1.0), rk0);
+          farG *= mix(vec3(1.0), vec3(0.74, 0.84, 0.7), vExtra.z * 0.75 * (1.0 - rk0));
+          vec3 rd = mix(textureLod(tRoad, vec2(0.5), 14.0).rgb * 0.9, textureLod(tAsph, vec2(0.5), 14.0).rgb, max(vExtra.x, 0.0));
+          farG = mix(farG, rd, vSplat.w);
+          ground = mix(ground, farG, lodK);
+        }
         ground *= groundMacro(wp);
         diffuseColor.rgb *= ground * vExtra.y;
         `,
       );
   };
-  mat.customProgramCacheKey = () => 'terrain-splat-4';
+  mat.customProgramCacheKey = () => 'terrain-splat-5';
   const group = new THREE.Group();
   group.name = 'terrain';
   const mesh = new MultiMesh(geo, mat, runs);

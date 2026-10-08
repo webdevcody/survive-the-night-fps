@@ -406,27 +406,81 @@ export function createMainland(seed) {
   // themselves are ridges and knolls of their own (a ridged noise), so no line of them runs along any edge: the edge is
   // only where the survey, and the walking, stop. (They were a rise along the square once, which drew it on the map
   // and on the skyline.)
-  // (Self-contained for issue #232, Layout 12, which rebuilds the mainland: what it would replace here is out, lift and
-  // treeOdds' far-hills term below, riverUp / riverFar above, and far / flora in what this returns. The client asks
-  // nothing of the mainland but those two - world.far(x, z), the ground past the edge, and world.flora, the odds its
-  // trees were planted by - so a new layout that gives them keeps the map and the far country drawn without a seam.)
-  const out = (x, z) => {
+  // (Self-contained for issue #232, Layout 12, which rebuilds the mainland: what it would replace here is out, lift,
+  // clearOf and treeOdds' far-hills term below, riverUp / riverFar above, and far / flora / river.up in what this
+  // returns. Of the far country the client asks the mainland only those - world.far(x, z), the ground past the edge;
+  // world.flora, the odds its trees were planted by; world.river.up, where the river comes from (the widest view draws
+  // it) - so a new layout that gives them keeps the map and the far country drawn without a seam.)
+  const OUT_WANDER = 130; // (more than the most the wander moves it, either way: 90 + 35, the noise being within 1)
+  const outR = (x, z) => {
     const ax = Math.abs(x);
     const az = Math.abs(z);
-    const r = Math.cbrt(ax * ax * ax + az * az * az);
-    return r + 90 * nB(x * 0.0026 + 4.1, z * 0.0026 - 2.7) + 35 * nE(x * 0.008 - 1.3, z * 0.008 + 6.2);
+    return Math.cbrt(ax * ax * ax + az * az * az);
   };
+  const out = (x, z, r = outR(x, z)) => r + 90 * nB(x * 0.0026 + 4.1, z * 0.0026 - 2.7) + 35 * nE(x * 0.008 - 1.3, z * 0.008 + 6.2);
   const lift = (x, z) => {
-    const t = smoothstep(HALF - 150, HALF + 150, out(x, z));
+    const r = outR(x, z);
+    if (r + OUT_WANDER <= HALF - 150) return 0; // (well inside: none, whatever the wander)
+    const t = smoothstep(HALF - 150, HALF + 150, out(x, z, r));
     if (t <= 0) return 0;
     const ridge = 1 - Math.abs(nB(x * 0.0055 + 13.7, z * 0.0055 - 8.1));
     return t * (8 + 30 * ridge * ridge + 6 * nE(x * 0.02 + 3, z * 0.02 - 5));
   };
-  const G0 = (x, z) => H0(x, z) + lift(x, z);
+  // (the hills keep off the places and their level ground, as the island's do: each stands on the plain's own ground,
+  // where it always stood, the hills rising behind it - an airfield is not to look up at its own hangars)
+  // (each place and level ground is filed under the cells of CC m it reaches, the first time it is asked: a point
+  // looks only at those of its own cell)
+  const CC = 64;
+  const CO = HALF + 320; // (the cells cover this far each way: no place reaches further)
+  const CN = Math.ceil((2 * CO) / CC);
+  let cells = null;
+  const file = (x0, z0, x1, z1, item) => {
+    for (let j = Math.max(0, Math.floor((z0 + CO) / CC)); j <= Math.min(CN - 1, Math.floor((z1 + CO) / CC)); j++) {
+      for (let i = Math.max(0, Math.floor((x0 + CO) / CC)); i <= Math.min(CN - 1, Math.floor((x1 + CO) / CC)); i++) (cells[j * CN + i] ||= []).push(item);
+    }
+  };
+  const clearOf = (x, z) => {
+    if (!cells) {
+      cells = new Array(CN * CN);
+      for (const zn of zones) {
+        const lim = zn.flat + zn.blend;
+        const R = lim + 35;
+        file(zn.x - R, zn.z - R, zn.x + R, zn.z + R, [0, zn.x, zn.z, lim + 5, R]);
+      }
+      for (const [fx, fz, hx, hz, , blend] of flats) file(fx - hx - blend - 30, fz - hz - blend - 30, fx + hx + blend + 30, fz + hz + blend + 30, [1, fx, fz, hx, hz, blend, blend + 30]);
+    }
+    const i = Math.floor((x + CO) / CC);
+    const j = Math.floor((z + CO) / CC);
+    const list = i >= 0 && j >= 0 && i < CN && j < CN ? cells[j * CN + i] : null;
+    if (!list) return 1;
+    let k = 1;
+    for (let n = 0; n < list.length && k > 0; n++) {
+      const c = list[n];
+      if (c[0] === 0) {
+        const dx = x - c[1];
+        const dz = z - c[2];
+        const d2 = dx * dx + dz * dz;
+        if (d2 < c[4] * c[4]) k *= smoothstep(c[3], c[4], Math.sqrt(d2));
+      } else {
+        const dx = Math.max(0, Math.abs(x - c[1]) - c[3]);
+        const dz = Math.max(0, Math.abs(z - c[2]) - c[4]);
+        const d2 = dx * dx + dz * dz;
+        if (d2 < c[6] * c[6]) k *= smoothstep(c[5], c[6], Math.sqrt(d2));
+      }
+    }
+    return k;
+  };
+  const G0 = (x, z) => {
+    const l = lift(x, z);
+    return H0(x, z) + (l > 0 ? l * clearOf(x, z) : 0);
+  };
   // how likely a tree is to stand at (x, z): the woods thicken out onto the far hills (the same rounded distance as
   // theirs: no band of them along the square), copses where the noise says (the client grows the same woods on past
   // the edge of the survey: shared/coast.js farFlora)
-  const treeOdds = (x, z) => Math.max(smoothstep(HALF - 170, HALF + 30, out(x, z)), smoothstep(0.12, 0.42, fbm(nE, x * 0.009, z * 0.009, 3)) * 0.85);
+  const treeOdds = (x, z) => {
+    const r = outR(x, z);
+    return Math.max(r + OUT_WANDER <= HALF - 170 ? 0 : smoothstep(HALF - 170, HALF + 30, out(x, z, r)), smoothstep(0.12, 0.42, fbm(nE, x * 0.009, z * 0.009, 3)) * 0.85);
+  };
   // the ground of the built-up places is one level each: the city's, the airfield's
   const cityH = Math.max(FLOOR + 1.4, H0(city.x, city.z) * 0.5 + 1);
   const fieldH = Math.max(FLOOR + 1.4, H0(field.x - 40, field.z) * 0.5 + 1);
@@ -435,7 +489,7 @@ export function createMainland(seed) {
     else if (zn.id === ZONE.CITY) zn.h = cityH;
     else if (zn.id === ZONE.TERMINAL || zn.id === ZONE.HANGARS || zn.id === ZONE.FUEL_DEPOT) zn.h = fieldH;
     else if (zn.id === ZONE.MARINA) zn.h = WATER_LEVEL + 1.5;
-    else zn.h = Math.max(FLOOR + 1, H0(zn.x, zn.z) * 0.55 + 0.8 + (zn.raise || 0) + lift(zn.x, zn.z) * 0.85);
+    else zn.h = Math.max(FLOOR + 1, H0(zn.x, zn.z) * 0.55 + 0.8 + (zn.raise || 0));
   }
   // rectangles of level ground [x, z, half x, half z, height, blend]: the runway with its apron, the city
   const flats = [
@@ -3498,7 +3552,7 @@ export function createMainland(seed) {
     highway,
     lake,
     ponds,
-    river: { pts: new Float32Array(riverPts), hw: RIVER_HW, bridges },
+    river: { pts: new Float32Array(riverPts), up: new Float32Array(riverUp), hw: RIVER_HW, bridges }, // (up: its reach past the edge, which world.far cuts)
     landmarks, // what the field map names inside a place: { x, z, name }
     sea: { x: COAST, shoreX }, // everything west of the shore, out past the edge of the map (the client lays water there)
     trees: new Float32Array(trees),

@@ -105,8 +105,10 @@ export function createWorld(seed) {
     for (let i = 0; i < zones.length && k > 0; i++) {
       const zn = zones[i];
       const lim = zn.flat + zn.blend;
-      const d = Math.hypot(x - zn.x, z - zn.z);
-      if (d < lim + 60) k *= smoothstep(lim + 10, lim + 60, d);
+      const dx = x - zn.x;
+      const dz = z - zn.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < (lim + 60) * (lim + 60)) k *= smoothstep(lim + 10, lim + 60, Math.hypot(dx, dz));
     }
     return k;
   };
@@ -118,10 +120,14 @@ export function createWorld(seed) {
   const mouths = [];
   const mouthAt = (x, z) => {
     let w = 0;
-    for (const [mx, mz] of mouths) w = Math.max(w, 1 - smoothstep(16, 40, Math.hypot(x - mx, z - mz)));
+    for (const [mx, mz] of mouths) {
+      const d2 = (x - mx) ** 2 + (z - mz) ** 2;
+      if (d2 < 1600) w = Math.max(w, 1 - smoothstep(16, 40, Math.hypot(x - mx, z - mz)));
+    }
     return w;
   };
-  // the ground with the island's lie on it; G0.lift: how much of it was the hills, at the point asked last
+  // the ground with the island's lie on it; lastLift: how much of it was the hills, at the point asked last
+  let lastLift = 0;
   const G0 = (x, z) => {
     const h0 = H0(x, z);
     const d = isle.land(x, z, h0) - h0;
@@ -130,7 +136,7 @@ export function createWorld(seed) {
       const w = mouthAt(x, z);
       if (w > 0) lift = lerp(lift, Math.max(lift, oldRim(x, z)), w);
     }
-    G0.lift = lift;
+    lastLift = lift;
     return h0 + lift;
   };
 
@@ -183,7 +189,7 @@ export function createWorld(seed) {
     for (let i = 0; i < N; i++) {
       const x = -MAP_HALF + i * GRID_STEP;
       heights[j * N + i] = H1(x, z);
-      routeLift[j * N + i] = oldRim(x, z) - G0.lift;
+      routeLift[j * N + i] = oldRim(x, z) - lastLift;
     }
   }
   const rawH = (x, z) => {
@@ -227,7 +233,7 @@ export function createWorld(seed) {
         for (let i = Math.max(0, Math.floor((mx - 42 + MAP_HALF) / GRID_STEP)); i <= Math.min(N - 1, Math.ceil((mx + 42 + MAP_HALF) / GRID_STEP)); i++) {
           const x = -MAP_HALF + i * GRID_STEP;
           heights[j * N + i] = H1(x, z);
-          routeLift[j * N + i] = oldRim(x, z) - G0.lift;
+          routeLift[j * N + i] = oldRim(x, z) - lastLift;
         }
       }
     }
