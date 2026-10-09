@@ -61,7 +61,7 @@ import { trackedRecipe, trackedNeed } from './tracked.js';
 import { mayHold } from './itemguide.js';
 import { worldFor } from '../../shared/worlds.js';
 import { WORLD, CROSSING, TAKEOFF_TIME, PLANE_REACH, RUNWAY } from '../../shared/acts.js';
-import { SUPPLIES, SUPPLY_NEED, W, setAct } from './act.js'; // (this act's supplies, and the words for what they go into)
+import { SUPPLIES, SUPPLY_NEED, W, setAct, wordsOf } from './act.js'; // (this act's supplies, and the words for what they go into)
 import { usePos } from '../../shared/protocol.js';
 import { characterFor, defaultCharacter, CHARACTER_COUNT } from '../../shared/characters.js';
 import { chosenCharacter } from '../ui/picker.js';
@@ -117,7 +117,7 @@ import { buildClinic, disposeClinic } from '../render/clinic.js';
 import { Graves } from '../render/cemetery.js';
 import { buildRailway } from '../render/railway.js';
 import { BridgeView } from '../render/bridge.js';
-import { Crossing, Takeoff, liveProps } from './cutscene.js';
+import { Crossing, Takeoff, LoadingCard, liveProps } from './cutscene.js';
 import { StaticWorld } from '../render/staticworld.js';
 import { Crowd } from '../render/crowd.js';
 import { getCrowdMaterial, crowdBones } from '../render/models/skinning.js';
@@ -527,6 +527,35 @@ export class Game {
         this.conn.release();
       };
       const wait = () => (card.painted ? go() : requestAnimationFrame(wait));
+      requestAnimationFrame(wait);
+      setTimeout(go, 1000); // (a hidden tab draws no frames)
+      return;
+    }
+    // A new world in play with no cutscene to cover it (/map2, a new run's island): a loading card of its own goes up
+    // first, as the crossing's does, and the build waits for it to be on screen - the page shows nothing else for the
+    // seconds it takes (the server holds the dead off meanwhile: Game.newWorldForAll)
+    if (!card && this.state !== 'menu' && this.world && (act !== this.act || seed !== this.seed)) {
+      const root = document.createElement('div');
+      root.className = 'cine';
+      document.body.appendChild(root);
+      // (of whatever map it is: its number, and where it is as the game words it - act.js)
+      const where = wordsOf(act).where;
+      const own = new LoadingCard(root, null, { title: `Loading map ${act}`, sub: where[0].toUpperCase() + where.slice(1) });
+      own.set(true, true);
+      this.conn.hold();
+      let done = false;
+      const go = () => {
+        if (done) return;
+        done = true;
+        try {
+          this.swapWorld(seed, act);
+        } finally {
+          this.conn.release();
+          own.set(false);
+          setTimeout(() => root.remove(), 600);
+        }
+      };
+      const wait = () => (own.painted ? go() : requestAnimationFrame(wait));
       requestAnimationFrame(wait);
       setTimeout(go, 1000); // (a hidden tab draws no frames)
       return;
