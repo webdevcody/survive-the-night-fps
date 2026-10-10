@@ -4,7 +4,7 @@
 // The herd that wanders the roads by day is in herd.js.
 import { MAP_SIZE, STEP_HEIGHT, PHASE, PLAYER_RADIUS, EYE_HEIGHT, MAX_ENTITIES, HORDE_SPAWN_MIN, HORDE_SPAWN_MAX, FLASHLIGHT_RANGE, FLASHLIGHT_CONE, FIRE_LIGHT_MARGIN, NOISE_RUSH, NOISE_SPEED_MIN, NOISE_MEMORY, NOISE_MEMORY_MAX } from '../shared/constants.js';
 import { HISTORY_TICKS, LEG_HP, STUMBLE_SPEED, HOBBLE_SPEED, CRAWL_SPEED, CRAWL_SPEED_MIN, CRAWL_SPEED_MAX, CRAWL_SLOW, CRAWL_HEIGHT, CRAWL_HEAD_Y } from '../shared/constants.js';
-import { ZTYPE, ZOMBIE_DEFS, ZANIM, SOUND, KILLER, PROJ, AREA, EVT, IMPACT, ITEM, STRUCT_DEFS, THROWABLES, ZONE, BURN } from '../shared/defs.js';
+import { ZTYPE, ZOMBIE_DEFS, ZANIM, SOUND, KILLER, PROJ, AREA, EVT, IMPACT, ITEM, STRUCT_DEFS, THROWABLES, ZONE, BURN, HEARD_MIN, HEARD_GAP } from '../shared/defs.js';
 import { ENT, qpos } from '../shared/protocol.js';
 import { resolveBody, groundAt, deepWaterAt, raycastWorld, footprintContains, COL } from '../shared/collision.js';
 import { eyeHeight } from '../shared/playersim.js';
@@ -750,12 +750,15 @@ export class Zombies {
   // A much fainter noise does not pull a zombie off the one it is already heading for. Returns how many heard it.
   // y (optional): the height it was made at, which tells a noise down in the mine from one on the ground above it.
   // Between the two levels a noise carries by way of the nearer portal, not through the rock.
-  noise(x, z, loud, y) {
+  // by, what (optional): the survivor who made it and what it was (HEARD). When it wakes HEARD_MIN or more of the
+  // dead that were heading for nothing, they are told (EVT.HEARD), so they learn what carries and how far.
+  noise(x, z, loud, y, by, what) {
     const g = this.g;
     const mn = g.mineNav;
     const su = !!mn && y !== undefined && mn.mine.under(x, y + 0.3, z);
     g.dm.hear(x, z, loud, y); // the deer hear it too, and run the other way
     let heard = 0;
+    let woke = 0;
     let calls = 0;
     for (const e of g.zombies) {
       if (e.dead || e.target || e.def.flying) continue;
@@ -775,11 +778,24 @@ export class Zombies {
       e.alertU = su;
       e.alertT = Math.min(NOISE_MEMORY_MAX, NOISE_MEMORY + d / (e.def.speed * (NOISE_SPEED_MIN + (1 - NOISE_SPEED_MIN) * rush)));
       heard++;
+      if (fresh) woke++;
       // a couple of them answer: the survivors hear what they woke
       if (fresh && calls < 2 && rush > 0.3 && g.rng() < 0.5) {
         calls++;
         g.sound(e.ztype === ZTYPE.RUNNER ? SOUND.RUNNER_SCREAM : e.def.pack ? SOUND.DOG_BARK : e.ztype === ZTYPE.TANK ? SOUND.TANK_ROAR : SOUND.ZOMBIE_GROWL, e.x, e.y + e.def.headY, e.z, 70);
       }
+    }
+    if (what && by && by.kind === ENT.PLAYER && !by.zombie && woke >= HEARD_MIN && !(g.time < (by.heardT ?? -Infinity) + HEARD_GAP)) {
+      by.heardT = g.time;
+      g.emit(
+        (w) => {
+          w.u8(EVT.HEARD);
+          w.u8(what);
+          w.u8(Math.min(255, woke));
+          w.u8(Math.min(255, Math.round(loud)));
+        },
+        { to: by.id },
+      );
     }
     return heard;
   }

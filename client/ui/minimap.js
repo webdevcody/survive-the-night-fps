@@ -6,7 +6,7 @@
 // The car supplies shrink to a row of icons under it (Objective's slim mode).
 import { ZONE_NAMES, ITEM, schematicRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
-import { el, svgEl } from './dom.js';
+import { el, svgEl, replay } from './dom.js';
 import { badge, setBadge, initial } from './mapmarks.js';
 import { itemIcon, glyph } from './icons.js';
 import { MAP_PPM, mapX, mapY } from './mapcanvas.js';
@@ -29,6 +29,7 @@ export class Minimap {
     this.marks = el('div', 'mmap-mks', this.root);
     svgEl('i', 'mmap-you', this.root, glyph('arrowUp'));
     this.north = el('b', 'mmap-n', this.root, 'N');
+    this.ring = el('i', 'mmap-heard', this.root); // a noise of yours that woke the dead (heard.js)
     this.pool = [];
     this.distPool = [];
     this.labPool = [];
@@ -56,6 +57,12 @@ export class Minimap {
     if (this.root.hidden === !v) return;
     this.root.hidden = !v;
     this.drawn = '';
+  }
+
+  // a ring out from you as far as a noise of yours carried (to the rim, past RANGE), for a moment
+  heard(loud) {
+    this.ring.style.setProperty('--r', (Math.min(1, loud / RANGE) * 100).toFixed(1) + '%');
+    replay(this.ring, 'on');
   }
 
   // screen: the field map (MapScreen: its world and baked map). d: what it shows (Game.mapData())

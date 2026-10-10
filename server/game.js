@@ -114,6 +114,7 @@ import {
   THROW_ITEMS,
   isFirearm,
   salvageOf,
+  HEARD,
 } from '../shared/defs.js';
 import { C2S, S2C, SNAP, SELF, ACT, SALVAGE_FROM, WORN, WORN_DO, UNDO_NO, ENT, HOLD, CAR_ID, REJECT_REASON, LEFT_CODE, CHATF, PLF, PROGF, WELCOMEF, PROTOCOL_VERSION, Writer, Reader, readInput, writeBoard, qpos, dqpos, usePos, qangle8, qangle16, dqangle16, dqpitch } from '../shared/protocol.js';
 import { XP, XPS, XP_SRC, levelOf, perkMask } from '../shared/progress.js';
@@ -3025,7 +3026,7 @@ export class Game {
   pryHeave(p, c, pry) {
     if (pry.weapon) this.strike(p, pry.weapon, false, pry.x, pry.y, pry.z, pry.dx, pry.dy, pry.dz);
     else this.sound(SOUND.SEARCH, c.x, c.y, c.z, 18);
-    this.zm.noise(c.x, c.z, PRY.noise);
+    this.zm.noise(c.x, c.z, PRY.noise, undefined, p, HEARD.PRY);
   }
 
   searchCache(p, c) {
@@ -3064,7 +3065,7 @@ export class Game {
     if (this.zombies.length >= MAX_ZOMBIES_ALIVE) return;
     this.notify(NOTIFY.CAR_ALARM, 0);
     this.sound(SOUND.HORDE_HORN, c.x, c.y, c.z, 140);
-    this.zm.noise(c.x, c.z, NOISE.CAR_ALARM);
+    this.zm.noise(c.x, c.z, NOISE.CAR_ALARM, undefined, p, HEARD.CAR_ALARM);
     let spawned = 0;
     for (let i = 0; i < count && this.zombies.length < MAX_ZOMBIES_ALIVE; i++) {
       const sp = this.pickCarAlarmSpawn(p, c, humans);
@@ -3169,14 +3170,14 @@ export class Game {
       const plankChance = (weapon === ITEM.MACHETE ? 0.35 : weapon === ITEM.HAMMER ? 0.15 : 0.22) + (col.tv === 5 ? 0.15 : 0);
       if (r() < plankChance) this.giveOrDrop(p, ITEM.WOOD, 1);
       if (!dead && r() < 0.07) this.giveOrDrop(p, ITEM.HERB, 1);
-      this.zm.noise(x, z, NOISE.CHOP); // (what it sounds like is the blow's: EVT.STRIKE)
+      this.zm.noise(x, z, NOISE.CHOP, undefined, p, HEARD.CHOP); // (what it sounds like is the blow's: EVT.STRIKE)
     } else {
       this.giveOrDrop(p, ITEM.SCRAP, weapon === ITEM.HAMMER ? 1 + (r() < 0.5 ? 1 : 0) : 1);
       if (r() < 0.3) this.giveOrDrop(p, ITEM.NAILS, 2 + Math.floor(r() * 3));
       if (r() < 0.08) this.giveOrDrop(p, ITEM.TAPE, 1);
       if (r() < 0.05) this.giveOrDrop(p, ITEM.WIRE, 1);
       if (r() < 0.04) this.giveOrDrop(p, ITEM.BATTERY, 1);
-      this.zm.noise(x, z, NOISE.SALVAGE);
+      this.zm.noise(x, z, NOISE.SALVAGE, undefined, p, HEARD.SALVAGE);
     }
     if (g.left > 0) return;
     // that was the last of it. A tree comes down, away from whoever cut it, and is out of the world until dawn;
@@ -3798,7 +3799,7 @@ export class Game {
     this.track.build(p, type);
     if (type === STRUCT.WORKBENCH) this.globalDirty = true;
     this.sound(SOUND.BUILD, x, y + 0.8, z, 35);
-    this.zm.noise(x, z, NOISE.BUILD, y);
+    this.zm.noise(x, z, NOISE.BUILD, y, p, HEARD.BUILD);
   }
 
   demolish(p, id) {
@@ -3846,7 +3847,7 @@ export class Game {
     p.actionT = this.time;
     p.invDirty = true;
     this.sound(SOUND.BUILD, e.x, e.y + 0.8, e.z, 30);
-    this.zm.noise(e.x, e.z, NOISE.BUILD, e.y);
+    this.zm.noise(e.x, e.z, NOISE.BUILD, e.y, p, HEARD.BUILD);
   }
 
   damageStructure(e, amount) {

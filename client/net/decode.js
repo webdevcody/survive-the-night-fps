@@ -393,6 +393,11 @@ export function readEvents(r, handler, flags, ents) {
         handler.pong?.(held);
         break;
       }
+      case EVT.HEARD: {
+        const what = r.u8(), woke = r.u8(), loud = r.u8();
+        handler.heard?.(what, woke, loud);
+        break;
+      }
       case EVT.PING:
         handler.ping?.(r.u16(), r.u8(), dqpos(r.i16()), dqpos(r.i16()), dqpos(r.i16()));
         break;

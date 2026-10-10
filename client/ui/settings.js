@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showFps: true,
   achBanners: true, // a banner when an achievement unlocks (ui/achievements.js)...
   achSound: true, // ...and its chime
+  noiseRings: false, // a ring on the minimap every time your noise wakes the dead (ui/heard.js); off: once for each kind of noise, every time on Ember
   hudScale: 1, // the HUD's size (ui/hud.js, ux-hud.css): a short window at this size gets the compact layout
   // Accessibility
   cameraShake: 1, // x the view's shake (game.js: explosions, a tank's footfalls, hits, crashes); 0 holds it still
@@ -82,7 +83,7 @@ export function sanitizeSettings(s) {
       if (Number.isFinite(v)) out[k] = clamp(v, NUM_RANGES[k][0], NUM_RANGES[k][1]);
     }
     for (const k in ENUMS) if (ENUMS[k].includes(s[k])) out[k] = s[k];
-    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes']) if (typeof s[k] === 'boolean') out[k] = s[k];
+    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes', 'noiseRings']) if (typeof s[k] === 'boolean') out[k] = s[k];
   }
   return out;
 }
@@ -198,6 +199,7 @@ const TABS = [
       { k: 'keyHints', label: 'Key hints', type: 'toggle', hint: 'Names a key when it would help, until you have used it twice' },
       { k: 'showFps', label: 'Show FPS counter', type: 'toggle' },
       { k: 'hudScale', label: 'HUD size', type: 'range', min: 0.75, max: 1.5, step: 0.05, fmt: pct, hint: 'Text and blocks on screen while you play. On a small window the HUD folds to a compact layout' },
+      { k: 'noiseRings', label: 'Noise rings', type: 'toggle', hint: 'A ring on the minimap as far as your noise carried, each time it wakes the dead. Off: only the first time for each kind of noise (always on Ember)' },
       { head: 'Achievements' },
       { k: 'achBanners', label: 'Unlock banners', type: 'toggle', hint: 'A banner at the top of the screen when you unlock an achievement' },
       { k: 'achSound', label: 'Unlock sound', type: 'toggle', hint: 'A chime when you unlock one' },

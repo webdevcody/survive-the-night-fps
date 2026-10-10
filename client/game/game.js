@@ -82,6 +82,7 @@ const _wcHit = { t: -1, col: null, terrain: false };
 const WC_RAYS = [[0, 0], [0.3, -0.25]]; // (right, up) of the view: straight on, and out past the right hand
 import { zombieHitbox, playerHitbox, rayHitbox } from '../../shared/hitbox.js';
 import { difficultyOf } from '../../shared/difficulty.js';
+import { heardShow, loadHeardSeen, saveHeardSeen } from '../ui/heard.js';
 import { deerHitbox, DEER_UNDEAD } from '../../shared/deer.js';
 import { readHeader, readGlobal, readSelf, readEntities, readEvents } from '../net/decode.js';
 import { Connection } from '../net/connection.js';
@@ -1567,6 +1568,15 @@ export class Game {
       },
       bestiary(flags, mask) {
         bestiaryEvent(flags, mask);
+      },
+      heard(what, woke, loud) {
+        g.heardSeen ||= loadHeardSeen();
+        const sh = heardShow(what, woke, loud, { ember: g.room?.difficulty === 'ember', always: g.settings.noiseRings, seen: g.heardSeen });
+        if (sh.label) {
+          saveHeardSeen(g.heardSeen);
+          g.ui.notify(sh.label, 'toast', 4);
+        }
+        if (sh.ring) g.ui.hud?.minimap?.heard(loud);
       },
       ping(pid, kind, x, y, z) {
         g.pings = g.pings.filter((p) => p.pid !== pid);
