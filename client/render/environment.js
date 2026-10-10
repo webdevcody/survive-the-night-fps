@@ -299,6 +299,10 @@ export class Environment {
       c.dirI *= 1 - (1 - SMOKED.dirI) * smoke;
       c.mist += (SMOKED.mist - c.mist) * smoke;
       c.rays *= 1 - smoke;
+      // (the sky is not in the haze: it is darkened to it, or the clouds' tops stand clear over the smoke)
+      c.zenith.lerp(SMOKED.fog, smoke * 0.92);
+      c.horizon.lerp(SMOKED.fog, smoke * 0.95);
+      c.glow.lerp(SMOKED.fog, smoke * 0.95);
     }
 
     u.uZenith.value.copy(c.zenith);

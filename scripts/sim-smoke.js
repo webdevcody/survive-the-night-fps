@@ -3088,7 +3088,7 @@ check('ping broadcast', B.pings > 0);
     const legged = Object.values(ZTYPE).filter((t) => ZOMBIE_DEFS[t].legs);
     const dog = put(ZTYPE.DOG, 14);
     const dogHit = shoot(dog, 0.25);
-    check('a dog, a tank or a boss has no leg to shoot off', near(dogHit, pistol.damage) && dog.legHp === null && dog.legs === 0 && dog.anim !== ZANIM.STUMBLE && legged.length === 6 && [ZTYPE.DOG, ZTYPE.TANK, ZTYPE.LEAPER, ZTYPE.BAT, ZTYPE.BOSS_ABOMINATION, ZTYPE.BOSS_HIVEQUEEN].every((t) => !ZOMBIE_DEFS[t].legs), `dog -${dogHit.toFixed(0)}, legged: ${legged.map((t) => ZOMBIE_DEFS[t].name).join(' ')}`);
+    check('a dog, a tank or a boss has no leg to shoot off', near(dogHit, pistol.damage) && dog.legHp === null && dog.legs === 0 && dog.anim !== ZANIM.STUMBLE && legged.length === 7 && [ZTYPE.DOG, ZTYPE.TANK, ZTYPE.LEAPER, ZTYPE.BAT, ZTYPE.BOSS_ABOMINATION, ZTYPE.BOSS_HIVEQUEEN].every((t) => !ZOMBIE_DEFS[t].legs), `dog -${dogHit.toFixed(0)}, legged: ${legged.map((t) => ZOMBIE_DEFS[t].name).join(' ')}`);
     g.combat.killZombie(dog, null, {});
 
     // a shade pinned by light is stone in the leg too: it takes litResist of the hit there, and does not trip
