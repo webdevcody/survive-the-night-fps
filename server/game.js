@@ -4184,7 +4184,7 @@ export class Game {
         const t = found[0].id;
         const pack = this.zm.newPack();
         let made = 0;
-        for (let i = 0; i < n; i++) if (this.zm.spawn(t, s.x - Math.sin(s.yaw) * 12 + (this.rng() - 0.5) * 4, s.z - Math.cos(s.yaw) * 12 + (this.rng() - 0.5) * 4, { horde: true, boss: ZOMBIE_DEFS[t].boss, pack })) made++;
+        for (let i = 0; i < n; i++) if (this.zm.spawn(t, s.x - Math.sin(s.yaw) * 12 + (this.rng() - 0.5) * 4, s.z - Math.cos(s.yaw) * 12 + (this.rng() - 0.5) * 4, { horde: true, boss: ZOMBIE_DEFS[t].boss, pack, force: true })) made++;
         this.sendChat(p, 0, CHATF.SYSTEM, `spawned ${made} x ${ZOMBIE_DEFS[t].name}`);
         break;
       }
