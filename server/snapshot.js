@@ -4,12 +4,12 @@
 // previous update, positions as 1-3 byte deltas when small; layout in shared/protocol.js), far entities update at
 // half rate, and irrelevant/destroyed entities get a remove. Sections with nothing in them are not written at all.
 import { SERVER_TICK_RATE, MAX_ENTITIES, LOD_NEAR, AOI_RADIUS, AOI_ITEM_RADIUS, AOI_STRUCTURE_RADIUS, AOI_CACHE_RADIUS } from '../shared/constants.js';
-import { ENT, SNAP, UPOS, UEXT, UEXT_ABS, qpos, qangle8, qangle16, qlookYaw, qlookPitch, packLook, PFLAG, PRIDE_SHIFT, ZSTATUS, HCAR_AT } from '../shared/protocol.js';
+import { ENT, SNAP, UPOS, UEXT, UEXT_ABS, qpos, qangle8, qangle16, qlookYaw, qlookPitch, packLook, PFLAG, PRIDE_SHIFT, ZSTATUS, PSTATUS, HCAR_AT } from '../shared/protocol.js';
 import { ZOMBIE_DEFS, PROJ, STRUCT } from '../shared/defs.js';
 import { GUN_CARRIED } from '../shared/mountedgun.js';
 import { currentWeapon } from '../shared/playersim.js';
 
-export const SLOTS = 9;
+export const SLOTS = 10;
 
 export class ClientView {
   constructor() {
@@ -42,10 +42,10 @@ export class ClientView {
 }
 
 const q = new Int32Array(SLOTS);
-const FIELD_COUNT = { [ENT.PLAYER]: 9, [ENT.ZOMBIE]: 9, [ENT.ITEM]: 4, [ENT.STRUCTURE]: 6, [ENT.PROJECTILE]: 3, [ENT.CRATE]: 4, [ENT.AREA]: 3, [ENT.CACHE]: 4, [ENT.CAT]: 6, [ENT.DEER]: 5, [ENT.FAIR]: 9, [ENT.GUN]: 8, [ENT.HANDCAR]: 5, [ENT.VEHICLE]: 9 };
+const FIELD_COUNT = { [ENT.PLAYER]: 10, [ENT.ZOMBIE]: 9, [ENT.ITEM]: 4, [ENT.STRUCTURE]: 6, [ENT.PROJECTILE]: 3, [ENT.CRATE]: 4, [ENT.AREA]: 3, [ENT.CACHE]: 4, [ENT.CAT]: 6, [ENT.DEER]: 5, [ENT.FAIR]: 9, [ENT.GUN]: 8, [ENT.HANDCAR]: 5, [ENT.VEHICLE]: 9 };
 // mask bit -> slot ranges (first bit is always pos = slots 0..2)
 const BIT_SLOTS = {
-  [ENT.PLAYER]: [[0, 3], [3, 5], [5, 6], [6, 7], [7, 8], [8, 9]],
+  [ENT.PLAYER]: [[0, 3], [3, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10]],
   [ENT.ZOMBIE]: [[0, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9]],
   [ENT.ITEM]: [[0, 3], [3, 4]],
   [ENT.STRUCTURE]: [[0, 3], [3, 4], [4, 5], [5, 6]],
@@ -91,6 +91,7 @@ function quant(e) {
       q[6] = e.zombie ? 0 : currentWeapon(s); // (the walkie-talkie slot: ITEM.WALKIE)
       q[7] = Math.max(0, Math.min(255, Math.ceil((e.hp / e.maxHp) * 255)));
       q[8] = s.fireCount & 255;
+      q[9] = e.burning ? PSTATUS.BURNING : 0;
       break;
     }
     case ENT.ZOMBIE:
@@ -99,7 +100,7 @@ function quant(e) {
       q[5] = Math.max(0, Math.min(255, Math.ceil((e.hp / e.maxHp) * 255)));
       q[6] = e.link || 0;
       q[7] = e.legs;
-      q[8] = e.onFire || e.burnT > 0 ? ZSTATUS.BURNING : 0;
+      q[8] = e.onFire || e.burnT > 0 || ZOMBIE_DEFS[e.ztype]?.fireproof ? ZSTATUS.BURNING : 0; // (the flammer is never not)
       break;
     case ENT.ITEM:
       q[3] = e.count;
@@ -109,7 +110,9 @@ function quant(e) {
       q[4] = e.state | 0;
       // a torch's or a campfire's flame: the server tick it burns out at (16 bits; 0: out), as the fair's fuel is
       // sent, so the clients count it down themselves and it is sent again only when the fire is fed or relit
-      q[5] = (e.stype === STRUCT.TORCH || e.stype === STRUCT.CAMPFIRE) && e.burnLeft > 0 ? (stageTick + Math.round(e.burnLeft * SERVER_TICK_RATE)) & 0xffff || 1 : 0;
+      // (any other piece: 1 while it is on fire - STRUCT_FIRE, Game.igniteStructure)
+      if (e.stype === STRUCT.TORCH || e.stype === STRUCT.CAMPFIRE) q[5] = e.burnLeft > 0 ? (stageTick + Math.round(e.burnLeft * SERVER_TICK_RATE)) & 0xffff || 1 : 0;
+      else q[5] = e.fire > 0 ? 1 : 0;
       break;
     case ENT.CRATE:
     case ENT.CACHE:

@@ -62,6 +62,7 @@ export class InputBuffer {
     // after all, or no longer what it was pressed for) and its button is still down, 0 nothing: the real button
     this.left = [0, 0, 0];
     this.ctx = [0, 0, 0]; // what each held press was made for
+    this.passJump = false; // jump goes out as it is held, unbuffered (a fire to put out: PLAYER_FIRE)
   }
 
   // nothing held may act later (death, a menu or the chat taking the input)
@@ -82,6 +83,12 @@ export class InputBuffer {
       const bit = BUFFERED[i];
       // (the cat in their arms: the fire button strokes it for as long as it is held, and nothing is waited for)
       if (bit === BTN.ATTACK && s.pet) {
+        this.left[i] = 0;
+        continue;
+      }
+      // (on fire, or beside a teammate who is: [Space] is held to put it out, and the server has to see it held
+      // whatever a jump would do - Game sets passJump)
+      if (bit === BTN.JUMP && this.passJump) {
         this.left[i] = 0;
         continue;
       }

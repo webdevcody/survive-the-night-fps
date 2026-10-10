@@ -313,6 +313,18 @@ export const WEAPONS = {
 // for `time` seconds after the fire that lit it; more fire tops the time back up, it does not stack.
 export const BURN = { time: 5, dps: 18 };
 
+// A fire on what the survivors built (the flammer sets them: ZOMBIE_DEFS fireproof / igniteRange, Game.updateStructures).
+// A piece that is not metal (nor a torch or a campfire, which are fires already: structBurns) burns at `dps` a second
+// until it is gone or somebody puts it out with the hammer in hand (a repair: free, and that is all the swing does).
+// Once it has burned `spreadAfter` s it may catch each piece within `gap` m of it, `spread` of a chance a second each.
+export const STRUCT_FIRE = { dps: 25, spreadAfter: 3, spread: 0.25, gap: 0.3 };
+export const structBurns = (stype) => !!STRUCT_DEFS[stype] && !STRUCT_DEFS[stype].metal && !STRUCT_DEFS[stype].burn;
+// A survivor set alight by a flammer's blow burns at `dps` a second until the fire is put out - it does not go out by
+// itself. Holding [Space] does it (stop, drop and roll), and so does a teammate within `reach` m holding theirs (they
+// beat the flames out): `time` s of holding between them, two at once in half the time. Let go and it creeps back
+// `decay` times as fast. Going down, or into water deep enough to swim, puts it out at once (Game.updateFire)
+export const PLAYER_FIRE = { dps: 5, time: 1.6, reach: 2, decay: 0.5 };
+
 // Player-zombie claws (not an item)
 export const CLAWS = { damage: 22, rate: 0.6, range: 2.0, headMul: 1.0, leapCooldown: 4.5, leapSpeed: 12, leapUp: 5.5 };
 
@@ -546,6 +558,7 @@ export const ZTYPE = {
   BOSS_BRUTE: 12,
   BOSS_ALPHA: 13,
   BOSS_BLOATER: 14,
+  FLAMMER: 15,
 };
 
 // speed m/s, hp, dmg per hit, attack rate s, radius, height (for hitboxes), headR, headY
@@ -599,6 +612,12 @@ export const ZOMBIE_DEFS = {
   // bile in a fan at whoever is within spewRange every spewRate s, and when it dies it bursts: blastRadius, blastDmg
   // to survivors, blastStruct to what you built. Bring it down far from the walls
   [ZTYPE.BOSS_BLOATER]: { name: 'The Bloater', hp: 2400, speed: 1.45, dmg: 22, rate: 1.4, range: 2.6, radius: 1.15, height: 2.9, headY: 2.55, headR: 0.32, moveR: 0.5, moveH: 1.9, structDmg: 160, loot: 1, knock: 6, boss: true, minNight: 3, spewRange: 13, spewRate: 7, blastRadius: 10, blastDmg: 70, blastStruct: 900, tip: 'When it dies it bursts and takes everything near it. Bring it down far from your walls.', tipBrief: 'Bursts when it dies. Kill it far from your walls.' },
+  // a firefighter who went into the fire and never came out: still smouldering inside its turnout coat, which no
+  // fire gets through (fireproof: fire does it no harm - a molotov, a campfire, the flamethrower - though the sun
+  // still does). What the survivors built catches from it: every igniteRate s it sets alight a piece within
+  // igniteRange m of its body (STRUCT_FIRE), and its blows set survivors alight (PLAYER_FIRE). Breaks the wooden fort:
+  // metal does not burn, and a hammer puts a fire out
+  [ZTYPE.FLAMMER]: { name: 'Flammer', hp: 150, speed: 2.1, dmg: 9, rate: 1.2, range: 1.55, radius: 0.4, height: 1.85, headY: 1.67, headR: 0.18, structDmg: 15, loot: 0.6, fireproof: true, igniteRange: 1.2, igniteRate: 1.5, minNight: 10, legs: true, intro: 'Flammers join the horde: they set your walls and you alight. A hammer puts out a fire, Space puts out you.', introBrief: 'Set walls and you alight. Hammer the fire, hold Space.' },
 };
 
 // Overkill: a zombie killed by one heavy blow (a rifle round, a point-blank blast, an explosion) that drives it far

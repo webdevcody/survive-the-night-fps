@@ -402,7 +402,7 @@ export class Combat {
   // Set a zombie alight (the BURN status): it burns for `time` seconds, the damage and the kill going to whoever
   // lit it. Fire on something already burning tops the time back up; it does not stack.
   ignite(z, attacker, weapon = 0, time = BURN.time) {
-    if (z.dead) return;
+    if (z.dead || z.def?.fireproof) return; // (the flammer's turnout gear)
     if (time > z.burnT) z.burnT = time;
     if (attacker && attacker.kind === ENT.PLAYER) {
       z.burnBy = attacker.id;
@@ -542,6 +542,7 @@ export class Combat {
     const g = this.g;
     if (z.dead) return false;
     if (z.kind === ENT.DEER) return g.dm.damage(z, amount, attacker, opts); // not one of the dead: nothing below is for it
+    if (opts.fire && z.def.fireproof && !z.onFire) return false; // the flammer: no fire hurts it but the sun's
     // a shade pinned by light shrugs off most of what hits it and cannot be shoved (the dawn sun still burns it)
     const solid = z.lit && !z.onFire;
     if (solid) amount *= z.def.litResist;

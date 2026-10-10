@@ -55,8 +55,9 @@ import {
   CONSUMABLES,
   useWasted,
   PROJ,
+  PLAYER_FIRE,
 } from '../../shared/defs.js';
-import { LEFT_CODE, MOVED_CODE, ENDED_CODE, ACT, ENT, SNAP, HOLD, CAR_ID, PING_KIND, PFLAG, CHATF, PLF, PROGF, UNDO_NO, dqpos } from '../../shared/protocol.js';
+import { LEFT_CODE, MOVED_CODE, ENDED_CODE, ACT, ENT, SNAP, HOLD, CAR_ID, PING_KIND, PFLAG, PSTATUS, CHATF, PLF, PROGF, UNDO_NO, dqpos } from '../../shared/protocol.js';
 import { trackedRecipe, trackedNeed } from './tracked.js';
 import { mayHold } from './itemguide.js';
 import { worldFor } from '../../shared/worlds.js';
@@ -1448,6 +1449,21 @@ export class Game {
 
   name(id) {
     return this.players.get(id)?.name || 'Someone';
+  }
+
+  // the teammate on fire within reach of our [Space] (PLAYER_FIRE: the server puts out the nearest), or null
+  burningMate(s) {
+    let best = null;
+    let bd = PLAYER_FIRE.reach;
+    for (const e of this.entities.ents.values()) {
+      if (e.kind !== ENT.PLAYER || e.id === this.myId || !(e.q[9] & PSTATUS.BURNING) || e.q[5] & (PFLAG.DEAD | PFLAG.ZOMBIE)) continue;
+      const d = Math.hypot(e.rx - s.x, e.rz - s.z);
+      if (d < bd && Math.abs(e.ry - s.y) < 1.5) {
+        bd = d;
+        best = e;
+      }
+    }
+    return best;
   }
 
   // a death now lasts until sunrise (DAWN_RETURN) - unless there is none to come: the final stand stops the clock,
@@ -4080,6 +4096,28 @@ export class Game {
     h.dropHint = this.dropHold.hint > 0 ? bindLabel('drop') : ''; // (let go too soon: "Hold G to drop")
     // pinned by a leaper: the shove meter (-1: not pinned), the key to mash, and the presses so far (each jolts it)
     h.shove = self.alive && s.pinned && !s.zombie ? s.shove : -1;
+    h.shoveText = '';
+    h.shoveHold = false;
+    // ...or the same meter for a fire (a flammer's doing: PLAYER_FIRE): [Space] held puts it out - ours, or that of the
+    // teammate beside us we are beating the flames out on
+    const burning = !!self.burning && !!self.alive && !s.zombie && !s.downed;
+    if (this.frame % 6 === 1) this.fireMate = burning || !self.alive || s.zombie || s.downed ? null : this.burningMate(s);
+    const mate = !burning && this.fireMate && this.entities.ents.get(this.fireMate.id) === this.fireMate ? this.fireMate : null;
+    if (h.shove < 0 && (burning || mate)) {
+      h.shove = self.douse || 0;
+      h.shoveHold = true;
+      h.shoveText = burning ? 'Hold to put the fire out' : `Hold to beat out the fire on ${this.name(mate.id)}`;
+    }
+    h.onFire = burning;
+    this.inputBuffer.passJump = burning || !!mate;
+    if (burning !== !!this.burnLoop) {
+      if (burning) this.burnLoop = this.audio.createLoop?.('burning', s.x, s.y + 1, s.z) || null;
+      else {
+        this.burnLoop?.stop();
+        this.burnLoop = null;
+      }
+    }
+    this.burnLoop?.setPosition(s.x, s.y + 1, s.z);
     h.shoveKey = h.shove >= 0 ? bindLabel('jump') : '';
     h.shoves = this.shoves | 0;
     const w = currentWeapon(s);

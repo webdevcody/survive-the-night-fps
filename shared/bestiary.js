@@ -26,6 +26,7 @@ export const BESTIARY = Object.freeze([
   B(ZTYPE.LEAPER, 'special', 'It stays low, and not on the ground for long.', 'Pounces from up to 14 m and pins you down. Mash jump to shove it off, or stay close to a teammate who can shoot it off you.'),
   B(ZTYPE.SHADE, 'special', 'Something tall that keeps to the dark.', 'It only moves in the dark, fast, and it hits hard. Any light on it - a flashlight, a torch, a campfire - freezes it where it stands, though it shrugs off most damage while lit. Keep a light on it and keep your distance.'),
   B(ZTYPE.ROPER, 'special', 'Something that reaches further than it should.', 'Lashes a rope at you from up to 24 m and drags you in. The rope needs line of sight: keep to cover, and shoot the roper to break it.'),
+  B(ZTYPE.FLAMMER, 'special', 'Smoke on the wind, and a glow that walks.', 'A firefighter still smouldering in its gear. It sets alight whatever wood you built that it comes near, and the fire spreads to what touches it: hit a burning piece with the hammer to put it out. Its blows set you alight too - hold jump to put yourself out, or hold it beside a burning teammate. Fire does it no harm; metal walls do not burn.'),
   B(ZTYPE.TANK, 'special', 'Heavy footsteps that shake the ground.'),
   B(ZTYPE.BOSS_BRUTE, 'boss', 'A hulking shape, slow for now.'),
   B(ZTYPE.BOSS_ALPHA, 'boss', 'A howl, and the dogs answer it.'),

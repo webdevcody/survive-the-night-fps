@@ -71,6 +71,7 @@ export class Hud {
     this.markers = new Markers(layer);
     // ---- full-screen effect layers
     this.lowhp = el('div', 'fx-lowhp', layer);
+    this.fire = el('div', 'fx-fire', layer); // set alight by a flammer: the flames at the edges of the eye
     this.blood = el('div', 'fx-blood', layer);
     this.splats = el('div', 'fx-splats', layer);
     this.zvig = el('div', 'fx-zombie', layer);
@@ -176,7 +177,7 @@ export class Hud {
     this.shove = el('div', 'shove', center);
     const shoveRow = el('div', 'shove-row', this.shove);
     this.shoveKey = el('span', 'kbd', shoveRow, '');
-    el('span', 'shove-t', shoveRow, 'Mash to shove it off');
+    this.shoveText = el('span', 'shove-t', shoveRow, 'Mash to shove it off'); // (or, on fire: hold to put it out)
     this.shoveFill = el('i', '', el('div', 'shove-bar', this.shove));
     this.shove.hidden = true;
 
@@ -870,6 +871,12 @@ export class Hud {
       if (sv >= 0) this.shoveFill.style.transform = `scaleX(${sv})`;
     }
     if (c.shoveKey !== h.shoveKey) this.shoveKey.textContent = c.shoveKey = h.shoveKey;
+    const st = h.shoveText || 'Mash to shove it off';
+    if (c.shoveText !== st) this.shoveText.textContent = c.shoveText = st;
+    const hold = !!h.shoveHold; // (a fire is put out by holding, not mashing: the key stays still)
+    if (c.shoveHold !== hold) this.shove.classList.toggle('hold', (c.shoveHold = hold));
+    const fire = !!h.onFire;
+    if (c.onFire !== fire) this.ui.root.classList.toggle('on-fire', (c.onFire = fire));
     if (c.shoves !== h.shoves) {
       c.shoves = h.shoves;
       if (sv >= 0) replay(this.shoveKey, 'hit');
