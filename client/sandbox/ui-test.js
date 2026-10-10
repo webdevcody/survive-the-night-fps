@@ -560,6 +560,19 @@ switch (screen) {
     loop((t) => ({ ...h, ability: Math.min(1, 0.55 + t * 0.12) }));
     break;
   }
+  case 'hud-latched': {
+    // a crawler on your face (fx-latch): blind, mashing Space to claw it off. &shove=0..1 holds the meter there
+    buildScene(bg || 'night');
+    const h = { ...baseHud, hp: 64, phase: PHASE.NIGHT, timeLeft: 88, night: 10, hordeLeft: 21, prompt: null, context: null, shoveKey: 'Space' };
+    ui.hideSplash();
+    feedSome();
+    const fixed = q.has('shove') ? +q.get('shove') : -1;
+    loop((t) => {
+      const shove = fixed >= 0 ? fixed : Math.min(0.95, (t % 2.5) * 0.4);
+      return { ...h, shove, shoves: Math.floor(t * 7), latch: 1 - 0.45 * shove };
+    });
+    break;
+  }
   case 'hud-downed': {
     buildScene(bg || 'night');
     const reviving = !!q.get('revive');

@@ -54,8 +54,10 @@ export const ALPHA_SCALE = 2.0;
 // The crawler (ZTYPE.CRAWLER): a raccoon the infection has had for a while, on the same rig, drawn at RACCOON_SCALE.
 // Stocky, grizzled grey, the black mask over its eyes and the ringed tail, half of it gnawed bald; its hand-like
 // forepaws grown long hooked claws (claws: x a dog's), to take hold of a face. Ears short and round (earLen)
-const RACCOON = { name: 'raccoon', fur: 0x6a655e, saddle: 0x34302c, belly: 0xa39b8c, ears: 'up', earLen: 0.042, mask: true, rings: true, tailBulk: 1.9, bulk: 1.18, mange: 0.52, claws: 1.9, tornEar: -1, ribs: 1 };
+const RACCOON = { name: 'raccoon', fur: 0x8a847a, saddle: 0x3a3632, belly: 0xb8b0a0, ears: 'up', earLen: 0.042, mask: true, rings: true, tailBulk: 1.9, bulk: 1.18, mange: 0.52, claws: 1.9, tornEar: -1, ribs: 1 };
 export const RACCOON_SCALE = 0.56;
+// ...and squat: wider, much lower on its legs and shorter from nose to tail than a dog (x, y, z of the drawn size)
+const RACCOON_SHAPE = [1.15, 0.6, 0.75];
 
 const C_MANGE = new THREE.Color(0x7c6a64); // bald, diseased skin
 const C_MASK = new THREE.Color(0x121010); // a raccoon's mask and the dark rings of its tail
@@ -82,7 +84,7 @@ function coatTint(coat, part, seed) {
     }
     if (coat.rings && part === 'tail') {
       // the rings down its tail
-      if (Math.sin(P.z * 95) > 0.1) C.lerp(C_MASK, 0.8);
+      if (Math.floor((P.z - 0.33) / 0.055) % 2 === 1) C.lerp(C_MASK, 0.85);
     }
     if (belly) {
       let b = 0;
@@ -266,7 +268,7 @@ function buildDog(coatIdx) {
     } else {
       const tk = bk * (coat.tailBulk || 1); // (a raccoon's: a thick, bushy brush)
       ringLoft(mb, 'tail0', [{ c: [0, 0.6, 0.35], rx: 0.032 }, { c: T[0], rx: 0.029 }, { c: T[1], rx: 0.023 }, { c: T[2], rx: 0.017 }, { c: T[3], rx: 0.008 }].map((r) => ({ ...r, rx: r.rx * tk })), {
-        ...fur('tail'), nu: 7, sub: 2, cap1: 0.012,
+        ...fur('tail'), nu: 7, sub: coat.rings ? 6 : 2, cap1: 0.012,
         wts: (p) => (p[2] < T[1][2] - 0.02 ? [tb[0], 1, 0, 0] : p[2] < T[1][2] + 0.02 ? blend(tb[0], tb[1], (p[2] - T[1][2] + 0.02) / 0.04) : p[2] < T[2][2] - 0.02 ? [tb[1], 1, 0, 0] : p[2] < T[2][2] + 0.02 ? blend(tb[1], tb[2], (p[2] - T[2][2] + 0.02) / 0.04) : [tb[2], 1, 0, 0]),
         dr: (s, a) => 0.004 * Math.sin(a * 5 + s * 30), // a ragged, half-bald brush
       });
@@ -372,6 +374,7 @@ class DogInstance {
     this.object = new THREE.Group();
     this.object.name = 'zombie';
     this.mesh.scale.setScalar(this.S);
+    if (this.raccoon) this.mesh.scale.set(this.S * RACCOON_SHAPE[0], this.S * RACCOON_SHAPE[1], this.S * RACCOON_SHAPE[2]);
     this.object.add(this.mesh);
     const r = (k) => noise3(seed * 0.618 + k * 7.1, k, 0.3, 29);
     this.seed = seed;
@@ -460,7 +463,10 @@ class DogInstance {
     this.rz.fill(0);
     const w = this.w;
     const st = { hy: 0, hz: 0, ry: 0, rootX: 0, rootY: 0 };
-    if (w[S_LOCO] > 0.001) this.poseLoco(t, w[S_LOCO], st);
+    if (w[S_LOCO] > 0.001) {
+      this.poseLoco(t, w[S_LOCO], st);
+      if (this.raccoon) this.poseHunch(w[S_LOCO], st);
+    }
     if (w[S_ATK] > 0.001) {
       const L = this.latchK;
       if (L < 0.999) this.poseBite(t, w[S_ATK] * (1 - L), st);
@@ -551,6 +557,23 @@ class DogInstance {
     for (let i = 0; i < TAIL_N; i++) {
       const x = lerp(i === 0 ? 0.85 : 0.18, i === 0 ? 0.25 : 0.05, R * M) + Math.sin(ph + i * 0.9) * 0.1 * R * M;
       this.add('tail' + i, W, x, Math.sin(t * 1.3 + i * 0.8 + sd) * 0.18 * idle + Math.sin(ph + i) * 0.1 * trot * M);
+    }
+  }
+
+  // a raccoon goes about low and hunched: knees and elbows bent under it, its back arched up over its hips, its head low
+  poseHunch(W, st) {
+    st.hy -= 0.06 * W;
+    this.add('hips', W, 0.1);
+    this.add('chest', W, -0.12);
+    this.add('neck', W, -0.15);
+    this.add('head', W, 0.1);
+    for (const s of ['L', 'R']) {
+      this.add('fu' + s, W, 0.35);
+      this.add('fl' + s, W, -0.7);
+      this.add('fp' + s, W, 0.4);
+      this.add('hu' + s, W, 0.4);
+      this.add('hk' + s, W, -0.65);
+      this.add('hh' + s, W, 0.4);
     }
   }
 

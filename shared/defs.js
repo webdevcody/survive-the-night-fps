@@ -605,7 +605,7 @@ export const ZOMBIE_DEFS = {
   // leaper's pounce, aimed at the head) and clamps on (the leaper's pin: s.pinned, the shove meter). While it is on
   // them they cannot see (client/ui/hud.js, fx-latch) and it gnaws latchDmg every latchRate s, until they mash Space to
   // claw it off, a teammate shoots or strikes it off, or it has had latchMax s
-  [ZTYPE.CRAWLER]: { name: 'Crawler', hp: 40, speed: 5.2, dmg: 4, rate: 0.6, range: 1.1, radius: 0.26, height: 0.5, headY: 0.34, headR: 0.11, headFwd: 0.3, bodyTop: 0.4, structDmg: 4, loot: 0.2, latchRange: 8, latchDmg: 3, latchRate: 0.6, latchMax: 10, minNight: 10, intro: 'Crawlers join the horde: they leap at your face and blind you. Mash Space to claw one off, or get a teammate to shoot it off you.', introBrief: 'Leap at your face and blind you. Mash Space.' },
+  [ZTYPE.CRAWLER]: { name: 'Crawler', hp: 40, speed: 5.2, dmg: 4, rate: 0.6, range: 1.1, radius: 0.26, height: 0.34, headY: 0.23, headR: 0.11, headFwd: 0.22, bodyTop: 0.26, structDmg: 4, loot: 0.2, latchRange: 8, latchDmg: 3, latchRate: 0.6, latchMax: 10, minNight: 10, intro: 'Crawlers join the horde: they leap at your face and blind you. Mash Space to claw one off, or get a teammate to shoot it off you.', introBrief: 'Leap at your face and blind you. Mash Space.' },
 };
 
 // Overkill: a zombie killed by one heavy blow (a rifle round, a point-blank blast, an explosion) that drives it far
