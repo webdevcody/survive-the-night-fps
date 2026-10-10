@@ -470,6 +470,11 @@ export function readEvents(r, handler, flags, ents) {
         handler.achieve?.(flags, add, ids);
         break;
       }
+      case EVT.SCREECH: {
+        const id = r.u16(), secs = r.u8() / 10;
+        handler.screech?.(id, secs);
+        break;
+      }
       case EVT.BESTIARY: {
         const flags = r.u8();
         const mask = r.u16();

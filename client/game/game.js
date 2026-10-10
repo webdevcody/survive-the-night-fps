@@ -1525,6 +1525,11 @@ export class Game {
       },
       zombieDie(id, yaw, flags) {
         g.entities.zombieDie(id, yaw, flags);
+        if (id === g.ringFrom) {
+          // the screecher that left our ears ringing is dead: they clear
+          g.ringFrom = 0;
+          g.audio.stopRing?.();
+        }
       },
       zombieLeg(id, legs, yaw) {
         g.entities.zombieLeg(id, legs, yaw);
@@ -1558,6 +1563,12 @@ export class Game {
       },
       flyover(x, y, z, heading, eta) {
         g.flyover?.start(x, y, z, heading, eta, g.time, g.audio);
+      },
+      screech(id, secs) {
+        // a screecher screamed close by: our ears ring until it is dead, or for secs (server/zombies.js screech)
+        if (g.self?.zombie) return;
+        g.ringFrom = id;
+        g.audio.ring?.(secs);
       },
       grave(i) {
         g.graves?.stir(i);
@@ -1697,6 +1708,7 @@ export class Game {
       case NOTIFY.YOU_DIED:
         this.deathInfo = { killer: arg === 255 ? 'the wilderness' : arg === 254 ? 'an undead deer' : ZOMBIE_DEFS[arg]?.name || 'the dead', ztype: arg < 254 ? arg : -1, day: this.global.day, night: this.global.phase === PHASE.NIGHT, dawn: this.dawnAhead(), dawnIn: this.global.phase === PHASE.NIGHT ? this.global.timeLeft : 0 };
         ui.showDeath(this.deathInfo);
+        a.stopRing?.(); // (the screecher's ringing, if it was still going: screech)
         a.stinger?.('death');
         this.deathShown = true;
         break;

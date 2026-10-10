@@ -546,6 +546,7 @@ export const ZTYPE = {
   BOSS_BRUTE: 12,
   BOSS_ALPHA: 13,
   BOSS_BLOATER: 14,
+  SCREECHER: 15,
 };
 
 // speed m/s, hp, dmg per hit, attack rate s, radius, height (for hitboxes), headR, headY
@@ -577,6 +578,11 @@ export const ZOMBIE_DEFS = {
   // goes; a metal wall loses about 40%) - unless the boomer is shot first, which leaves only the blast
   [ZTYPE.BOOMER]: { name: 'Boomer', hp: 70, speed: 1.7, dmg: 0, rate: 1, range: 2.2, radius: 0.6, height: 1.8, headY: 1.62, headR: 0.2, structDmg: 0, loot: 0.6, blastRadius: 5.5, blastDmg: 45, breachHold: 0.8, breachWindup: 1.2, breachRange: 12, breachDmg: 750, minNight: 4, legs: true, intro: 'Boomers join the horde: they burst against your walls. Shoot them far off.', introBrief: 'Burst against your walls. Shoot them far off.' },
   [ZTYPE.BAT]: { name: 'Bat', hp: 28, speed: 7.5, dmg: 5, rate: 0.9, range: 1.3, radius: 0.3, height: 0.4, headY: 0.2, headR: 0.2, structDmg: 0, loot: 0.08, flying: true, common: true, minNight: 7, intro: 'Bats join the horde: they fly over every wall. Shotguns and melee.', introBrief: 'Fly over every wall. Shotguns and melee.' },
+  // stops where it sees a survivor within screamRange and screams (screamWindup s, then again every screamRate s while it
+  // lives): a horde of screamHorde (+ screamHordeEach a survivor past the first) comes running out of the dark at whoever
+  // it screamed at, and every survivor within ringRange m hears ringing (ringT s, or until it is dead). Breaks: hiding
+  // quietly behind walls - it brings the crowd to you (SCREECH_* in server/zombies.js)
+  [ZTYPE.SCREECHER]: { name: 'Screecher', hp: 130, speed: 2.4, dmg: 7, rate: 1.0, range: 1.5, radius: 0.36, height: 1.78, headY: 1.6, headR: 0.17, structDmg: 12, loot: 0.6, screamRange: 30, screamWindup: 1.3, screamRate: 20, screamHorde: 6, screamHordeEach: 2, ringRange: 22, ringT: 6, minNight: 10, legs: true, intro: 'Screechers join the horde: one scream and the dead come running. Kill them before they see you.', introBrief: 'One scream brings a horde. Kill them on sight.' },
   // night bosses: hp is what one survivor faces (+ BOSS_HP_PER_PLAYER of it per extra survivor, Game.spawnBosses),
   // sized so that the rounds a survivor has left once the horde has had its share can bring one down before sunrise
   [ZTYPE.BOSS_ABOMINATION]: { name: 'The Abomination', hp: 4000, speed: 3.0, dmg: 55, rate: 1.8, range: 3.4, radius: 1.5, height: 4.2, headY: 3.7, headR: 0.5, structDmg: 600, loot: 1, knock: 16, boss: true, minNight: 4, tip: 'It slams the ground and throws boulders. Spread out and keep moving.', tipBrief: 'Slams and throws boulders. Spread out, keep moving.' },
@@ -612,7 +618,7 @@ export const ZANIM = {
   WALK: 1,
   RUN: 2,
   ATTACK: 3,
-  SPECIAL: 4, // spit / rope / leap-windup / slam
+  SPECIAL: 4, // spit / rope / leap-windup / slam / scream
   AIRBORNE: 5, // leaping / thrown
   STAGGER: 6,
   DEAD: 7,
@@ -754,6 +760,7 @@ export const SOUND = {
   DRINK: 121, // a can cracked open and gulped down (an energy drink)
   FLARE_GUN: 122, // a flare gun's shot (client-side, from EVT.SHOT)
   FLARE_POP: 123, // a parachute flare bursting alight at the top of its climb (client-side, from its flight)
+  SCREECHER_SCREAM: 126, // a screecher's scream: the dead hear it from far off, and come
   DEER_SCREAM: 124, // an undead deer (the mainland's): a rotten-throated bellow as it lowers its antlers, is hit, or dies
   CAT_PURR: 125, // the stray cat purring while it is stroked (client-side, from its CANIM.PET)
   // vehicles (shared/vehicles.js)
@@ -815,6 +822,9 @@ export const EVT = {
   // u8 how far up its foot it broke (0.1 m), u8 pieces (1: a shot, snapped there; 2-3: a blast; 0: none - only how
   // much of it stands, to whoever joins). What stands below stands until dawn, and can be shot again
   TREE_BREAK: 38,
+  // (private) a screecher screamed close enough to leave the survivor's ears ringing: u16 its id, u8 tenths of a second
+  // the ringing lasts at most (it stops sooner if the screecher dies)
+  SCREECH: 39,
 };
 
 export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7 };
