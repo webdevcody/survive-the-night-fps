@@ -47,6 +47,11 @@ const LEAP_PIN = 1.5;
 const LEAP_LAND = 1.7;
 const LEAP_MISS_CD = 2.5;
 const THROW_OFF_DAZE = 1; // s a leaper reels for once the survivor it pinned throws it off (throwOff)
+// A leaper hunts whoever has strayed (#299): a survivor with no teammate standing within LONE_NEAR m of them looks
+// LONE_WEIGHT times nearer to it than they are when it picks its prey (chooseTarget), so straying is a real risk and
+// keeping together is what covers you. How far off it notices them at all is unchanged.
+export const LONE_NEAR = 12;
+export const LONE_WEIGHT = 3;
 const PIN_NEAR = 0.55; // m in front of the survivor it has pinned...
 const PIN_SHOVED = 0.3; // ...and this much further at the end of their shove (s.shove: SHOVE_* in constants.js)
 const WEDGE_MOVE = 1.5; // m a zombie after a survivor has to get from where it was to count as getting anywhere (z.wedgeT)
@@ -1328,6 +1333,7 @@ export class Zombies {
     let best = null;
     let bd = Infinity;
     const mn = g.mineNav;
+    const lone = z.ztype === ZTYPE.LEAPER && humans.length > 1;
     for (const h of humans) {
       if (g.safe(h)) continue; // (dropped and held, or back and not playing yet: game.js hold, resume)
       const s = h.state;
@@ -1345,12 +1351,25 @@ export class Zombies {
       if (!z.horde && z.def.sense) range *= z.def.sense; // dogs catch the scent from further off
       if (z.aggroId === h.id && z.aggroT > 0) range = 600;
       if (z.target === h.id) range *= 1.6; // hysteresis
-      if (d < range && d < bd) {
-        bd = d;
+      if (d >= range) continue;
+      const w = lone && this.alone(h, humans) ? d / LONE_WEIGHT : d;
+      if (w < bd) {
+        bd = w;
         best = h;
       }
     }
     z.target = best ? best.id : 0;
+  }
+
+  // nobody else up and about within LONE_NEAR m of this survivor, on their level (the downed cover nobody)
+  alone(h, humans) {
+    const g = this.g;
+    const s = h.state;
+    for (const o of humans) {
+      if (o === h || o.downed || g.safe(o) || !!o.under !== !!h.under) continue;
+      if (Math.hypot(o.state.x - s.x, o.state.z - s.z) < LONE_NEAR) return false;
+    }
+    return true;
   }
 
   // a dog that picks up a scent sets the rest of its pack onto the same survivor (and howls, once)
