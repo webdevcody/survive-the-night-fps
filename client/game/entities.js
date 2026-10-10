@@ -407,7 +407,7 @@ export class Entities {
           if (ZOMBIE_DEFS[e.ztype].boss) this.bossEnt = e;
           if (e.ztype === ZTYPE.BOSS_ABOMINATION || e.ztype === ZTYPE.BOSS_HIVEQUEEN || e.ztype === ZTYPE.BOSS_BRUTE || e.ztype === ZTYPE.BOSS_BLOATER) e.loop = g.audio.createLoop?.('boss_breath', e.rx, e.ry + 2, e.rz);
           // the wet, rattling breath of the dead: only the nearest few are ever heard (the audio engine caps the loop)
-          else if (!e.dead && !ZOMBIE_DEFS[e.ztype].flying && e.ztype !== ZTYPE.DOG && e.ztype !== ZTYPE.BOSS_ALPHA && e.ztype !== ZTYPE.SHADE) e.loop = g.audio.createLoop?.('zombie_idle', e.rx, e.ry + 1.5, e.rz);
+          else if (!e.dead && !ZOMBIE_DEFS[e.ztype].flying && e.ztype !== ZTYPE.DOG && e.ztype !== ZTYPE.BOSS_ALPHA && e.ztype !== ZTYPE.SHADE && e.ztype !== ZTYPE.CRAWLER) e.loop = g.audio.createLoop?.('zombie_idle', e.rx, e.ry + 1.5, e.rz);
           this.zombieCount++;
           break;
         }
@@ -927,6 +927,12 @@ export class Entities {
           const distC = (e.rx - camPos.x) ** 2 + (e.rz - camPos.z) ** 2;
           v.object.position.set(e.rx, e.ry, e.rz);
           v.object.rotation.y = e.ryaw;
+          if (e.ztype === ZTYPE.CRAWLER) {
+            // on somebody's face (ZF.LINK: whose): it clings there. On ours it is not drawn - it is right in front of the
+            // eyes, and what we see of it is the dark (the HUD's fx-latch)
+            v.setLatched?.(e.q[6] !== 0);
+            v.object.visible = !(e.q[6] !== 0 && e.q[6] === g.myId && e.q[4] === ZANIM.ATTACK);
+          }
           // How often it is posed. Past 60 m: every other frame. Nearer, but past POSE_NEAR (where its far copy is
           // drawn): no more than POSE_HZ times a second - at 80 frames a second or fewer that is every frame, as it
           // always was; at 240 the horde's limbs are worked out a third as often, and where each body stands and
@@ -972,9 +978,9 @@ export class Entities {
               e.growlT = shade ? 1.8 + Math.random() * 2.2 : 4 + Math.random() * 9;
               const alpha = e.ztype === ZTYPE.BOSS_ALPHA; // a dog's bark and snarl, from a chest the size of a pony's
               const dog = e.ztype === ZTYPE.DOG || alpha;
-              const snd = shade ? SOUND.SHADE_WHISPER : dog ? (e.speed > 3 && Math.random() < 0.6 ? SOUND.DOG_BARK : SOUND.DOG_SNARL) : e.ztype === ZTYPE.BAT ? SOUND.BAT_SCREECH : e.ztype === ZTYPE.BOOMER || e.ztype === ZTYPE.BOSS_BLOATER ? SOUND.BOOMER_GURGLE : e.ztype === ZTYPE.TANK ? SOUND.TANK_ROAR : e.ztype === ZTYPE.RUNNER && e.speed > 3 ? SOUND.RUNNER_SCREAM : ZOMBIE_DEFS[e.ztype].boss ? SOUND.BOSS_ROAR : e.speed < 1.2 && distC > 14 * 14 && e.q[4] !== ZANIM.ATTACK ? SOUND.ZOMBIE_MOAN : SOUND.ZOMBIE_GROWL; // shambling about somewhere off in the trees, it moans; on the hunt or on top of you, it growls
+              const snd = e.ztype === ZTYPE.CRAWLER ? SOUND.CRAWLER_CHITTER : shade ? SOUND.SHADE_WHISPER : dog ? (e.speed > 3 && Math.random() < 0.6 ? SOUND.DOG_BARK : SOUND.DOG_SNARL) : e.ztype === ZTYPE.BAT ? SOUND.BAT_SCREECH : e.ztype === ZTYPE.BOOMER || e.ztype === ZTYPE.BOSS_BLOATER ? SOUND.BOOMER_GURGLE : e.ztype === ZTYPE.TANK ? SOUND.TANK_ROAR : e.ztype === ZTYPE.RUNNER && e.speed > 3 ? SOUND.RUNNER_SCREAM : ZOMBIE_DEFS[e.ztype].boss ? SOUND.BOSS_ROAR : e.speed < 1.2 && distC > 14 * 14 && e.q[4] !== ZANIM.ATTACK ? SOUND.ZOMBIE_MOAN : SOUND.ZOMBIE_GROWL; // shambling about somewhere off in the trees, it moans; on the hunt or on top of you, it growls
               if (e.ztype === ZTYPE.TANK && Math.random() < 0.6) e.growlT += 4;
-              if (dog) e.growlT *= 0.6;
+              if (dog || e.ztype === ZTYPE.CRAWLER) e.growlT *= 0.6;
               g.audio.play(snd, { x: e.rx, y: e.ry + (alpha ? 1.2 : dog ? 0.6 : 1.5), z: e.rz, volume: e.ztype === ZTYPE.BAT ? 0.6 : alpha ? 1.4 : 0.9, rate: e.voice * (alpha ? 0.66 : e.ztype === ZTYPE.BOSS_BLOATER ? 0.62 : 1) });
               v.vocalize?.(snd === SOUND.RUNNER_SCREAM || snd === SOUND.DOG_BARK ? 1 : snd === SOUND.TANK_ROAR || snd === SOUND.BOSS_ROAR ? 2 : 0);
             }
@@ -982,8 +988,8 @@ export class Entities {
             const heavy = e.ztype === ZTYPE.TANK || (!!ZOMBIE_DEFS[e.ztype].boss && e.ztype !== ZTYPE.BOSS_ALPHA); // (the Alpha runs on pads: no quake)
             if (e.speed > 0.4 && !ZOMBIE_DEFS[e.ztype].flying && e.q[7] !== 3 && (heavy || distC < 22 * 22)) {
               // a visible planted-foot gait sounds its steps as the feet land; otherwise keep a cadence timer
-              const dog = e.ztype === ZTYPE.DOG || e.ztype === ZTYPE.BOSS_ALPHA;
-              const stepVol = heavy ? 1 : e.ztype === ZTYPE.BOSS_ALPHA ? 0.7 : dog ? 0.25 : shade ? 0.2 : 0.45;
+              const dog = e.ztype === ZTYPE.DOG || e.ztype === ZTYPE.BOSS_ALPHA || e.ztype === ZTYPE.CRAWLER;
+              const stepVol = heavy ? 1 : e.ztype === ZTYPE.BOSS_ALPHA ? 0.7 : e.ztype === ZTYPE.CRAWLER ? 0.12 : dog ? 0.25 : shade ? 0.2 : 0.45;
               const falls = v.footfalls ? v.footfalls() : -1;
               let stepped = false;
               if (falls >= 0) {

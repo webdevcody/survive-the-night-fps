@@ -546,6 +546,7 @@ export const ZTYPE = {
   BOSS_BRUTE: 12,
   BOSS_ALPHA: 13,
   BOSS_BLOATER: 14,
+  CRAWLER: 15,
 };
 
 // speed m/s, hp, dmg per hit, attack rate s, radius, height (for hitboxes), headR, headY
@@ -599,6 +600,12 @@ export const ZOMBIE_DEFS = {
   // bile in a fan at whoever is within spewRange every spewRate s, and when it dies it bursts: blastRadius, blastDmg
   // to survivors, blastStruct to what you built. Bring it down far from the walls
   [ZTYPE.BOSS_BLOATER]: { name: 'The Bloater', hp: 2400, speed: 1.45, dmg: 22, rate: 1.4, range: 2.6, radius: 1.15, height: 2.9, headY: 2.55, headR: 0.32, moveR: 0.5, moveH: 1.9, structDmg: 160, loot: 1, knock: 6, boss: true, minNight: 3, spewRange: 13, spewRate: 7, blastRadius: 10, blastDmg: 70, blastStruct: 900, tip: 'When it dies it bursts and takes everything near it. Bring it down far from your walls.', tipBrief: 'Bursts when it dies. Kill it far from your walls.' },
+  // a raccoon the infection has had for a while: rabid, half bald, its ringed tail gnawed, its hand-like forepaws grown
+  // long hooked claws. It runs in low under the guns and springs at a survivor's face from up to latchRange m (the
+  // leaper's pounce, aimed at the head) and clamps on (the leaper's pin: s.pinned, the shove meter). While it is on
+  // them they cannot see (client/ui/hud.js, fx-latch) and it gnaws latchDmg every latchRate s, until they mash Space to
+  // claw it off, a teammate shoots or strikes it off, or it has had latchMax s
+  [ZTYPE.CRAWLER]: { name: 'Crawler', hp: 40, speed: 5.2, dmg: 4, rate: 0.6, range: 1.1, radius: 0.26, height: 0.5, headY: 0.34, headR: 0.11, headFwd: 0.3, bodyTop: 0.4, structDmg: 4, loot: 0.2, latchRange: 8, latchDmg: 3, latchRate: 0.6, latchMax: 10, minNight: 10, intro: 'Crawlers join the horde: they leap at your face and blind you. Mash Space to claw one off, or get a teammate to shoot it off you.', introBrief: 'Leap at your face and blind you. Mash Space.' },
 };
 
 // Overkill: a zombie killed by one heavy blow (a rifle round, a point-blank blast, an explosion) that drives it far
@@ -770,6 +777,7 @@ export const SOUND = {
   BIKE_BELL: 140, // a bicycle's bell
   VEH_MOUNT: 141, // somebody swinging a leg over a moped or a bicycle
   VEH_SKID: 142, // tyres letting go (client-side, from the vehicle's replicated state)
+  CRAWLER_CHITTER: 150, // a crawler springing at a face, and gnawing on it once it has it
 };
 
 export const EVT = {

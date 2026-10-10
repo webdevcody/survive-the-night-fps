@@ -1868,6 +1868,7 @@ export class Game {
         [ZTYPE.ROPER, 5 + sp * 3],
         [ZTYPE.TANK, (1 + n * 0.3) * (0.5 + sp)],
         [ZTYPE.SHADE, 2.5 + sp * 2.5],
+        [ZTYPE.CRAWLER, 5 + sp * 4],
       ];
       // one new kind a night: each stays out of the horde until its night comes
       for (const wt of weights) if (rank < ZOMBIE_DEFS[wt[0]].minNight) wt[1] = 0;
@@ -1876,7 +1877,7 @@ export class Game {
       // the crowd, the other is a slow thing you can see coming. The night's guaranteed new kind is added below.
       if (this.diff.specials !== 1) {
         for (const wt of weights) {
-          if (wt[0] === ZTYPE.SPITTER || wt[0] === ZTYPE.BOOMER || wt[0] === ZTYPE.LEAPER || wt[0] === ZTYPE.ROPER || wt[0] === ZTYPE.SHADE || wt[0] === ZTYPE.BAT) wt[1] *= this.diff.specials;
+          if (wt[0] === ZTYPE.SPITTER || wt[0] === ZTYPE.BOOMER || wt[0] === ZTYPE.LEAPER || wt[0] === ZTYPE.ROPER || wt[0] === ZTYPE.SHADE || wt[0] === ZTYPE.BAT || wt[0] === ZTYPE.CRAWLER) wt[1] *= this.diff.specials;
         }
       }
       const tot = weights.reduce((a, b) => a + b[1], 0);
@@ -2440,10 +2441,12 @@ export class Game {
         // an item asked for is in the hands from the client's first command after asking on (useItem)
         if (p.useItem && !p.state.using && ((cmd.seq - p.useItem.from) & 0xffff) < 0x8000) p.state.using = 1;
         simulatePlayer(p.state, cmd, this.world, events);
-        // pinned by a leaper: shoved all the way (the simulation's meter, s.shove), they throw it off (Zombies.throwOff)
-        if (p.state.pinned && p.state.shove >= 1 && this.zm.throwOff(p)) {
+        // pinned by a leaper (or a crawler on their face): shoved all the way (the simulation's meter, s.shove), they
+        // throw it off (Zombies.throwOff)
+        const off = p.state.pinned && p.state.shove >= 1 ? this.zm.throwOff(p) : null;
+        if (off) {
           p.selfSync = true;
-          this.ach.threwOff(p);
+          if (off.ztype === ZTYPE.LEAPER) this.ach.threwOff(p);
         }
         copyPlayerState(p.shadow, p.state);
         if (cmd.hash === NO_HASH || (cmd.hash >= 0 && cmd.hash !== hashPlayerState(p.state))) p.selfSync = true;

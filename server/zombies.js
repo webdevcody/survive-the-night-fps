@@ -3,7 +3,7 @@
 // zombie dog packs that den in the thick woods, flank and lunge, the shade that only moves in darkness).
 // The herd that wanders the roads by day is in herd.js.
 import { MAP_SIZE, STEP_HEIGHT, PHASE, PLAYER_RADIUS, EYE_HEIGHT, MAX_ENTITIES, HORDE_SPAWN_MIN, HORDE_SPAWN_MAX, FLASHLIGHT_RANGE, FLASHLIGHT_CONE, FIRE_LIGHT_MARGIN, NOISE_RUSH, NOISE_SPEED_MIN, NOISE_MEMORY, NOISE_MEMORY_MAX } from '../shared/constants.js';
-import { HISTORY_TICKS, LEG_HP, STUMBLE_SPEED, HOBBLE_SPEED, CRAWL_SPEED, CRAWL_SPEED_MIN, CRAWL_SPEED_MAX, CRAWL_SLOW, CRAWL_HEIGHT, CRAWL_HEAD_Y } from '../shared/constants.js';
+import { EYE_HEIGHT_CROUCH, HISTORY_TICKS, LEG_HP, STUMBLE_SPEED, HOBBLE_SPEED, CRAWL_SPEED, CRAWL_SPEED_MIN, CRAWL_SPEED_MAX, CRAWL_SLOW, CRAWL_HEIGHT, CRAWL_HEAD_Y } from '../shared/constants.js';
 import { ZTYPE, ZOMBIE_DEFS, ZANIM, SOUND, KILLER, PROJ, AREA, EVT, IMPACT, ITEM, STRUCT_DEFS, THROWABLES, ZONE, BURN } from '../shared/defs.js';
 import { ENT, qpos } from '../shared/protocol.js';
 import { resolveBody, groundAt, deepWaterAt, raycastWorld, footprintContains, COL } from '../shared/collision.js';
@@ -49,6 +49,13 @@ const LEAP_MISS_CD = 2.5;
 const THROW_OFF_DAZE = 1; // s a leaper reels for once the survivor it pinned throws it off (throwOff)
 const PIN_NEAR = 0.55; // m in front of the survivor it has pinned...
 const PIN_SHOVED = 0.3; // ...and this much further at the end of their shove (s.shove: SHOVE_* in constants.js)
+// The crawler (ZTYPE.CRAWLER) springs with the leaper's pounce, aimed LATCH_AIM m above its prey's feet (their face, not
+// their chest), and clamps on there: LATCH_DROP m under their eyes (the middle of its body over them), LATCH_NEAR m in
+// front of them (+ PIN_SHOVED as they shove)
+const LATCH_AIM = 1.45;
+const LATCH_DROP = 0.1;
+const LATCH_NEAR = 0.12;
+const LEAP_AIM = 0.6; // (the leaper's: at the chest, to bear them down)
 const WEDGE_MOVE = 1.5; // m a zombie after a survivor has to get from where it was to count as getting anywhere (z.wedgeT)
 const _leap = { x: 0, y: 0, z: 0 };
 // The zombie dog's hunt (def.hitRun). It runs in, bites once (a snap or a lunge), and breaks off (special state 7,
@@ -1845,7 +1852,7 @@ export class Zombies {
     if (!z.link) return;
     const p = g.players.get(z.link);
     if (p) {
-      if (z.ztype === ZTYPE.LEAPER) p.state.pinned = 0;
+      if (z.ztype === ZTYPE.LEAPER || z.ztype === ZTYPE.CRAWLER) p.state.pinned = 0;
       else p.state.pulled = 0;
       p.pinnedBy = 0;
       p.ropedBy = 0;
@@ -1868,12 +1875,12 @@ export class Zombies {
     z.specialCd = 6 + this.g.rng() * 3;
   }
 
-  // A pinned survivor who has shoved the leaper all the way off (the simulation's s.shove, Game.processInputs) throws
-  // it: it is flung back the way it faces, away from them, and is dazed for THROW_OFF_DAZE s once it lands, long
-  // enough to get away
+  // A pinned survivor who has shoved the leaper (or clawed the crawler) all the way off (the simulation's s.shove,
+  // Game.processInputs) throws it: it is flung back the way it faces, away from them, and is dazed for THROW_OFF_DAZE s
+  // once it lands, long enough to get away. Returns the one thrown off (null: nothing was on them)
   throwOff(p) {
     const z = this.g.zombies.find((o) => o.id === p.pinnedBy && !o.dead);
-    if (!z || z.state !== 3 || z.link !== p.id) return false;
+    if (!z || z.state !== 3 || z.link !== p.id) return null;
     this.releaseLink(z);
     const s = p.state;
     const ax = z.x - s.x;
@@ -1887,7 +1894,7 @@ export class Zombies {
     z.attackCd = Math.max(z.attackCd, THROW_OFF_DAZE);
     z.specialCd = Math.max(z.specialCd, 4);
     this.g.sound(SOUND.ZOMBIE_PAIN, z.x, z.y + 1, z.z, 30);
-    return true;
+    return z;
   }
 
   // ---------------------------------------------------------------- specials
@@ -1981,21 +1988,24 @@ export class Zombies {
       }
       const s = p.state;
       z.linkT += dt;
-      // on them, face to face: further off the further they have shoved it (s.shove, the simulation's)
-      const off = PIN_NEAR + PIN_SHOVED * s.shove;
+      // on them, face to face: further off the further they have shoved it (s.shove, the simulation's). A crawler is
+      // on their face itself, wrapped round their head (the client stands it up against it: entities.js)
+      const latch = t === ZTYPE.CRAWLER;
+      const off = (latch ? LATCH_NEAR : PIN_NEAR) + PIN_SHOVED * s.shove;
       z.x = s.x - Math.sin(s.yaw) * off;
       z.z = s.z - Math.cos(s.yaw) * off;
-      z.y = s.y;
+      z.y = s.y + (latch ? (s.crouch ? EYE_HEIGHT_CROUCH : EYE_HEIGHT) - LATCH_DROP : 0);
       z.yaw = s.yaw + Math.PI;
       z.anim = ZANIM.ATTACK;
       z.animT = 0.2;
       s.pinned = 1;
       if (z.attackCd <= 0) {
-        z.attackCd = 0.45;
-        g.damagePlayer(p, 5.5 * (1 + 0.05 * g.day), { kind: KILLER.ZOMBIE, ztype: t, x: z.x, z: z.z });
-        g.impact(IMPACT.BLOOD, s.x, s.y + 1, s.z);
+        z.attackCd = latch ? def.latchRate : 0.45;
+        g.damagePlayer(p, (latch ? def.latchDmg : 5.5) * (1 + 0.05 * g.day), { kind: KILLER.ZOMBIE, ztype: t, x: z.x, z: z.z });
+        g.impact(IMPACT.BLOOD, s.x, s.y + (latch ? 1.5 : 1), s.z);
+        if (latch && g.rng() < 0.3) g.sound(SOUND.CRAWLER_CHITTER, z.x, z.y, z.z, 25);
       }
-      if (z.linkT > 5 || z.linkDmg > z.maxHp * 0.45) this.releaseLink(z);
+      if (z.linkT > (latch ? def.latchMax : 5) || z.linkDmg > z.maxHp * 0.45) this.releaseLink(z);
       return true;
     }
     if (z.state === 4) {
@@ -2135,6 +2145,13 @@ export class Zombies {
           return true;
         }
         break;
+      case ZTYPE.CRAWLER:
+        // (not at whoever already has something on them: it goes for a face that is free)
+        if (z.specialCd <= 0 && z.los && dist < def.latchRange && dist > 1.6 && z.vy === 0 && !target.state.pinned && !target.state.pulled) {
+          windup(0.35, 2, SOUND.CRAWLER_CHITTER);
+          return true;
+        }
+        break;
       case ZTYPE.ROPER:
         if (z.specialCd <= 0 && z.los && dist < def.ropeRange && dist > 5 && !target.state.pulled && !target.state.pinned) {
           windup(0.7, 3, SOUND.ROPER_SHOOT);
@@ -2232,7 +2249,7 @@ export class Zombies {
   // a leaper in the air on a pounce twists towards its prey (LEAP_STEER): at the speed that would bring it down on
   // them, as far as that much twisting gets it
   leapSteer(z, s, dt) {
-    const disc = z.vy * z.vy + 2 * GRAV * (z.y - (s.y + 0.6));
+    const disc = z.vy * z.vy + 2 * GRAV * (z.y - (s.y + leapAim(z)));
     if (disc < 0) return;
     const left = (z.vy + Math.sqrt(disc)) / GRAV;
     if (left < 0.05) return;
@@ -2264,8 +2281,10 @@ export class Zombies {
         s.vx = s.vz = 0;
         h.pinnedBy = z.id;
         g.track?.grabbed(h, 'pinned');
-        g.sound(SOUND.LEAPER_SCREECH, z.x, z.y + 1, z.z, 40);
-        g.damagePlayer(h, 10, { kind: KILLER.ZOMBIE, ztype: z.ztype, x: z.x, z: z.z });
+        const latch = z.ztype === ZTYPE.CRAWLER;
+        if (latch) z.attackCd = z.def.latchRate; // (its first bite is the one it lands with)
+        g.sound(latch ? SOUND.CRAWLER_CHITTER : SOUND.LEAPER_SCREECH, z.x, z.y + 1, z.z, 40);
+        g.damagePlayer(h, latch ? 5 : 10, { kind: KILLER.ZOMBIE, ztype: z.ztype, x: z.x, z: z.z });
         return true;
       }
     }
@@ -2291,6 +2310,7 @@ export class Zombies {
         // between (LEAP_*); with no arc that clears it, the lowest one, which runs into it
         if (!target) return;
         const s = target.state;
+        const up = leapAim(z);
         const T0 = Math.max(LEAP_TMIN, Math.min(LEAP_TMAX, LEAP_T0 + LEAP_TK * dist));
         const aim = (T) => {
           const k = LEAP_LEAD * T * Math.min(1, LEAP_LEAD_MAX / (Math.hypot(s.vx, s.vz) * LEAP_LEAD * T || 1));
@@ -2300,7 +2320,7 @@ export class Zombies {
         let T = T0;
         for (let k = 0; k < 4; k++) {
           aim(T0 + k * LEAP_RAISE);
-          if (this.leapClear(z, _leap.x, s.y + 0.6, _leap.z, T0 + k * LEAP_RAISE)) {
+          if (this.leapClear(z, _leap.x, s.y + up, _leap.z, T0 + k * LEAP_RAISE)) {
             T = T0 + k * LEAP_RAISE;
             break;
           }
@@ -2308,12 +2328,12 @@ export class Zombies {
         aim(T);
         z.vx = (_leap.x - z.x) / T;
         z.vz = (_leap.z - z.z) / T;
-        z.vy = (s.y + 0.6 - z.y + 0.5 * GRAV * T * T) / T;
+        z.vy = (s.y + up - z.y + 0.5 * GRAV * T * T) / T;
         z.state = 2;
         z.pounce = true;
         z.anim = ZANIM.AIRBORNE;
         z.specialCd = 5 + g.rng() * 3;
-        g.sound(SOUND.LEAP, z.x, z.y + 1, z.z, 30);
+        g.sound(SOUND.LEAP, z.x, z.y + def.headY, z.z, z.ztype === ZTYPE.CRAWLER ? 18 : 30);
         break;
       }
       case 3: {
@@ -2767,6 +2787,11 @@ function roofBetween(w, ox, oy, oz, tx, ty, tz) {
 }
 
 // how fast a zombie of this kind drags itself along once both legs are gone (m/s)
+// how far above its prey's feet a pounce comes down: a crawler goes for the face, a leaper for the chest
+export function leapAim(z) {
+  return z.ztype === ZTYPE.CRAWLER ? LATCH_AIM : LEAP_AIM;
+}
+
 export function crawlSpeed(def) {
   return Math.max(CRAWL_SPEED_MIN, Math.min(CRAWL_SPEED_MAX, def.speed * CRAWL_SPEED));
 }

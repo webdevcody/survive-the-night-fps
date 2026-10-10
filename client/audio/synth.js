@@ -877,6 +877,25 @@ export function dogSnarl(sr, rng, i) {
   if (i % 3 !== 1) addNorm(out, noise(sr, rng, 0.03, { bp: [2600, 1.2], a: 0.0005, d: 0.012 }), sr, dur * 0.92, 0.7); // teeth clack
   return finish(out, sr);
 }
+// the crawler (a rabid raccoon): a run of shrill, rasping chitters over a hiss through its teeth
+export function zCrawler(sr, rng, i) {
+  const out = alloc(sr, 0.9);
+  addNorm(out, noise(sr, rng, 0.55, { bp: [3800, 0.9], sweep: [4400, 2600], a: 0.03, d: 0.3 }), sr, 0, 0.35);
+  const count = 5 + Math.floor(rng() * 4);
+  let t = 0.02;
+  for (let k = 0; k < count && t < 0.75; k++) {
+    const b = rrange(rng, 900, 1300) * (i % 2 ? 1.1 : 1);
+    const len = rrange(rng, 0.045, 0.085);
+    const c = voice(sr, rng, {
+      dur: len, pitch: [[0, b * 0.85], [0.4, b * 1.25], [1, b * 0.9]], vowels: vowelPath(['i', 'e', 'i'], rng), fscale: 1.45, bw: 2.2,
+      jitter: 0.12, jitterHz: 60, shimmer: 0.5, rasp: 0.9, raspHz: 260, breath: 0.4, drive: 4, chest: 0, a3: 0.6, hp: 600,
+      env: [[0, 0], [0.15, 1], [0.6, 0.8], [1, 0]],
+    });
+    addNorm(out, c, sr, t, rrange(rng, 0.55, 0.9));
+    t += len + rrange(rng, 0.015, 0.05);
+  }
+  return finish(out, sr);
+}
 // yelps when hit; the last variant is a dying whine
 export function dogYelp(sr, rng, i) {
   const dying = i === 2;
@@ -2121,6 +2140,7 @@ export const SFX_DEFS = [
   { bank: 'dog_howl', n: 2, sr: MID, gen: dogHowl },
   { bank: 'dog_snarl', n: 3, sr: MID, gen: dogSnarl },
   { bank: 'dog_yelp', n: 3, sr: MID, gen: dogYelp },
+  { bank: 'z_crawler', n: 2, sr: MID, gen: zCrawler },
   { bank: 'deer_snort', n: 3, sr: MID, gen: deerSnort },
   { bank: 'deer_bleat', n: 3, sr: MID, gen: deerBleat },
   { bank: 'deer_scream', n: 3, sr: MID, gen: deerScream },
