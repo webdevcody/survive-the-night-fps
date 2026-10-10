@@ -418,6 +418,7 @@ body {
 
 
 .stn-ui .fx-lowhp,
+.stn-ui .fx-fire,
 .stn-ui .fx-blood,
 .stn-ui .fx-zombie,
 .stn-ui .fx-splats {
@@ -437,6 +438,27 @@ body {
   -webkit-backdrop-filter: saturate(0.45);
   backdrop-filter: saturate(0.45);
   animation: stn-lowpulse 1.15s ease-in-out infinite;
+}
+
+/* on fire (a flammer's doing): the flames lick in from the edges until it is put out */
+.stn-ui .fx-fire {
+  opacity: 0;
+  background: radial-gradient(ellipse 75% 70% at 50% 45%, transparent 45%, rgba(255, 120, 20, 0.22) 72%, rgba(200, 50, 0, 0.62) 100%);
+  transition: opacity 0.3s;
+}
+
+.stn-ui.on-fire .fx-fire {
+  opacity: 1;
+  animation: stn-firelick 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes stn-firelick {
+  from {
+    filter: brightness(0.85);
+  }
+  to {
+    filter: brightness(1.25);
+  }
 }
 
 .stn-ui .fx-blood {
@@ -1124,6 +1146,10 @@ body {
   animation: stn-shoveMash 0.3s ease-in-out infinite;
 }
 
+.stn-ui .shove.hold .kbd {
+  animation: none;
+}
+
 .stn-ui .shove .kbd.hit {
   animation: stn-shoveHit 0.16s ease-out, stn-shoveMash 0.3s 0.45s ease-in-out infinite;
 }
@@ -1160,7 +1186,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .stn-ui .shove .kbd,
-  .stn-ui .shove .kbd.hit {
+  .stn-ui .shove .kbd.hit,
+  .stn-ui.on-fire .fx-fire {
     animation: none;
   }
 }

@@ -13,7 +13,7 @@ import { ZTYPE } from './defs.js';
 // What each thing a survivor does is worth. All first guesses: nobody has played them yet.
 export const XP = {
   kill: 5, // one of the rank and file (walkers, runners, dogs, bats)
-  kinds: { [ZTYPE.SPITTER]: 15, [ZTYPE.BOOMER]: 15, [ZTYPE.LEAPER]: 20, [ZTYPE.ROPER]: 20, [ZTYPE.SHADE]: 25, [ZTYPE.TANK]: 30 },
+  kinds: { [ZTYPE.SPITTER]: 15, [ZTYPE.BOOMER]: 15, [ZTYPE.LEAPER]: 20, [ZTYPE.ROPER]: 20, [ZTYPE.SHADE]: 25, [ZTYPE.FLAMMER]: 20, [ZTYPE.TANK]: 30 },
   headshot: 2, // on top of the kill
   boss: 150,
   revive: 40,

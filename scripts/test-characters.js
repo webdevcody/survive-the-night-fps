@@ -517,6 +517,23 @@ try {
     check(`${def.name}: the size it was (${h.toFixed(2)} m tall, ${w.toFixed(2)} half wide, ${d.toFixed(2)} half deep; was ${want.h}, ${want.w}, ${want.d})`,
       Math.abs(h / want.h - 1) <= 0.07 && w <= want.w * 1.08 + 0.01 && w >= want.w * 0.85 && d <= want.d + 0.15 && d >= want.d * 0.8 && (t === ZTYPE.BAT || low > -0.02));
   }
+  // the flammer (new since RIGS was taken): the humanoid rig every animation hangs on, one draw call, within the dead's
+  // budgets near and far, and the height of its hitbox
+  {
+    const z = C.createZombie(ZTYPE.FLAMMER, 1);
+    const meshes = [];
+    z.object.traverse((m) => m.isMesh && meshes.push(m));
+    const inst = z._inst;
+    const g = meshes[0].geometry;
+    g.computeBoundingBox();
+    const k = inst.cal.k;
+    const h = g.boundingBox.max.y * k;
+    const tris = g.index.count / 3;
+    const far = inst.rigFar ? inst.rigFar.tris : 0;
+    check(`Flammer: one draw call on the humanoid rig (${inst.rig.bones.length - 1} bones), ${tris} tris (<= ${DEAD_NEAR}), ${far} far (<= ${DEAD_FAR}), ${h.toFixed(2)} m tall (hitbox ${ZOMBIE_DEFS[ZTYPE.FLAMMER].height})`,
+      meshes.length === 1 && meshes[0].isSkinnedMesh && inst.rig.bones.length - 1 === RIGS.ROPER.bones && tris > 500 && tris <= DEAD_NEAR && far > 0 && far <= DEAD_FAR && Math.abs(h / ZOMBIE_DEFS[ZTYPE.FLAMMER].height - 1) <= 0.07);
+    z.dispose();
+  }
   // a boss's teeth do not depend on what was built before it (a far copy used to leave the next head built without them)
   C.debugRig(ZTYPE.WALKER, 0, true);
   const brute = C.createZombie(ZTYPE.BOSS_BRUTE, 1)._inst.rig.geometry;

@@ -76,6 +76,7 @@ import {
   TALK_CLEAR,
   TALK_RANGE,
   SLOT_RADIO,
+  BTN,
 } from '../shared/constants.js';
 import {
   ITEM,
@@ -114,6 +115,9 @@ import {
   THROW_ITEMS,
   isFirearm,
   salvageOf,
+  STRUCT_FIRE,
+  PLAYER_FIRE,
+  structBurns,
 } from '../shared/defs.js';
 import { C2S, S2C, SNAP, SELF, ACT, SALVAGE_FROM, WORN, WORN_DO, UNDO_NO, ENT, HOLD, CAR_ID, REJECT_REASON, LEFT_CODE, CHATF, PLF, PROGF, WELCOMEF, PROTOCOL_VERSION, Writer, Reader, readInput, writeBoard, qpos, dqpos, usePos, qangle8, qangle16, dqangle16, dqpitch } from '../shared/protocol.js';
 import { XP, XPS, XP_SRC, levelOf, perkMask } from '../shared/progress.js';
@@ -980,6 +984,9 @@ export class Game {
       partFullT: -99, // ...and when that something was a car supply
       pinnedBy: 0,
       ropedBy: 0,
+      burning: false, // set alight by a flammer (PLAYER_FIRE, updateFire): until it is put out
+      douse: 0, // ...how far it has been put out (0-1)
+      jumpHeld: false, // [Space] down in their newest command (holding it puts a fire out: theirs or a teammate's)
       ping: 0,
       ts: null, // the stint analytics.js is counting for them (null: none)
       rejoinKey: '', // 'a:<account id>' or 'g:<sha-256 of the browser id>': whose JOIN may take this player back after a drop (resume)
@@ -1868,6 +1875,7 @@ export class Game {
         [ZTYPE.ROPER, 5 + sp * 3],
         [ZTYPE.TANK, (1 + n * 0.3) * (0.5 + sp)],
         [ZTYPE.SHADE, 2.5 + sp * 2.5],
+        [ZTYPE.FLAMMER, 3 + sp * 3],
       ];
       // one new kind a night: each stays out of the horde until its night comes
       for (const wt of weights) if (rank < ZOMBIE_DEFS[wt[0]].minNight) wt[1] = 0;
@@ -1876,7 +1884,7 @@ export class Game {
       // the crowd, the other is a slow thing you can see coming. The night's guaranteed new kind is added below.
       if (this.diff.specials !== 1) {
         for (const wt of weights) {
-          if (wt[0] === ZTYPE.SPITTER || wt[0] === ZTYPE.BOOMER || wt[0] === ZTYPE.LEAPER || wt[0] === ZTYPE.ROPER || wt[0] === ZTYPE.SHADE || wt[0] === ZTYPE.BAT) wt[1] *= this.diff.specials;
+          if (wt[0] === ZTYPE.SPITTER || wt[0] === ZTYPE.BOOMER || wt[0] === ZTYPE.LEAPER || wt[0] === ZTYPE.ROPER || wt[0] === ZTYPE.SHADE || wt[0] === ZTYPE.BAT || wt[0] === ZTYPE.FLAMMER) wt[1] *= this.diff.specials;
         }
       }
       const tot = weights.reduce((a, b) => a + b[1], 0);
@@ -2440,6 +2448,7 @@ export class Game {
         // an item asked for is in the hands from the client's first command after asking on (useItem)
         if (p.useItem && !p.state.using && ((cmd.seq - p.useItem.from) & 0xffff) < 0x8000) p.state.using = 1;
         simulatePlayer(p.state, cmd, this.world, events);
+        p.jumpHeld = !!(cmd.buttons & BTN.JUMP);
         // pinned by a leaper: shoved all the way (the simulation's meter, s.shove), they throw it off (Zombies.throwOff)
         if (p.state.pinned && p.state.shove >= 1 && this.zm.throwOff(p)) {
           p.selfSync = true;
@@ -3784,6 +3793,8 @@ export class Game {
       state: 1,
       owner: p.id,
       burnLeft: def.burn || 0,
+      fire: 0, // s it has been on fire (STRUCT_FIRE: igniteStructure); 0: not burning
+      fireDmg: 0,
       collider: null,
       trapTick: 0,
     };
@@ -3828,6 +3839,14 @@ export class Game {
       if (hammer) this.feedFire(p, e);
       return;
     }
+    if (e.fire > 0) {
+      // a piece on fire (STRUCT_FIRE): the swing beats the flames out, and costs nothing. Mending it is the next one's
+      if (this.time - p.actionT < 0.6) return;
+      if (!hammer || s.slot !== SLOT_BUILD) return this.notify(NOTIFY.NEED_HAMMER, 0, p.id);
+      p.actionT = this.time;
+      this.extinguish(e);
+      return;
+    }
     if (e.hp >= e.maxHp && !(e.stype === STRUCT.TORCH && e.burnLeft <= 0)) return;
     if (this.time - p.actionT < 0.6) return;
     if (!hammer || s.slot !== SLOT_BUILD) return this.notify(NOTIFY.NEED_HAMMER, 0, p.id); // (the hammer in hand, not just carried)
@@ -3861,6 +3880,105 @@ export class Game {
     if (!e || e.maxHp <= 0) return;
     const share = Math.max(0, Math.min(1, e.hp / e.maxHp));
     e.minHealth = Math.min(Number.isFinite(e.minHealth) ? e.minHealth : 1, share);
+  }
+
+  // ---------------------------------------------------------------- fire on what was built (STRUCT_FIRE)
+  // Sets a piece alight (a flammer came near it, or the fire next to it spread). false: it does not burn, or already is
+  igniteStructure(e) {
+    if (!e || e.removed || e.kind !== ENT.STRUCTURE || e.fire > 0 || !structBurns(e.stype)) return false;
+    e.fire = 1e-6;
+    e.fireDmg = 0;
+    this.sound(SOUND.FIRE_WHOOSH, e.x, e.y + 1, e.z, 40);
+    return true;
+  }
+
+  extinguish(e) {
+    if (!(e.fire > 0)) return;
+    e.fire = 0;
+    e.fireDmg = 0;
+    this.sound(SOUND.ACID_SIZZLE, e.x, e.y + 1, e.z, 30);
+  }
+
+  // A burning piece (updateStructures): it takes STRUCT_FIRE.dps (the night's hurt, as the dead's blows are), dealt
+  // a couple of times a second so it is not a hit sound every tick, and from spreadAfter s on may set what touches it
+  // alight. false: it burned down
+  burnStructure(e, dt) {
+    e.fire += dt;
+    e.fireDmg += STRUCT_FIRE.dps * this.diff.hurt * dt;
+    if (e.fireDmg >= 12) {
+      const d = e.fireDmg;
+      e.fireDmg = 0;
+      e.hp -= d;
+      this.noteStructureHealth(e);
+      if (e.hp <= 0) {
+        this.destroyStructure(e, true);
+        return false;
+      }
+    }
+    if (e.fire >= STRUCT_FIRE.spreadAfter && this.rng() < STRUCT_FIRE.spread * dt) {
+      const near = [];
+      this.world.structGrid.query(e.x, e.z, e.collider.r + STRUCT_FIRE.gap + 3.5, near);
+      const catches = near.filter((c) => c !== e.collider && overlapBoxes(e.collider, c, STRUCT_FIRE.gap / 2) && this.ents[c.id] && !(this.ents[c.id].fire > 0) && structBurns(this.ents[c.id].stype));
+      if (catches.length) this.igniteStructure(this.ents[catches[Math.floor(this.rng() * catches.length)].id]);
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------- a survivor on fire (PLAYER_FIRE)
+  setAlight(p) {
+    if (!p || !p.alive || p.zombie || p.downed || p.burning || this.safe(p) || swimming(this.world, p.state)) return false;
+    p.burning = true;
+    p.douse = 0;
+    this.sound(SOUND.FIRE_WHOOSH, p.state.x, p.state.y + 1, p.state.z, 40);
+    return true;
+  }
+
+  putOut(p, loud = true) {
+    if (!p.burning) return;
+    p.burning = false;
+    p.douse = 0;
+    if (loud) this.sound(SOUND.ACID_SIZZLE, p.state.x, p.state.y + 1, p.state.z, 25);
+  }
+
+  // Each tick for a survivor alight: in the water it is out; otherwise it burns them, and [Space] held - theirs, and
+  // every teammate's within reach who is up and not burning - puts it out over PLAYER_FIRE.time. true: it killed them
+  updateFire(p, dt) {
+    const s = p.state;
+    if (swimming(this.world, s) || p.downed) {
+      this.putOut(p);
+      return false;
+    }
+    let hands = p.jumpHeld ? 1 : 0;
+    for (const q of this.players.values()) {
+      if (q === p || !q.alive || q.zombie || q.downed || q.burning || !q.jumpHeld || this.safe(q)) continue;
+      if (Math.hypot(q.state.x - s.x, q.state.z - s.z) < PLAYER_FIRE.reach && Math.abs(q.state.y - s.y) < 1.5) hands++;
+    }
+    p.douse = hands ? p.douse + (hands * dt) / PLAYER_FIRE.time : Math.max(0, p.douse - (PLAYER_FIRE.decay * dt) / PLAYER_FIRE.time);
+    if (p.douse >= 1) {
+      this.putOut(p);
+      return false;
+    }
+    if ((p.fireT = (p.fireT || 0) + dt) >= 0.5) {
+      p.fireT -= 0.5;
+      this.damagePlayer(p, PLAYER_FIRE.dps * 0.5, { kind: KILLER.ZOMBIE, ztype: ZTYPE.FLAMMER, x: s.x, z: s.z, fire: true });
+    }
+    return !p.alive;
+  }
+
+  // the burning survivor a teammate's [Space] is beating the flames out on (the nearest), or null
+  dousing(q) {
+    if (!q.jumpHeld || !q.alive || q.zombie || q.downed || q.burning || this.safe(q)) return null;
+    let best = null;
+    let bd = PLAYER_FIRE.reach;
+    for (const p of this.players.values()) {
+      if (p === q || !p.burning || !p.alive) continue;
+      const d = Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z);
+      if (d < bd && Math.abs(q.state.y - p.state.y) < 1.5) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
   }
 
   destroyStructure(e, broken) {
@@ -3951,6 +4069,7 @@ export class Game {
   }
 
   goDown(p) {
+    this.putOut(p, false); // (down on the ground, they roll the fire out)
     p.downed = true;
     p.hp = 0;
     p.bleed = DOWN_TIME * this.diff.down;
@@ -3993,6 +4112,7 @@ export class Game {
   }
 
   killPlayer(p, src, silent = false) {
+    this.putOut(p, false);
     this.track.death(p, src, silent); // (first: what they were when it came)
     this.ach.death(p, src);
     this.vehicles.drop(p); // (out of whatever they were in: it rolls on without them)
@@ -4951,6 +5071,7 @@ export class Game {
           this.ach.drowning(p);
         }
       } else p.drownT = 0;
+      if (p.burning && this.updateFire(p, dt)) continue;
       if (p.downed) {
         if (!p.revivedBy && !this.safe(p)) p.bleed -= dt * playerMods(p).bleed; // (a held player's clock stops)
         if (p.bleed <= 0) this.killPlayer(p, p.lastSrc || { kind: KILLER.WORLD });
@@ -4988,6 +5109,7 @@ export class Game {
     this.power.update(dt); // generators burn their fuel, hum and feed the floodlights
     for (let i = this.structures.length - 1; i >= 0; i--) {
       const e = this.structures[i];
+      if (e.fire > 0 && !this.burnStructure(e, dt)) continue;
       if (e.stype === STRUCT.TORCH) {
         e.burnLeft -= dt;
         e.state = e.burnLeft > 0 ? 1 : 0;
@@ -5259,8 +5381,13 @@ export class Game {
           c.u8(p.armorMax);
           break;
         case 2:
-          c.u8((p.alive ? 1 : 0) | (p.flashlight ? 2 : 0) | (p.revivedBy ? 4 : 0));
+          c.u8((p.alive ? 1 : 0) | (p.flashlight ? 2 : 0) | (p.revivedBy ? 4 : 0) | (p.burning ? 8 : 0));
           c.u8(Math.round(p.battery));
+          {
+            // on fire: how far it is put out; beating it out on a teammate: how far theirs is (PLAYER_FIRE)
+            const mate = p.burning ? null : this.dousing(p);
+            c.u8(Math.round(Math.min(1, p.burning ? p.douse : mate ? mate.douse : 0) * 255));
+          }
           break;
         case 3:
           // (only once it is in the hands: this is also what the client has the simulation's `using` from, endUse)

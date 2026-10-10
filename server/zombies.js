@@ -4,7 +4,7 @@
 // The herd that wanders the roads by day is in herd.js.
 import { MAP_SIZE, STEP_HEIGHT, PHASE, PLAYER_RADIUS, EYE_HEIGHT, MAX_ENTITIES, HORDE_SPAWN_MIN, HORDE_SPAWN_MAX, FLASHLIGHT_RANGE, FLASHLIGHT_CONE, FIRE_LIGHT_MARGIN, NOISE_RUSH, NOISE_SPEED_MIN, NOISE_MEMORY, NOISE_MEMORY_MAX } from '../shared/constants.js';
 import { HISTORY_TICKS, LEG_HP, STUMBLE_SPEED, HOBBLE_SPEED, CRAWL_SPEED, CRAWL_SPEED_MIN, CRAWL_SPEED_MAX, CRAWL_SLOW, CRAWL_HEIGHT, CRAWL_HEAD_Y } from '../shared/constants.js';
-import { ZTYPE, ZOMBIE_DEFS, ZANIM, SOUND, KILLER, PROJ, AREA, EVT, IMPACT, ITEM, STRUCT_DEFS, THROWABLES, ZONE, BURN } from '../shared/defs.js';
+import { ZTYPE, ZOMBIE_DEFS, ZANIM, SOUND, KILLER, PROJ, AREA, EVT, IMPACT, ITEM, STRUCT_DEFS, THROWABLES, ZONE, BURN, structBurns } from '../shared/defs.js';
 import { ENT, qpos } from '../shared/protocol.js';
 import { resolveBody, groundAt, deepWaterAt, raycastWorld, footprintContains, COL } from '../shared/collision.js';
 import { eyeHeight } from '../shared/playersim.js';
@@ -297,6 +297,7 @@ export class Zombies {
       burnT: 0, // set alight (Combat.ignite): seconds of burning left
       burnBy: 0, // player who lit it (gets the kill)
       burnWeapon: 0,
+      igniteT: def.igniteRate || 0, // flammer: s until it may set the next piece of what was built alight (igniteNear)
       lit: false, // shade: frozen by light
       darkT: 1,
       trapSlow: 1,
@@ -973,6 +974,9 @@ export class Zombies {
         else z.direct = z.los && dist < (z.pack ? 18 : 12) && g.nav.segClear(z.x, z.z, tx, tz);
       }
     }
+
+    // the flammer: what the survivors built catches from it as it comes past
+    if (def.igniteRange && (z.igniteT -= dt) <= 0) this.igniteNear(z);
 
     // type specific behaviour (may take over movement this tick)
     if (def.flying) return this.updateBat(z, dt, target, tx, ty, tz, dist);
@@ -1675,6 +1679,7 @@ export class Zombies {
       if (d > def.range + PLAYER_RADIUS + 0.9 || ((Math.abs(s.y - z.y) > 2.5 || !this.canReach(z, p)) && !this.canReachUp(z, p, 0.9))) return;
       g.damagePlayer(p, def.dmg * dmgMul, { kind: KILLER.ZOMBIE, ztype: z.ztype, x: z.x, z: z.z });
       g.impact(IMPACT.BLOOD, s.x, s.y + 1.2, s.z);
+      if (def.fireproof) g.setAlight(p); // (the flammer's blow sets them burning: PLAYER_FIRE)
       if (def.knock) this.knock(p, z.x, z.z, def.knock, 4, 0.35);
     } else if (z.pendingKind === 2) {
       const s = g.ents[z.pendingTarget];
@@ -1738,6 +1743,29 @@ export class Zombies {
       }
     }
     return best;
+  }
+
+  // The flammer sets alight the nearest piece of what the survivors built that will burn (structBurns) and is not
+  // burning already, within igniteRange m of its body; then not again for igniteRate s (sooner when nothing caught)
+  igniteNear(z) {
+    const g = this.g;
+    const def = z.def;
+    z.igniteT = 0.25;
+    let best = null;
+    let bd = Infinity;
+    for (const c of g.world.structGrid.query(z.x, z.z, def.radius + def.igniteRange + 3.5, _lq)) {
+      const s = g.ents[c.id];
+      if (!s || s.kind !== ENT.STRUCTURE || s.removed || s.fire > 0 || !structBurns(s.stype)) continue;
+      if (z.y > c.y1 || z.y + def.height < c.y0 || !footprintContains(c, z.x, z.z, def.radius + def.igniteRange)) continue;
+      const d = Math.hypot(c.x - z.x, c.z - z.z);
+      if (d < bd) {
+        bd = d;
+        best = s;
+      }
+    }
+    if (!best) return;
+    g.igniteStructure(best);
+    z.igniteT = def.igniteRate * (0.8 + g.rng() * 0.4);
   }
 
   // a dog sets out to ram structure s: it backs off square from it, on its own side (special state 8)
