@@ -150,6 +150,7 @@ import { MenuTour } from './menutour.js';
 import { KeyGuard } from './keyguard.js';
 import { CardsClient } from './cards.js';
 import { G } from '../render/globals.js';
+import { smokeCover } from '../../shared/smoke.js';
 // A world with mountains (the mainland) is seen far: the distance haze is whole up to HAZE_BASE m and thins over that
 // by e every HAZE_THIN m of the height the eye's ray runs at (globals.js uHaze), so a range stands up out of the haze
 // from across the map while the plain at its foot is lost in it; the camera's far plane goes out to FAR_BIG for it.
@@ -307,7 +308,8 @@ export class Game {
     this.openness = 0;
     this.indoor = 0;
     this.under = 0; // how far down the mine the eye is (0..1)
-    this._envOver = { under: 0 };
+    this._envOver = { under: 0, smoke: 0 };
+    this.smoke = 0; // how deep in a smoker's cloud the eye is, eased (Environment's smoke override)
     this._wxDown = {};
     this.stepAcc = 0;
     this.swimming = false; // afloat in the lake or a pond (shared/swim.js), as of the last frame
@@ -3513,6 +3515,12 @@ export class Game {
     // (the mainland's passage was kept lit to the end - its lamps every few metres: down it a little of the light stays,
     // so its timbers, rails and tubs read; the island's mine is as dark as it was)
     this._envOver.under = this.world.size > 1000 && deep > 0 ? this.under * 0.8 : this.under;
+    // in a smoker's cloud the haze closes in round the eye (shared/smoke.js): it thickens over a second, and clears a
+    // little slower once the cloud is gone or the eye is out of it
+    const smoke = cine ? 0 : smokeCover(cam.position.x, cam.position.y, cam.position.z, this.entities.smokes);
+    this.smoke += (smoke - this.smoke) * Math.min(1, dt * (smoke > this.smoke ? 2.5 : 1.2));
+    if (this.smoke < 0.002) this.smoke = 0;
+    this._envOver.smoke = this.smoke;
     this._envOver.fogMul = this.debugFog ?? (cine ? cine.fogMul : 0); // (a cutscene's long shots see further than the day's haze lets a survivor; debugFog: a look-dev camera's)
     this.env.update(dt, cycle, cam.position, time, weather, this._envOver);
     this.viewDist = Math.max(cine ? cine.far : 0, this.env.fogVisibility + 40); // how far anything is drawn: past it the haze has it

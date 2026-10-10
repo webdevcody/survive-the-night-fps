@@ -2141,6 +2141,13 @@ export class Zombies {
           return true;
         }
         break;
+      case ZTYPE.SMOKER:
+        // it needs no line to them: it smokes out the ground between, and the dead come on through it
+        if (z.specialCd <= 0 && dist < def.smokeRange && Math.abs(ty - z.y) < 4) {
+          windup(0.8, 13, SOUND.SMOKER_HISS);
+          return true;
+        }
+        break;
       case ZTYPE.BOSS_BRUTE:
         // badly hurt, it stops to roar, and comes on at a run from then on
         if (!z.enraged && z.hp <= z.maxHp * def.enrage) {
@@ -2467,6 +2474,11 @@ export class Zombies {
         z.specialCd = def.spewRate + g.rng() * 2;
         break;
       }
+      case 13:
+        // a smoker breathes out its cloud, where it stands
+        c.spawnArea(AREA.SMOKE, z.x, z.y, z.z, def.smokeRadius, def.smokeLife);
+        z.specialCd = def.smokeRate + g.rng() * 4;
+        break;
       case 99: {
         // boomer detonation. Bursting against a structure, that piece takes the brunt: the blast alone falls off so
         // gently that a number big enough to open a wall would level its neighbours too

@@ -123,6 +123,9 @@ const KEYS = [
   { s: 1.0, zenith: C(0x5a6778), horizon: C(0x8e9594), glow: C(0xbcb3a2), hemiSky: C(0xadb6ba), hemiGround: C(0x33302a), hemi: 0.88, dir: C(0xf6e6cf), dirI: 2.2, fog: C(0x7e8584), fogD: 0.0072, mist: 0.003, scatter: 0.55, rays: 0.55, exposure: 0.92 },
 ];
 // what is left of all that well down the mine: no sun, a trace of ambient to make shapes out by, dark haze
+// in a smoker's cloud (overrides.smoke, 0..1): a dark grey-brown haze so thick that 95% of what is 4 m off is lost
+// in it (render/globals.js: FogExp2, sqrt(3) / fogD), and the light it lets through dimmed
+const SMOKED = { fog: C(0x141210), fogD: 0.43, hemi: 0.55, dirI: 0.35, mist: 0 };
 const UNDER = { hemi: 0.1, hemiSky: C(0x566078), hemiGround: C(0x15141a), fog: C(0x020203), fogD: 0.03, exposure: 1.5 };
 const COLOR_KEYS = ['zenith', 'horizon', 'glow', 'hemiSky', 'hemiGround', 'dir', 'fog'];
 const NUM_KEYS = ['hemi', 'dirI', 'fogD', 'mist', 'scatter', 'rays', 'exposure'];
@@ -286,6 +289,16 @@ export class Environment {
       c.mist *= 1 - down;
       c.scatter *= 1 - down;
       c.rays *= 1 - down;
+    }
+
+    const smoke = overrides.smoke || 0;
+    if (smoke > 0) {
+      c.fog.lerp(SMOKED.fog, smoke);
+      c.fogD += (SMOKED.fogD - c.fogD) * smoke;
+      c.hemi *= 1 - (1 - SMOKED.hemi) * smoke;
+      c.dirI *= 1 - (1 - SMOKED.dirI) * smoke;
+      c.mist += (SMOKED.mist - c.mist) * smoke;
+      c.rays *= 1 - smoke;
     }
 
     u.uZenith.value.copy(c.zenith);

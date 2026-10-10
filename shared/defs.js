@@ -546,6 +546,7 @@ export const ZTYPE = {
   BOSS_BRUTE: 12,
   BOSS_ALPHA: 13,
   BOSS_BLOATER: 14,
+  SMOKER: 15,
 };
 
 // speed m/s, hp, dmg per hit, attack rate s, radius, height (for hitboxes), headR, headY
@@ -599,6 +600,12 @@ export const ZOMBIE_DEFS = {
   // bile in a fan at whoever is within spewRange every spewRate s, and when it dies it bursts: blastRadius, blastDmg
   // to survivors, blastStruct to what you built. Bring it down far from the walls
   [ZTYPE.BOSS_BLOATER]: { name: 'The Bloater', hp: 2400, speed: 1.45, dmg: 22, rate: 1.4, range: 2.6, radius: 1.15, height: 2.9, headY: 2.55, headR: 0.32, moveR: 0.5, moveH: 1.9, structDmg: 160, loot: 1, knock: 6, boss: true, minNight: 3, spewRange: 13, spewRate: 7, blastRadius: 10, blastDmg: 70, blastStruct: 900, tip: 'When it dies it bursts and takes everything near it. Bring it down far from your walls.', tipBrief: 'Bursts when it dies. Kill it far from your walls.' },
+  // breaks: a team that holds one wall and shoots what it sees. Within smokeRange of a survivor it stops and breathes out
+  // a cloud of dark smoke (smokeRadius m, smokeLife s) every smokeRate s, and the dead come at them out of it. When it
+  // dies it bursts into one more (deathSmoke); killed among what the survivors built - baseCount pieces or more within
+  // baseRange m (Combat.inBase) - the cloud it lets go is big enough to fill the base (baseSmoke). Kill it out past the
+  // walls. (AREA.SMOKE: the client's view thickens with it, shared/smoke.js)
+  [ZTYPE.SMOKER]: { name: 'Smoker', hp: 130, speed: 2.0, dmg: 8, rate: 1.1, range: 1.55, radius: 0.38, height: 1.86, headY: 1.68, headR: 0.17, structDmg: 15, loot: 0.6, smokeRange: 20, smokeRate: 11, smokeRadius: 4.5, smokeLife: 9, deathSmoke: { radius: 5, life: 10 }, baseSmoke: { radius: 14, life: 26 }, baseRange: 12, baseCount: 4, minNight: 10, legs: true, intro: 'Smokers join the horde: they breathe out clouds you cannot see through. Kill them out past your walls, or their last breath fills the base.', introBrief: 'Smoke you cannot see through. Kill them past the walls.' },
 };
 
 // Overkill: a zombie killed by one heavy blow (a rifle round, a point-blank blast, an explosion) that drives it far
@@ -650,6 +657,7 @@ export const PROJ_ITEM = { [PROJ.MOLOTOV]: ITEM.MOLOTOV, [PROJ.PIPEBOMB]: ITEM.P
 export const AREA = {
   ACID: 1,
   FIRE: 2,
+  SMOKE: 3, // a smoker's cloud: nothing but what it hides (shared/smoke.js)
 };
 
 // ---------------------------------------------------------------- events
@@ -756,6 +764,7 @@ export const SOUND = {
   FLARE_POP: 123, // a parachute flare bursting alight at the top of its climb (client-side, from its flight)
   DEER_SCREAM: 124, // an undead deer (the mainland's): a rotten-throated bellow as it lowers its antlers, is hit, or dies
   CAT_PURR: 125, // the stray cat purring while it is stroked (client-side, from its CANIM.PET)
+  SMOKER_HISS: 143, // a smoker breathing out its cloud
   // vehicles (shared/vehicles.js)
   VEH_START: 130, // an engine turned over and caught (somebody at the wheel of one that runs)
   VEH_STOP: 131, // ...and switched off, or run dry

@@ -321,6 +321,7 @@ export class Entities {
     this.glints.renderOrder = 7;
     this.caches = new Set();
     this.loose = new Set(); // every other item on the ground: a small glint up close (see update)
+    this.smokes = new Set(); // the smokers' clouds (AREA.SMOKE): what the eye is in thickens the haze (Game, shared/smoke.js)
     this.stations = []; // built campfires / workbenches (crafting)
   }
 
@@ -527,7 +528,11 @@ export class Entities {
           break;
         }
         case ENT.AREA: {
-          if (e.atype === AREA.FIRE) {
+          if (e.atype === AREA.SMOKE) {
+            e.emitter = g.effects.createEmitter('smoke', e.rx, e.ry, e.rz, { radius: e.radius });
+            e.cloud = { x: e.rx, y: e.ry, z: e.rz, radius: e.radius };
+            this.smokes.add(e.cloud);
+          } else if (e.atype === AREA.FIRE) {
             e.emitter = g.effects.createEmitter('fire', e.rx, e.ry, e.rz, { radius: e.radius });
             e.fire = { x: e.rx, y: e.ry, z: e.rz, intensity: 1.6 };
             e.loop = g.audio.createLoop?.('fire', e.rx, e.ry + 0.5, e.rz);
@@ -741,6 +746,7 @@ export class Entities {
     if (e.kind === ENT.VEHICLE) this.g.vehicles.detach(e);
     const g = this.g;
     if (e.kind === ENT.CACHE || e.kind === ENT.ITEM) this.caches.delete(e);
+    if (e.cloud) this.smokes.delete(e.cloud);
     if (e.kind === ENT.ITEM) this.loose.delete(e);
     if (e.kind === ENT.STRUCTURE) {
       const i = this.stations.indexOf(e);
