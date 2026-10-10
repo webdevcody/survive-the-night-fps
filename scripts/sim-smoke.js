@@ -2665,7 +2665,7 @@ check('ping broadcast', B.pings > 0);
     A.act(ACT.FLASHLIGHT, 0);
     game.combat.damageZombie(sh, 1e6, null, {});
     run(3, face);
-    // a standing torch holds it at the edge of its light
+    // a standing torch makes a lit base: the shade will not come into its light, and waits just outside it
     const n0 = game.structures.length;
     game.giveItem(A.p(), ITEM.TORCH, 1);
     A.act(ACT.BUILD, STRUCT.TORCH, a.x, a.z - 3, 0);
@@ -2676,11 +2676,38 @@ check('ping broadcast', B.pings > 0);
     run(80, face);
     const td = Math.hypot(sh2.x - torch.x, sh2.z - torch.z);
     const R = STRUCT_DEFS[STRUCT.TORCH].light;
-    check('torch light stops the shade at its edge', sh2.lit && td < R + 0.01 && td > R - 1.5, `${td.toFixed(2)} m from the torch (light ${R} m)`);
+    check('a lit base keeps the shade out: it waits at the edge of the torch light', !sh2.lit && td > R && td < R + 4, `${td.toFixed(2)} m from the torch (light ${R} m), lit ${sh2.lit}`);
+    // one that finds itself inside the light's reach (in a shadow there) heads back out of it
+    const sh3 = zm.spawn(ZTYPE.SHADE, torch.x + 4, torch.z + 4.5, { horde: true });
+    const in0 = Math.hypot(sh3.x - torch.x, sh3.z - torch.z);
+    sh3.darkT = 1; // (as if a wall shaded it there)
+    zm.isLit = ((orig) => (z) => (z === sh3 ? false : orig.call(zm, z)))(zm.isLit);
+    run(20, face);
+    delete zm.isLit;
+    const in1 = Math.hypot(sh3.x - torch.x, sh3.z - torch.z);
+    check('a shade inside a lit base backs out of it', in1 > R && in1 > in0, `${in0.toFixed(1)} -> ${in1.toFixed(1)} m from the torch (light ${R} m)`);
+    game.combat.damageZombie(sh3, 1e6, null, {});
+    // wandering, it picks somewhere dark: never a spot in the torch's light
+    let litPicks = 0;
+    for (let i = 0; i < 40; i++) {
+      sh2.target = 0;
+      sh2.targetT = 99;
+      sh2.alertT = 0;
+      sh2.wanderT = 0;
+      sh2.x = torch.x + R + 3;
+      sh2.z = torch.z;
+      run(1, face);
+      if (Math.hypot(sh2.wanderX - torch.x, sh2.wanderZ - torch.z) < R) litPicks++;
+    }
+    check('a wandering shade picks somewhere dark to go', litPicks === 0, `${litPicks} of 40 picks in the torch light`);
     // the torch burns out: darkness, and it comes
+    sh2.wanderT = 99;
+    sh2.targetT = 0;
+    run(10, face);
+    const td2 = Math.hypot(sh2.x - torch.x, sh2.z - torch.z);
     torch.burnLeft = 0.01;
     run(20, face);
-    check('shade moves when the torch burns out', !sh2.lit && Math.hypot(sh2.x - torch.x, sh2.z - torch.z) < td - 2);
+    check('shade moves when the torch burns out', !sh2.lit && Math.hypot(sh2.x - torch.x, sh2.z - torch.z) < td2 - 2, `${td2.toFixed(1)} -> ${Math.hypot(sh2.x - torch.x, sh2.z - torch.z).toFixed(1)} m from the torch`);
     // a road flare thrown down pins it too
     const fl = game.combat.spawnProjectile(PROJ.FLARE, A.p(), sh2.x + 2, sh2.y + 0.5, sh2.z, 0, 0, 0, { fuse: THROWABLES[ITEM.FLARE].fuse });
     run(6, face);
@@ -3008,7 +3035,7 @@ check('ping broadcast', B.pings > 0);
     g.fillHistory(p);
     tick(2);
     const put = (type, d) => {
-      const z = g.zm.spawn(type, s.x + lane.ux * d, s.z + lane.uz * d);
+      const z = g.zm.spawn(type, s.x + lane.ux * d, s.z + lane.uz * d, { force: true }); // (a shade too, by day)
       z.yaw = Math.atan2(lane.ux, lane.uz); // facing her: forward is (-sin yaw, -cos yaw)
       return z;
     };
