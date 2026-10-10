@@ -771,6 +771,28 @@ export function shadeShriek(sr, rng) {
   return finish(out, sr, 0.9);
 }
 
+// the screecher: a sharp indrawn gasp, then one long scream torn out of a ruined throat - two voices a little apart,
+// climbing and cracking, with the rasp of the wound under it. Long enough to cover its windup (screamWindup) and more
+export function screecherScream(sr, rng) {
+  const inhale = 0.32;
+  const dur = rrange(rng, 2.1, 2.5);
+  const out = alloc(sr, inhale + dur + 0.2);
+  addNorm(out, noise(sr, rng, inhale, { bp: [1800, 1.2], sweep: [700, 2600], env: (u) => u * u * (1 - smoothstep((u - 0.85) / 0.15)) }), sr, 0, 0.35);
+  const b = rrange(rng, 610, 700);
+  for (const det of [1, 1.045, 0.5]) {
+    const v = voice(sr, rng, {
+      dur, pitch: [[0, b * det * 0.75], [0.12, b * det * 1.25], [0.45, b * det * 1.4], [0.6, b * det * 1.65], [0.85, b * det * 1.5], [1, b * det * 0.9]],
+      vowels: vowelPath(['a', 'ae', 'i', 'ae', 'a'], rng), fscale: det < 1 ? 1.05 : 1.25, bw: 2.4, jitter: 0.12, jitterHz: 45, shimmer: 0.55, sub: 0.15,
+      rasp: det < 1 ? 1.2 : 0.7, raspHz: det < 1 ? 70 : 220, breath: 0.8, vib: 0.03, vibHz: 7, drive: 5, chest: det < 1 ? 0.4 : 0, a3: 0.9, a4: 0.7, hp: 300,
+      env: [[0, 0], [0.05, 0.8], [0.4, 1], [0.8, 0.85], [1, 0]],
+    });
+    addNorm(out, v, sr, inhale + (det > 1 ? 0.03 : 0), det > 1 ? 0.6 : det < 1 ? 0.45 : 1);
+  }
+  addNorm(out, whoosh(sr, rng, dur * 0.9, 900, 4200, 2200, 1.4, 0.5), sr, inhale, 0.3);
+  softclip(out, 2.8);
+  return finish(out, sr, 0.95);
+}
+
 export function zpGrowl(sr, rng, i) {
   const b = rrange(rng, 90, 118);
   return voice(sr, rng, {
@@ -2114,6 +2136,7 @@ export const SFX_DEFS = [
   { bank: 'z_shade_whisper', n: 3, sr: MID, gen: shadeWhisper },
   { bank: 'z_shade_freeze', n: 2, sr: HI, gen: shadeFreeze },
   { bank: 'z_shade_shriek', n: 2, sr: MID, gen: shadeShriek },
+  { bank: 'z_screecher', n: 2, sr: MID, gen: screecherScream },
   { bank: 'zp_growl', n: 3, sr: MID, gen: zpGrowl },
   { bank: 'cat_meow', n: 3, sr: HI, gen: catMeow },
   { bank: 'cat_purr', n: 3, sr: MID, gen: catPurr },

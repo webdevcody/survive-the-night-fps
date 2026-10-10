@@ -258,6 +258,7 @@ def(S.DOG_YELP, 'dog_yelp', 'zombie', 0.8, 0.08, 0.15, R_DOG_YELP);
 def(S.SHADE_WHISPER, 'z_shade_whisper', 'zombie', 0.8, 0.1, 0.15, R_Z_WHISPER);
 def(S.SHADE_FREEZE, 'z_shade_freeze', 'zombie', 1, 0.06);
 def(S.SHADE_SHRIEK, 'z_shade_shriek', 'zombie', 1, 0.06);
+def(S.SCREECHER_SCREAM, 'z_screecher', 'big', 1, 0.05, 0.25);
 def(S.EAT, 'eat', 'fx', 0.5, 0.05);
 def(S.DRINK, 'drink', 'fx', 0.4, 0.05); // (-2 dB: it measures that much hotter than can_open)
 def(S.BODY_FALL, 'land', 'fx', 0.9, 0.1, 0.15, R_BODY);
@@ -965,6 +966,9 @@ class VoiceSource {
   }
 }
 
+const RING_VOL = 0.07; // a screecher's ringing (ring): plainly there over the fight, not painful
+const RING_FADE = 1.5; // s it takes to fade once it is over
+const RING_LP = 900; // Hz: the world through ringing ears
 const RADIO_STATIC_VOL = 0.28; // radioStatic(1) about -22 LUFS, a few dB under the forest and well under a voice; held (0.35), -31
 const NULL_LOOP = Object.freeze({ setPosition() {}, setVolume() {}, setRate() {}, stop() {} });
 const NULL_VOICE = Object.freeze({ setPosition() {}, setAbsent() {}, setRadio() {}, mode: () => 0, setVolume() {}, setMuffled() {}, disconnect() {} });
@@ -1585,6 +1589,52 @@ export class AudioEngine {
     this._static.g.gain.setTargetAtTime(level * RADIO_STATIC_VOL, this._ctx.currentTime, 0.03);
   }
 
+  // A screecher's scream close by (EVT.SCREECH): the ears ring for secs - a thin, high tone right in the head, two
+  // pitches a few hertz apart so it beats, and the world dulled under it (_tick: the sfx low-pass) - or until
+  // stopRing() (the screecher is dead, or so is the survivor). It comes in at once and goes slowly; a second scream
+  // while it rings only makes it last. The tone is on the ui bus: it is in the head, not out in the world
+  ring(secs) {
+    if (!this._ready || this._state.menu || !(secs > 0)) return;
+    const c = this._ctx;
+    const now = c.currentTime;
+    if (!this._ring) {
+      const g = c.createGain();
+      g.gain.value = 0;
+      const osc = [3870, 3911, 7790].map((f, i) => {
+        const o = c.createOscillator();
+        o.frequency.value = f;
+        const k = c.createGain();
+        k.gain.value = i === 2 ? 0.12 : 0.5;
+        o.connect(k);
+        k.connect(g);
+        o.start(now);
+        return o;
+      });
+      g.connect(this._uiIn);
+      this._ring = { g, osc, end: now };
+    }
+    this._ring.end = Math.max(this._ring.end, now + secs);
+    this._ring.g.gain.setTargetAtTime(RING_VOL, now, 0.04);
+  }
+  stopRing() {
+    if (this._ring) this._ring.end = Math.min(this._ring.end, this._ctx.currentTime);
+  }
+  // how hard the ears still ring, 0..1 (fading over the last RING_FADE s), for the muffle in _tick
+  _ringing(now) {
+    const r = this._ring;
+    if (!r) return 0;
+    const left = r.end - now;
+    if (left > -RING_FADE) {
+      const k = Math.max(0, Math.min(1, (left + RING_FADE) / RING_FADE));
+      if (left < 0) r.g.gain.setTargetAtTime(RING_VOL * k * k, now, 0.1);
+      return left > 0 ? 1 : k;
+    }
+    for (const o of r.osc) o.stop();
+    r.g.disconnect();
+    this._ring = null;
+    return 0;
+  }
+
   // recorded foley (R_* defs): every layer must be decoded, otherwise false and the caller plays the procedural bank
   // (a recording that is only waiting to be decoded is asked for, so it is there the next time).
   // cat = positional category or null for 2D; pitch = the caller's own rate on top of the take's pitch range.
@@ -1898,7 +1948,11 @@ export class AudioEngine {
     const s = this._state;
     // low health: sfx muffle + heartbeat
     const lh = s.dead || s.menu ? 0 : s.lowHealth;
-    const lpf = lh > 0.02 ? Math.round(20000 * Math.pow(2600 / 20000, lh)) : 20000;
+    let lpf = lh > 0.02 ? Math.round(20000 * Math.pow(2600 / 20000, lh)) : 20000;
+    // ringing ears (ring): the world comes through dull, and clears as the ringing fades
+    const rk = this._ringing(now);
+    if (s.menu) this.stopRing();
+    if (rk > 0) lpf = Math.min(lpf, Math.round(RING_LP * Math.pow(20000 / RING_LP, 1 - rk)));
     if (Math.abs(lpf - this._mix.sfxLP) > 50) {
       this._mix.sfxLP = lpf;
       this._sfxLP.frequency.setTargetAtTime(lpf, now, 0.4);

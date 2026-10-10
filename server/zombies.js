@@ -1,6 +1,7 @@
 // Zombie AI: targeting, flow-field navigation, melee, structure breaking, and special abilities
 // (spitter acid, leaper pounce/pin, roper rope-pull, boomer explosion, bat swarms, tank charge, bosses,
-// zombie dog packs that den in the thick woods, flank and lunge, the shade that only moves in darkness).
+// zombie dog packs that den in the thick woods, flank and lunge, the shade that only moves in darkness, the screecher
+// whose scream calls a horde).
 // The herd that wanders the roads by day is in herd.js.
 import { MAP_SIZE, STEP_HEIGHT, PHASE, PLAYER_RADIUS, EYE_HEIGHT, MAX_ENTITIES, HORDE_SPAWN_MIN, HORDE_SPAWN_MAX, FLASHLIGHT_RANGE, FLASHLIGHT_CONE, FIRE_LIGHT_MARGIN, NOISE_RUSH, NOISE_SPEED_MIN, NOISE_MEMORY, NOISE_MEMORY_MAX } from '../shared/constants.js';
 import { HISTORY_TICKS, LEG_HP, STUMBLE_SPEED, HOBBLE_SPEED, CRAWL_SPEED, CRAWL_SPEED_MIN, CRAWL_SPEED_MAX, CRAWL_SLOW, CRAWL_HEIGHT, CRAWL_HEAD_Y } from '../shared/constants.js';
@@ -80,6 +81,21 @@ const DOG_RAM_STUN = 1;
 const DOG_RAM_STUN_MISS = 0.5;
 const DOG_RAM_CD = 0.8;
 const _lq = [];
+// The screecher's scream (fireSpecial case 13, screech). It calls def.screamHorde (+ def.screamHordeEach a survivor past
+// the first, SCREECH_HORDE_MAX at most) of the dead: SCREECH_RUNNERS of them runners, the rest walkers, coming out of
+// the dark in groups of SCREECH_GROUP from SCREECH_SPAWN_MIN-MAX m round whoever it screamed at, and set on them for
+// SCREECH_AGGRO s. Never past SCREECH_HORDE_ALIVE of the horde alive at once, nor SCREECH_ALIVE_MAX of the dead in all
+// (a day's valley alone can hold more than the 120 of MAX_ZOMBIES_ALIVE in game.js, which only holds back the night's
+// waves). The dead within SCREECH_LOUD m that have nobody to chase come too (noise)
+const SCREECH_HORDE_MAX = 14;
+const SCREECH_RUNNERS = 0.6;
+const SCREECH_GROUP = 4;
+const SCREECH_SPAWN_MIN = 40;
+const SCREECH_SPAWN_MAX = 60;
+const SCREECH_AGGRO = 20;
+const SCREECH_HORDE_ALIVE = 100;
+const SCREECH_ALIVE_MAX = 200;
+const SCREECH_LOUD = 90;
 // the client's distance haze: fog density by sun height (KEYS s / fogD in client/render/environment.js), see sightRange()
 const HAZE_SUN = [-1, -0.12, 0.02, 0.18, 0.55, 1];
 const HAZE_DENSITY = [0.025, 0.025, 0.0195, 0.0108, 0.0074, 0.0072];
@@ -2141,6 +2157,14 @@ export class Zombies {
           return true;
         }
         break;
+      case ZTYPE.SCREECHER:
+        // it stops where it sees a survivor and rears back to scream: the scream is heard well before the horde comes
+        if (z.specialCd <= 0 && z.los && dist < def.screamRange && Math.abs(ty - z.y) < 6) {
+          windup(def.screamWindup, 13, null);
+          g.sound(SOUND.SCREECHER_SCREAM, z.x, z.y + def.headY, z.z, 160);
+          return true;
+        }
+        break;
       case ZTYPE.BOSS_BRUTE:
         // badly hurt, it stops to roar, and comes on at a run from then on
         if (!z.enraged && z.hp <= z.maxHp * def.enrage) {
@@ -2467,6 +2491,11 @@ export class Zombies {
         z.specialCd = def.spewRate + g.rng() * 2;
         break;
       }
+      case 13:
+        // the screecher's scream: a horde, the dead about, and ringing ears (screech)
+        this.screech(z, target);
+        z.specialCd = def.screamRate * (1 + 0.25 * g.rng());
+        break;
       case 99: {
         // boomer detonation. Bursting against a structure, that piece takes the brunt: the blast alone falls off so
         // gently that a number big enough to open a wall would level its neighbours too
@@ -2476,6 +2505,54 @@ export class Zombies {
         break;
       }
     }
+  }
+
+  // The screecher screams (SCREECH_*): the dead it calls come running at `target` (whoever it screamed at; null: they
+  // hunt as the horde does), the dead about that heard it come over, and each survivor within def.ringRange m is told
+  // their ears ring (EVT.SCREECH: the nearer, the longer, def.ringT s at most; the client stops it when the screecher
+  // dies). Returns how many of the dead it called up.
+  screech(z, target) {
+    const g = this.g;
+    const def = z.def;
+    const humans = this.humansCache;
+    let n = Math.min(SCREECH_HORDE_MAX, def.screamHorde + def.screamHordeEach * Math.max(0, humans.length - 1));
+    n = Math.min(n, SCREECH_HORDE_ALIVE - g.hordeAlive(), SCREECH_ALIVE_MAX - g.zombies.length);
+    let called = 0;
+    const at = target ? target.state : z;
+    while (n > 0 && humans.length) {
+      const sp = this.pickSpawnAround(at.x, at.z, humans, SCREECH_SPAWN_MIN, SCREECH_SPAWN_MAX);
+      if (!sp) break;
+      const k = Math.min(n, SCREECH_GROUP);
+      for (let i = 0; i < k; i++) {
+        const type = g.rng() < SCREECH_RUNNERS ? ZTYPE.RUNNER : ZTYPE.WALKER;
+        const e = this.spawn(type, sp.x + (g.rng() - 0.5) * 2 * SPAWN_SPREAD, sp.z + (g.rng() - 0.5) * 2 * SPAWN_SPREAD, { horde: true, hpMul: g.hordeHpMul || 1 });
+        if (!e) continue;
+        called++;
+        if (target) {
+          e.target = target.id;
+          e.aggroId = target.id;
+          e.aggroT = SCREECH_AGGRO;
+        }
+      }
+      n -= k;
+    }
+    if (called) g.globalDirty = true;
+    this.noise(z.x, z.z, SCREECH_LOUD, z.y);
+    for (const h of humans) {
+      const s = h.state;
+      const d = Math.hypot(s.x - z.x, s.y - z.y, s.z - z.z);
+      if (d >= def.ringRange) continue;
+      const secs = def.ringT * (1 - 0.5 * (d / def.ringRange));
+      g.emit(
+        (w) => {
+          w.u8(EVT.SCREECH);
+          w.u16(z.id);
+          w.u8(Math.round(secs * 10));
+        },
+        { to: h.id },
+      );
+    }
+    return called;
   }
 
   // ---------------------------------------------------------------- bats
