@@ -75,6 +75,7 @@ const R_ZP_GROWL = { key: 'zv_growl', vol: 1.6, pitch: [0.88, 1.0] };
 // feral dogs (real dogs, pitched down a little: bigger and meaner) and the stray cat
 const R_DOG_BARK = { key: 'dog_bark', vol: 1.3, pitch: [0.82, 0.95] };
 const R_DOG_SNARL = { key: 'dog_snarl', vol: 1.2, pitch: [0.8, 0.95] };
+const R_CRAWLER = { key: 'dog_snarl', vol: 0.9, pitch: [1.55, 1.8] }; // the crawler: a dog's snarl from a raccoon's throat
 const R_DOG_HOWL = { key: 'dog_howl', vol: 1.85, pitch: [0.85, 0.98] };
 const R_DOG_YELP = { key: 'dog_yelp', vol: 1.05, pitch: [0.9, 1.05] };
 const R_CAT_MEOW = { key: 'cat_meow', vol: 2.4, pitch: [0.95, 1.08] };
@@ -254,6 +255,7 @@ def(S.CAT_PURR, 'cat_purr', 'fx', 0.45, 0.03, 0.1); // (in somebody else's arms,
 def(S.DOG_BARK, 'dog_bark', 'zombie', 0.95, 0.08, 0.15, R_DOG_BARK);
 def(S.DOG_HOWL, 'dog_howl', 'big', 0.8, 0.06, 0.15, R_DOG_HOWL);
 def(S.DOG_SNARL, 'dog_snarl', 'zombie', 0.85, 0.1, 0.15, R_DOG_SNARL);
+def(S.CRAWLER_CHITTER, 'z_crawler', 'zombie', 0.8, 0.1, 0.15, R_CRAWLER);
 def(S.DOG_YELP, 'dog_yelp', 'zombie', 0.8, 0.08, 0.15, R_DOG_YELP);
 def(S.SHADE_WHISPER, 'z_shade_whisper', 'zombie', 0.8, 0.1, 0.15, R_Z_WHISPER);
 def(S.SHADE_FREEZE, 'z_shade_freeze', 'zombie', 1, 0.06);

@@ -74,6 +74,9 @@ export class Hud {
     this.blood = el('div', 'fx-blood', layer);
     this.splats = el('div', 'fx-splats', layer);
     this.zvig = el('div', 'fx-zombie', layer);
+    // a crawler on your face (h.latch): the dark of its belly over your eyes, a little light round its edges once you
+    // have clawed at it
+    this.latch = el('div', 'fx-latch', layer);
 
     // ---- top-left info
     const info = el('div', 'hud-info', layer);
@@ -858,6 +861,14 @@ export class Hud {
     }
     const ul = up >= 0 ? h.useLabel || '' : '';
     if (c.useL !== ul) this.useLabel.textContent = c.useL = ul;
+
+    // blinded by a crawler on the face
+    const lt = Math.round(clamp(h.latch || 0, 0, 1) * 50) / 50;
+    if (c.latch !== lt) {
+      c.latch = lt;
+      this.latch.style.opacity = lt.toFixed(2);
+      this.latch.classList.toggle('on', lt > 0);
+    }
 
     // shove meter (pinned by a leaper)
     const sv = h.shove >= 0 ? Math.round(clamp(h.shove, 0, 1) * 100) / 100 : -1;

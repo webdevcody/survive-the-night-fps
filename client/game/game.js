@@ -4054,6 +4054,12 @@ export class Game {
     this.punchT = 0;
   }
 
+  // the crawler on our face, if one is (ZF.LINK: who it has hold of)
+  latchedBy() {
+    for (const e of this.entities.ents.values()) if (e.kind === ENT.ZOMBIE && e.ztype === ZTYPE.CRAWLER && e.q[6] === this.myId && !e.dead) return e;
+    return null;
+  }
+
   updateHud(dt, s, aiming, wdef) {
     const self = this.self;
     const g = this.global;
@@ -4081,6 +4087,8 @@ export class Game {
     // pinned by a leaper: the shove meter (-1: not pinned), the key to mash, and the presses so far (each jolts it)
     h.shove = self.alive && s.pinned && !s.zombie ? s.shove : -1;
     h.shoveKey = h.shove >= 0 ? bindLabel('jump') : '';
+    // ...by a crawler, on their face: they cannot see (the HUD's fx-latch), less so the further they have clawed it off
+    h.latch = h.shove >= 0 && this.latchedBy() ? 1 - 0.45 * s.shove : 0;
     h.shoves = this.shoves | 0;
     const w = currentWeapon(s);
     const def = WEAPONS[w];

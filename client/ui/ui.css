@@ -420,6 +420,7 @@ body {
 .stn-ui .fx-lowhp,
 .stn-ui .fx-blood,
 .stn-ui .fx-zombie,
+.stn-ui .fx-latch,
 .stn-ui .fx-splats {
   position: absolute;
   inset: 0;
@@ -452,6 +453,34 @@ body {
 
 .stn-ui.is-zombie .fx-zombie {
   opacity: 1;
+}
+
+/* a crawler on your face (hud.js): its matted belly over your eyes, near black, a glimmer of light through the fur
+   at the edges and the hot dark red of blood in the middle. Opacity is set from how far it has been clawed off */
+.stn-ui .fx-latch {
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 34% 26% at 50% 54%, rgba(48, 6, 4, 0.9), transparent 70%),
+    repeating-linear-gradient(103deg, rgba(60, 54, 46, 0.18) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(77deg, rgba(20, 18, 16, 0.5) 0 3px, transparent 3px 9px),
+    radial-gradient(ellipse 120% 110% at 50% 50%, #0b0908 55%, rgba(30, 26, 22, 0.96) 80%, rgba(70, 62, 52, 0.85) 100%);
+  transition: opacity 0.12s linear;
+}
+
+.stn-ui .fx-latch.on {
+  animation: stn-latchWrithe 0.9s ease-in-out infinite;
+}
+
+@keyframes stn-latchWrithe {
+  0%, 100% { transform: scale(1.04) translate(0, 0); }
+  35% { transform: scale(1.08) translate(-1.2%, 0.8%); }
+  70% { transform: scale(1.05) translate(1%, -0.6%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stn-ui .fx-latch.on {
+    animation: none;
+  }
 }
 
 .stn-ui .splat {

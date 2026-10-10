@@ -550,7 +550,7 @@ export class Combat {
     z.hp -= amount;
     if (z.link) {
       z.linkDmg += amount;
-      if (opts.melee && z.ztype === ZTYPE.LEAPER) g.zm.releaseLink(z);
+      if (opts.melee && (z.ztype === ZTYPE.LEAPER || z.ztype === ZTYPE.CRAWLER)) g.zm.releaseLink(z);
     }
     if (attacker) {
       z.aggroId = attacker.id;
