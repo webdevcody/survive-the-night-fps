@@ -281,7 +281,16 @@ function holeSingle(run, first, count, cut) {
 }
 
 export class StaticWorld {
-  constructor(scene, world) {
+  // stepwise: built a little at a time by whoever drives this.steps (Game.loadWorldSoon: the splash answering in
+  // between); otherwise built here and now
+  constructor(scene, world, { stepwise = false } = {}) {
+    const steps = this.build(scene, world);
+    if (stepwise) this.steps = steps;
+    else while (!steps.next().done);
+  }
+  // (a generator: it yields after each piece of work small enough to leave the page a frame - a part, a prop, a chunk,
+  // a material's buffers)
+  *build(scene, world) {
     this.scene = scene;
     this.group = new THREE.Group();
     this.group.name = 'static-world';
@@ -385,8 +394,9 @@ export class StaticWorld {
       }
       add(x, z, mat, tpl, new THREE.Matrix4().makeTranslation(lx, ly, lz).premultiply(m));
     };
-    world.parts.forEach((part, pi) => {
-      if (part.hidden) return; // (a solid the city's kit draws in its own way: citykit.js)
+    for (let pi = 0; pi < world.parts.length; pi++) {
+      const part = world.parts[pi];
+      if (part.hidden) continue; // (a solid the city's kit draws in its own way: citykit.js)
       let g;
       // glass: a thin pane set back in the opening, framed by casings (the wall below it came just before)
       const glass = part.shape === 'box' && part.mat === 'glass';
@@ -408,7 +418,8 @@ export class StaticWorld {
         const trimMat = getMaterial(world.parts[pi - 1]?.mat === 'clapboard' ? 'sash' : 'trim');
         for (const b of windowTrim(part.sx, part.sy, part.sz)) addTrim(part.x, part.z, trimMat, m, b);
       }
-    });
+      yield;
+    }
     // door casings on house walls: jambs and a head around each doorway that has a lintel over it (the
     // lintel sits exactly above the doorway centre and tells the wall's material and thickness)
     const lintels = new Map();
@@ -479,6 +490,7 @@ export class StaticWorld {
         }
         add(pr.x, pr.z, mats[0], cachedTpl(o.geometry, !!mats[0].vertexColors), m, null, null, null, tier, key);
       });
+      yield;
     }
     // the city's buildings, built from what the world says of each (world.city.buildings)
     if (world.city) buildCity(world, (x, z, matName, tpl, tier = 0) => add(x, z, staticSurface(getMaterial(matName)), tpl, IDENTITY, null, null, null, tier));
@@ -621,6 +633,7 @@ export class StaticWorld {
       m.runs = [];
       for (const list of m.lists) {
         fill(list, pos, nrm, uv, col, ground, tints, o);
+        yield;
         const sp = boundsOf(pos.subarray(o * 3, (o + list.verts) * 3));
         const run = { chunk: list.chunk, first: o, count: list.verts, maxDist: list.maxDist, side: list.side, x: sp.center.x, y: sp.center.y, z: sp.center.z, r: sp.radius };
         m.runs.push(run);

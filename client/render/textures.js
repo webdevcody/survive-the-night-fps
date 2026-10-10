@@ -118,6 +118,17 @@ export function setMaxAnisotropy(n) {
 }
 
 export const TEXTURE_NAMES = () => Object.keys(GEN);
+// Every texture made ahead of its first use, one a step (a generator: Game.loadWorldSoon gives the page a frame between
+// them). The ground's first: the terrain wants them first. (each is some 50 to 500 ms of drawing)
+export function* textureSteps() {
+  const names = Object.keys(GEN).sort((a, b) => b.startsWith('ground_') - a.startsWith('ground_'));
+  for (const name of names) {
+    if (!cache.has(name)) {
+      getTexture(name);
+      yield;
+    }
+  }
+}
 
 function finish(out, name) {
   let t;

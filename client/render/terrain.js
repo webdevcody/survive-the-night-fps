@@ -326,12 +326,21 @@ export function groundFields(world) {
 }
 
 export function buildTerrain(world) {
+  const steps = terrainSteps(world);
+  let r;
+  while (!(r = steps.next()).done);
+  return r.value;
+}
+// ...a little at a time (Game.loadWorldSoon): a generator that yields between pieces of the work and returns the terrain
+export function* terrainSteps(world) {
   const N = world.gridN;
   const MAP_HALF = world.half;
   const H = world.heights;
   const count = N * N;
   const F = groundFields(world);
+  yield;
   const frame = roadFrame(world);
+  yield;
   const pos = new Float32Array(count * 3);
   const extra = new Float32Array(count * 4);
   const roadAttr = new Float32Array(count * 4);
@@ -355,6 +364,7 @@ export function buildTerrain(world) {
       soilAttr[k * 2] = Math.round(F.soil[k] * 255);
       soilAttr[k * 2 + 1] = Math.round(F.scree[k] * 255);
     }
+    if (j % 32 === 31) yield;
   }
   // One vertex buffer for the whole heightfield, drawn as TERRAIN_CHUNK x TERRAIN_CHUNK-cell pieces with an index
   // buffer and a bounding sphere each, so what is behind the camera or past the edge of a shadow cascade is not
@@ -403,6 +413,7 @@ export function buildTerrain(world) {
       const sz = ((j1 - cj) * GRID_STEP) / 2;
       runs.push({ first, count: o - first, x: -MAP_HALF + ci * GRID_STEP + sx, y: (lo + hi) / 2, z: -MAP_HALF + cj * GRID_STEP + sz, r: Math.hypot(sx, sz, (hi - lo) / 2), hx: sx, hz: sz, chunk: far ? { on: true, near: 0 } : ALWAYS, maxDist: Infinity });
     }
+    yield;
   }
   const geo = new THREE.BufferGeometry();
   for (const name in attrs) geo.setAttribute(name, attrs[name]);

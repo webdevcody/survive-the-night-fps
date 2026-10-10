@@ -111,7 +111,8 @@ import { DropHold } from './drophold.js';
 import { SkyFlares } from './skyflares.js';
 import { Voice } from './voice.js';
 import { Environment } from '../render/environment.js';
-import { buildTerrain, buildWater } from '../render/terrain.js';
+import { textureSteps } from '../render/textures.js';
+import { terrainSteps, buildWater } from '../render/terrain.js';
 import { buildMine } from '../render/mine.js';
 import { buildShips } from '../render/ships.js';
 import { buildClinic, disposeClinic } from '../render/clinic.js';
@@ -195,6 +196,7 @@ const AT_ROUND_IN = 0.62;
 const HEAL_ITEMS = [ITEM.BANDAGE, ITEM.TUNA, ITEM.VENISON, ITEM.PAINKILLERS, ITEM.MEDKIT];
 const PING_LIFE = 12;
 const MOVING_NOTE_MS = 400; // a deploy that takes longer than this to bring us back says so (onMoving)
+const BUILD_SLICE_MS = 10; // loadWorldSoon: the longest the world's build holds the page at a time (a frame is 16)
 const WAYPOINT_REACH = 10; // metres: this close to a waypoint that is not on a named place and it is reached
 // two waypoints on one spot: on the same place, or bare spots a few steps apart
 const sameSpot = (a, b) => (a.zone >= 0 || b.zone >= 0 ? a.zone === b.zone : Math.hypot(a.x - b.x, a.z - b.z) < WAYPOINT_REACH);
@@ -541,10 +543,62 @@ export class Game {
     this.cine?.worldChanged();
   }
 
+  // The world of seed (and act), built here and now: a join, the crossing, a new map - the game wants it before its
+  // next frame. (One being built a step at a time - loadWorldSoon - is finished first.)
   // act: which of the run's two maps to make of the seed (shared/acts.js)
   loadWorld(seed, act = WORLD.ISLAND) {
+    this.finishBuild();
     if (this.seed === seed && this.act === act && this.world) return;
+    const steps = this.buildWorld(seed, act);
+    while (!steps.next().done);
+  }
+  // ...or a step at a time, the page answering in between: the backdrop behind the splash, whose build held the main
+  // thread for seconds (a click or a key on the splash waited for all of it). The steps run for at most
+  // BUILD_SLICE_MS a task: first the textures made ahead of their first use (most of the time a build took: each is a
+  // block of its own), then buildWorld's. Nothing is updated or drawn of the world until it is whole (update, main.js).
+  // A loadWorld meanwhile finishes it at once (and the textures not made yet are made when first wanted, as ever).
+  // Resolves when the world is built.
+  loadWorldSoon(seed, act = WORLD.ISLAND) {
+    this.finishBuild();
+    if (this.seed === seed && this.act === act && this.world) return Promise.resolve();
+    const b = (this.building = { pre: textureSteps(), steps: this.buildWorld(seed, act), done: null });
+    return new Promise((done) => {
+      b.done = done;
+      const slice = () => {
+        if (this.building !== b) return; // (finished at once by a loadWorld)
+        const t0 = performance.now();
+        try {
+          while (performance.now() - t0 < BUILD_SLICE_MS) {
+            if (b.pre && !b.pre.next().done) continue;
+            b.pre = null;
+            if (!b.steps.next().done) continue;
+            this.building = null;
+            return done();
+          }
+        } catch (err) {
+          // (as a build in one go would have thrown: the page goes on without a backdrop, a join builds its world anew)
+          console.error('world build failed', err);
+          this.building = null;
+          this.halfBuilt = false;
+          this.seed = undefined; // (so that a loadWorld of the same seed builds it again)
+          return done();
+        }
+        setTimeout(slice, 0);
+      };
+      setTimeout(slice, 0);
+    });
+  }
+  finishBuild() {
+    const b = this.building;
+    if (!b) return;
+    this.building = null;
+    while (!b.steps.next().done);
+    b.done?.();
+  }
+  // (a generator: it yields between pieces of the build small enough to leave the page a frame)
+  *buildWorld(seed, act) {
     const t0 = performance.now();
+    this.halfBuilt = true; // (until the end: prewarm waits for the whole of it)
     if (this.world) this.unloadWorld();
     this.seed = seed;
     this.act = act;
@@ -559,7 +613,8 @@ export class Game {
     G.uHaze.value.set(this.world.size > 1000 ? HAZE_BASE : 0, this.world.size > 1000 ? 1 / HAZE_THIN : 0);
     this.renderer.camera.far = this.world.size > 1000 ? FAR_BIG : FAR_SMALL;
     this.renderer.camera.updateProjectionMatrix();
-    this.terrain = buildTerrain(this.world);
+    yield;
+    this.terrain = yield* terrainSteps(this.world);
     this.terrain.userData.setShadows(!!this.renderer.q.shadows); // hills shade the valleys at low sun
     this.scene.add(this.terrain);
     this.water = buildWater(this.world);
@@ -578,11 +633,16 @@ export class Game {
     this.ships = buildShips(this.scene, this.world); // (the mainland's: the freighter at the docks' quay, drawn only)
     this.under = 0;
     const t2 = performance.now();
-    this.staticWorld = new StaticWorld(this.scene, this.world);
+    yield;
+    const sw = new StaticWorld(this.scene, this.world, { stepwise: true });
+    yield* sw.steps;
+    this.staticWorld = sw;
     this.staticWorld.setShadows(!!this.renderer.q.shadows);
     const t3 = performance.now();
+    yield;
     this.foliage = new Foliage(this.scene, this.world, this.renderer.q, this.settings.grassDistance);
     const t4 = performance.now();
+    yield;
     if (!this.effects) this.effects = new Effects(this.scene, this.renderer.vmScene, this.world);
     else this.effects.world = this.world;
     // the marks blows and bullets leave, and the wrecks taken apart (none of the old world's are left)
@@ -616,8 +676,10 @@ export class Game {
         this.staticFires.push({ x: l.x, y: l.y - 0.4, z: l.z, intensity: 1, big: true });
       }
     }
+    yield;
     this.ui.map.setWorld(this.world);
     this.ui.map.baked(); // (the minimap draws from it at once: bake it here, in the load, not on the first frame)
+    this.halfBuilt = false;
     this.prewarm();
     console.log(`[client] world ${seed}: gen ${(t1 - t0).toFixed(0)}ms, terrain ${(t2 - t1).toFixed(0)}ms, static ${(t3 - t2).toFixed(0)}ms, foliage ${(t4 - t3).toFixed(0)}ms, rest ${(performance.now() - t4).toFixed(0)}ms`);
   }
@@ -673,7 +735,7 @@ export class Game {
   // (other lights and shadows: another program for every lit material).
   prewarm() {
     const key = `${this.renderer.quality}:${this.seed}:${this.act}`;
-    if (!this.world || key === this.warmKey) return;
+    if (!this.world || this.halfBuilt || key === this.warmKey) return; // (a world half built: its own build warms it when done)
     this.warmKey = key;
     this.warmTodo ||= this.warmViews();
     this.scene.add(this.warmSet);
@@ -3095,6 +3157,7 @@ export class Game {
 
   // ---------------------------------------------------------------- frame
   update(dt) {
+    if (this.building) return; // (a world half built: nothing of it is updated, nor drawn - main.js)
     this.frame++;
     this.time += dt;
     const time = this.time;

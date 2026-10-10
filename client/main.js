@@ -367,8 +367,8 @@ function applySettings(s) {
 
 // build the world behind the splash screen as soon as we know the server's seed
 async function preload() {
-  // ...but not before the splash has had a frame on screen: the build holds the main thread for seconds, and on a
-  // fast link the seed can be here before the first frame is out
+  // ...but not before the splash has had a frame on screen (on a fast link the seed can be here before the first frame
+  // is out), and a step at a time (Game.loadWorldSoon): built in one go it held the page for seconds
   const painted = new Promise((done) => {
     requestAnimationFrame(() => setTimeout(done, 0)); // (a timer set from a frame callback runs after that frame's paint)
     setTimeout(done, 500); // a tab opened in the background gets no frame: build there anyway
@@ -378,12 +378,12 @@ async function preload() {
     const code = linkedCode();
     const seed = code ? (await gameInfo(code)).seed : (await listGames()).list.find((g) => !g.full)?.seed;
     await painted;
-    if (seed && game.state === 'menu') game.loadWorld(seed);
-    else if (!game.world) game.loadWorld(1337); // (none running yet: a backdrop, and the join builds its own)
+    if (seed && game.state === 'menu') game.loadWorldSoon(seed);
+    else if (!game.world && !game.building) game.loadWorldSoon(1337); // (none running yet: a backdrop, and the join builds its own)
   } catch {
     // server offline: the UI shows it; build a placeholder world so the menu has a backdrop
     await painted;
-    if (!game.world) game.loadWorld(1337);
+    if (!game.world && !game.building) game.loadWorldSoon(1337);
   }
 }
 preload();
@@ -462,7 +462,7 @@ function frame(now) {
   }
   const t1 = performance.now();
   // (nothing is drawn while the scene's shader programs are being built in the background: Game.prewarm)
-  if (game.post && !game.warm?.hold) {
+  if (game.post && !game.warm?.hold && !game.building) {
     renderer.render(game.post, game.state === 'playing');
     showScene();
     // a few seconds into a shot of the walk, faded all the way in, the shaders all built
