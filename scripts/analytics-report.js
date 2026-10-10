@@ -25,6 +25,7 @@ const QUESTIONS = [
   ['daily', 'Day by day'],
   ['by_team_size', 'By team size (most players at once)'],
   ['night_funnel', 'Night by night: how many teams reach each night and see it through'],
+  ['night_pacing', 'The pacing director by team size and moon: breathers (relaxes) and early groups (pulls) a night'],
   ['bosses', 'Bosses'],
   ['death_causes', 'What downs and kills survivors'],
   ['damage_sources', 'Where the damage survivors take comes from'],

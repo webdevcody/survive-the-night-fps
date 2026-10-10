@@ -1319,6 +1319,39 @@
   color: #ffb3a6;
 }
 
+/* tonight's moon: a blood moon is the loudest row on the card, a clear moon a cool, quiet one */
+.stn-ui .tn-blood {
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  background: linear-gradient(90deg, rgba(160, 20, 14, 0.5), rgba(160, 20, 14, 0.08));
+  box-shadow: inset 3px 0 0 #e0301e;
+}
+
+.stn-ui .tn-blood .tn-ico svg,
+.stn-ui .tn-blood .tn-name {
+  color: #ff5a44;
+}
+
+.stn-ui .tn-blood .tn-tag {
+  border-color: rgba(255, 70, 50, 0.8);
+  color: #ffb3a6;
+}
+
+.stn-ui .tn-clear {
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  background: linear-gradient(90deg, rgba(120, 150, 210, 0.22), rgba(120, 150, 210, 0.04));
+  box-shadow: inset 3px 0 0 #a9c0ec;
+}
+
+.stn-ui .tn-clear .tn-ico svg,
+.stn-ui .tn-clear .tn-name {
+  color: #cfdcf6;
+}
+
+.stn-ui .tn-clear .tn-tag {
+  border-color: rgba(169, 192, 236, 0.6);
+  color: #cfdcf6;
+}
+
 /* the few words under a name fold away once the card has had its time */
 .stn-ui .tn-brief {
   display: grid;

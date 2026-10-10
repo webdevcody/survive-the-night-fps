@@ -34,6 +34,10 @@ uniform vec3 uCloudOff;
 uniform float uFlash;
 uniform vec3 uFlashDir;
 uniform vec3 uFog;
+uniform vec3 uMoonCol;
+uniform vec3 uMoonHalo;
+uniform vec3 uMoonShape;
+uniform float uMoonWide;
 ${FOG_FUNCS}
 float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float noise(vec3 x) {
@@ -57,8 +61,11 @@ void main() {
   // moon + stars (hidden behind a storm deck)
   float clear = 1.0 - uOvercast * 0.94;
   float md = max(dot(d, uMoonDir), 0.0);
-  col += vec3(0.55, 0.62, 0.75) * pow(md, 300.0) * uNight * 0.6 * clear;
-  col += vec3(0.85, 0.88, 0.95) * smoothstep(0.99955, 0.99975, md) * uNight * 1.6 * clear;
+  // (uMoonShape: the disc's inner and outer edge, the halo's falloff; uMoonWide: a wide glow round it, 0 on a plain
+  // night - a blood moon hangs bigger, in a wide red halo)
+  col += uMoonHalo * pow(md, uMoonShape.z) * uNight * 0.6 * clear;
+  col += uMoonHalo * pow(md, 24.0) * uNight * 0.12 * uMoonWide * clear;
+  col += uMoonCol * smoothstep(uMoonShape.x, uMoonShape.y, md) * uNight * 1.6 * clear;
   // stars
   if (uNight > 0.01 && h > 0.0) {
     vec3 sp = d * 420.0;
@@ -122,6 +129,24 @@ const KEYS = [
   { s: 0.55, zenith: C(0x5a6778), horizon: C(0x8e9594), glow: C(0xbcb3a2), hemiSky: C(0xadb6ba), hemiGround: C(0x33302a), hemi: 0.86, dir: C(0xf6e6cf), dirI: 2.15, fog: C(0x7e8584), fogD: 0.0074, mist: 0.004, scatter: 0.6, rays: 0.6, exposure: 0.92 },
   { s: 1.0, zenith: C(0x5a6778), horizon: C(0x8e9594), glow: C(0xbcb3a2), hemiSky: C(0xadb6ba), hemiGround: C(0x33302a), hemi: 0.88, dir: C(0xf6e6cf), dirI: 2.2, fog: C(0x7e8584), fogD: 0.0072, mist: 0.003, scatter: 0.55, rays: 0.55, exposure: 0.92 },
 ];
+// Tonight's moon (Game.moon: shared/constants.js MOON), over the night palette as the night comes on. A blood moon:
+// a big red disc in a wide red halo, the moonlight, the sky's ambient, the haze and the sky itself gone the colour of
+// it - you know at a glance what kind of night it is. A clear moon: the plain white moon a little larger and brighter,
+// half as much again of its light and a lighter ambient, cool blue haze, and none of the red the dusk leaves in the sky.
+const RGB = (r, g, b) => new THREE.Color().setRGB(r, g, b); // (as the sky shader always had it: no sRGB decode)
+const MOON_PLAIN = { disc: RGB(0.85, 0.88, 0.95), halo: RGB(0.55, 0.62, 0.75), shape: [0.99955, 0.99975, 300], wide: 0 };
+const MOON_BLOOD = {
+  disc: C(0xff3a22), halo: C(0xc0281a), shape: [0.9991, 0.99945, 120], wide: 1,
+  dir: C(0xff4a30), dirI: 1.45, hemiSky: C(0x9a3c34), hemiGround: C(0x240c0c), hemi: 1.2,
+  zenith: C(0x1a050c), horizon: C(0x4a1210), glow: C(0x7a1812), fog: C(0x300d0c), fogD: 1.0, tint: 0.7,
+};
+const MOON_CLEAR = {
+  disc: C(0xf4f7ff), halo: C(0xaabce0), shape: [0.9994, 0.99968, 220], wide: 0.4,
+  dir: C(0xc4d4f4), dirI: 1.55, hemiSky: C(0x6a82b4), hemiGround: C(0x161a26), hemi: 1.3,
+  zenith: C(0x050a1a), horizon: C(0x141c30), glow: C(0x18223c), fog: C(0x10162a), fogD: 0.85, tint: 0.6,
+};
+const MOON_COLORS = ['dir', 'hemiSky', 'hemiGround', 'zenith', 'horizon', 'glow', 'fog'];
+
 // what is left of all that well down the mine: no sun, a trace of ambient to make shapes out by, dark haze
 const UNDER = { hemi: 0.1, hemiSky: C(0x566078), hemiGround: C(0x15141a), fog: C(0x020203), fogD: 0.03, exposure: 1.5 };
 const COLOR_KEYS = ['zenith', 'horizon', 'glow', 'hemiSky', 'hemiGround', 'dir', 'fog'];
@@ -164,6 +189,10 @@ export class Environment {
       uFlash: { value: 0 },
       uFlashDir: { value: new THREE.Vector3(0, 1, 0) },
       uFog: { value: new THREE.Color() },
+      uMoonCol: { value: new THREE.Color() },
+      uMoonHalo: { value: new THREE.Color() },
+      uMoonShape: { value: new THREE.Vector3(0.99955, 0.99975, 300) },
+      uMoonWide: { value: 0 },
       ...G,
     };
     const sky = new THREE.Mesh(
@@ -211,6 +240,9 @@ export class Environment {
     // the eye towards the one that lights the haze most; color: its light
     this.flare = { ground: 0, sky: 0, dir: new THREE.Vector3(0, 1, 0), color: new THREE.Color(1, 1, 1) };
     this._flareCol = new THREE.Color();
+    // tonight's moon as it shows, eased in and out (applyMoon): blood 0..1, clear 0..1
+    this.moonMix = { blood: 0, clear: 0 };
+    this._moonA = new THREE.Color();
   }
 
   // quality: renderer.q (shadows, shadowMapSize, shadowDist)
@@ -244,7 +276,7 @@ export class Environment {
   }
 
   // w: weather state (client/game/weather.js), optional. overrides: { fogMul, mistMul } (look-dev), { under }: how
-  // far down the mine the eye is, 0..1 (Game)
+  // far down the mine the eye is, 0..1 (Game), { moon }: tonight's moon (MOON: 0 plain, 1 blood, 2 clear)
   update(dt, targetCycle, camPos, time, w = null, overrides = {}) {
     // smooth cycle (handles wrap)
     let d = targetCycle - this.cycle;
@@ -270,6 +302,7 @@ export class Environment {
     if (overrides.fogMul) c.fogD *= overrides.fogMul;
     this.night = 1 - Math.max(0, Math.min(1, (sunH + 0.12) / 0.3));
     const u = this.uniforms;
+    this.applyMoon(dt, overrides.moon || 0);
     if (w) this.applyWeather(dt, w);
     this.applyFlare(overrides.under || 0);
     // down the mine none of it arrives: the sky's light and the sun go out, and the haze between the eye and
@@ -335,6 +368,42 @@ export class Environment {
     r.color.copy(c.dir).multiplyScalar(c.dirI * 0.3);
     r.strength = c.rays * handover * (useSun ? 1 : 0.5);
     r.sigma = Math.max(0.006, c.fogD * 2.2);
+  }
+
+  // Tonight's moon (MOON_BLOOD / MOON_CLEAR) on top of the time-of-day palette, as far as it is night, before the
+  // weather (a storm deck still hides it). moon: 0 plain, 1 blood, 2 clear; the change eases in over a few seconds.
+  applyMoon(dt, moon) {
+    const m = this.moonMix;
+    const ease = Math.min(1, dt * 0.6);
+    m.blood += ((moon === 1 ? 1 : 0) - m.blood) * ease;
+    m.clear += ((moon === 2 ? 1 : 0) - m.clear) * ease;
+    if (m.blood < 1e-3) m.blood = 0;
+    if (m.clear < 1e-3) m.clear = 0;
+    const u = this.uniforms;
+    const disc = u.uMoonCol.value.copy(MOON_PLAIN.disc);
+    const halo = u.uMoonHalo.value.copy(MOON_PLAIN.halo);
+    const shape = u.uMoonShape.value.set(...MOON_PLAIN.shape);
+    u.uMoonWide.value = 0;
+    const c = this.cur;
+    // the night palette takes it on as the light drains (and the dusk sky already starts to turn with it)
+    const k = Math.max(this.night, 0.35 * (1 - Math.min(1, Math.max(0, this.sunHeight / 0.15))));
+    for (const [P, w] of [
+      [MOON_BLOOD, m.blood],
+      [MOON_CLEAR, m.clear],
+    ]) {
+      if (!w) continue;
+      disc.lerp(P.disc, w);
+      halo.lerp(P.halo, w);
+      shape.x += (P.shape[0] - shape.x) * w;
+      shape.y += (P.shape[1] - shape.y) * w;
+      shape.z += (P.shape[2] - shape.z) * w;
+      u.uMoonWide.value += P.wide * w;
+      const t = w * k;
+      for (const key of MOON_COLORS) c[key].lerp(P[key], t * P.tint);
+      c.dirI *= 1 + (P.dirI - 1) * t;
+      c.hemi *= 1 + (P.hemi - 1) * t;
+      c.fogD *= 1 + (P.fogD - 1) * t;
+    }
   }
 
   // A flare gun's flare (this.flare) on top of the palette and the weather: by night its light lifts the sky's ambient

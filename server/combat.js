@@ -610,6 +610,7 @@ export class Combat {
     );
     if (!opts.fire && !opts.gib) g.sound(z.boss ? SOUND.BOSS_ROAR : z.ztype === ZTYPE.DOG ? SOUND.DOG_YELP : SOUND.ZOMBIE_DEATH, z.x, z.y + Math.min(1.5, z.def.height), z.z, z.boss ? 150 : 35);
     if (g.phase === PHASE.NIGHT || g.escape?.active) g.nightStats.kills++;
+    g.director?.killed(g, z);
     // a boss still standing when the dawn sun sets it alight is the sun's kill, whoever lands the last blow: what it
     // carried burns with it. Its loot is for the team that brings it down before sunrise (a molotov or the
     // flamethrower is burnT, not onFire: that still pays out)
@@ -864,6 +865,7 @@ export class Combat {
               s.pullZ = roper.z;
               tp.ropedBy = roper.id;
               g.track?.grabbed(tp, 'roped');
+              g.director?.grabbed(g, tp);
               g.sound(SOUND.ROPER_SHOOT, s.x, s.y + 1, s.z, 30);
               done = true;
               break;

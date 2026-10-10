@@ -2264,6 +2264,7 @@ export class Zombies {
         s.vx = s.vz = 0;
         h.pinnedBy = z.id;
         g.track?.grabbed(h, 'pinned');
+        g.director?.grabbed(g, h);
         g.sound(SOUND.LEAPER_SCREECH, z.x, z.y + 1, z.z, 40);
         g.damagePlayer(h, 10, { kind: KILLER.ZOMBIE, ztype: z.ztype, x: z.x, z: z.z });
         return true;

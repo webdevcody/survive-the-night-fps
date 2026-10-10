@@ -45,6 +45,8 @@ server/      authoritative game server (uWebSockets.js)
   room-worker.js one game server: a worker thread running one Game and its tick loop
   wire.js        the packed frames the two threads pass sockets' messages in
   game.js        the simulation of one game (Game), and everything it sends
+  director.js    the pacing director (breathers after a peak, the next group early when it is quiet) and tonight's
+                 moon: a blood moon now and then, a clear one for a team that is struggling (see Night waves)
 client/      three.js client (Vite root)
   index.html, main.js
   net/        connection, snapshot decode, interpolation, prediction
@@ -1608,6 +1610,15 @@ nobody's state; the one thing the server keeps is each wreck's short record of t
   The horde takes one new kind a night: `startNight` zeroes the weight of every kind whose `ZOMBIE_DEFS[t].minNight`
   is still to come, and puts the night's new one in the second wave if the draw left it out. By day the kinds are not
   gated by night but by distance from the car (`Zombies.daySpecial`, `DAY_SPECIAL_*`).
+  The pacing director (`server/director.js`, `PACE` in constants.js) keeps `p.intensity` per survivor (damage, downs,
+  grabs, nearby kills, decaying by the second) and moves only *when* groups come: past `PACE.PEAK` it waits for a break
+  in the hits and holds the wave queues (`Director.tick`, at most `PACE.HOLD_MAX` s a night); a quiet spell between
+  waves brings the next wave's first group early. Boss timing and horde size are untouched. At the dusk horn
+  `Director.pickMoon` sets `Game.moon` (in the global state): a blood moon (`BLOOD_MOON_CHANCE` from night 2, never two
+  running) brings `BLOOD_MOON_HORDE` times the horde and no breathers; a team that is struggling gets a clear moon
+  instead (`CLEAR_PACE`: breathers sooner and longer). The client tints the sky, the moon and the light to match
+  (`Environment.applyMoon`) and says so at the horn, on the dusk card and at nightfall. Night records carry the moon
+  and the relax / pull counts (`npm run report -- --only night_pacing`).
 - **Noise.** `Zombies.noise(x, z, loud)` is the one entry point: `loud` is the radius (m) the noise carries
   (`NOISE` in constants.js; gunshots use `WEAPONS[w].noise`). Every zombie inside it with no target heads for
   the spot (`alertX/Z`, `alertT`), at a speed set by how loud it was where the zombie stood (`alertRush`,
