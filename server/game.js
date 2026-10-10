@@ -679,6 +679,16 @@ export class Game {
     p.arriving = null;
     return false;
   }
+  // Everybody here has a new world to build - the mainland, a new run's island - and their page holds for as long as
+  // that takes (seconds; more on a slow machine), nothing on their screen, while the game runs on. They are arriving
+  // again: as safe as one back from a drop (safe) until their page is running - ARRIVE_TICKS ticks of commands, or
+  // anything they do (arrived) - or ARRIVE_MAX at most. A page that builds it quickly is playing a few ticks later.
+  // (Only a page that was sending commands - hasSeq: what has none to stop sending, a test's or a bot's that never
+  // sends any, is as it was)
+  newWorldForAll() {
+    if (ARRIVE_MAX <= 0) return;
+    for (const p of this.players.values()) if (p.session && !p.away && p.hasSeq) p.arriving = { until: this.time + ARRIVE_MAX, n: 0, tick: -1 };
+  }
   // a command packet from one who is back: their client is running. ARRIVE_TICKS ticks with one, and they are playing
   arrived(p) {
     const a = p.arriving;
@@ -1320,6 +1330,7 @@ export class Game {
       this.spawnHuman(p);
     }
     this.notify(NOTIFY.NEW_GAME, this.day);
+    this.newWorldForAll(); // (a new island: every page builds it)
     this.globalDirty = true;
     this.playersDirty = true;
     this.track.start();
@@ -1533,6 +1544,7 @@ export class Game {
     this.track.arrived(back);
     this.timeLeft = this.dayLen;
     this.notify(NOTIFY.ARRIVED, back);
+    this.newWorldForAll(); // (a page still building the mainland - a skip, a slow machine, /map2 - is nobody's prey)
     this.sound(SOUND.DAWN, 0, 0, 0, 0);
     this.globalDirty = true;
     this.playersDirty = true;

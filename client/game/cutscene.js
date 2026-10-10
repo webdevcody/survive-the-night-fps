@@ -166,8 +166,10 @@ if (typeof Image === 'function' && typeof setTimeout === 'function') {
   if (typeof globalThis.requestIdleCallback === 'function') globalThis.requestIdleCallback(fetchArt, { timeout: 10_000 });
   else setTimeout(fetchArt, 5000);
 }
-class LoadingCard {
-  constructor(parent, before) {
+// own: { title, sub } of a card that is not the crossing's (Game.onWorld: a new world with no cutscene) - plain, with
+// no picture: the crossing's is of the mainland
+export class LoadingCard {
+  constructor(parent, before, own = null) {
     const el = (tag, cls, p, text) => {
       const d = document.createElement(tag);
       d.className = cls;
@@ -178,14 +180,16 @@ class LoadingCard {
     this.root = document.createElement('div');
     this.root.className = 'cine-load';
     parent.insertBefore(this.root, before); // (under the letterbox bars and the skip line)
-    const img = el('img', 'cine-load-art', this.root);
-    img.alt = '';
-    img.src = LOADING_ART;
-    img.decode?.().catch(() => {}); // (decoded now, not in the frame it first shows)
+    if (!own) {
+      const img = el('img', 'cine-load-art', this.root);
+      img.alt = '';
+      img.src = LOADING_ART;
+      img.decode?.().catch(() => {}); // (decoded now, not in the frame it first shows)
+    }
     const mid = el('div', 'cine-load-mid', this.root);
     el('div', 'cine-load-spin', mid);
-    el('div', 'cine-load-title', mid, 'Loading map 2');
-    el('div', 'cine-load-sub', mid, 'The mainland · Town Center');
+    el('div', 'cine-load-title', mid, own ? own.title : 'Loading map 2');
+    el('div', 'cine-load-sub', mid, own ? own.sub : 'The mainland · Town Center');
     this.on = false;
     this.painted = false; // it has been on screen for a frame (what the world swap waits for)
     this.turn = 0;

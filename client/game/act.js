@@ -14,6 +14,8 @@ const WORDS = {
 };
 // the words for this act's vehicle
 export let W = WORDS[ACT_NOW];
+// the words of any act's, not only this one's (the loading card of a world being changed to)
+export const wordsOf = (act) => WORDS[act] || WORDS[WORLD.ISLAND];
 
 export function setAct(act) {
   ACT_NOW = act === WORLD.MAINLAND ? WORLD.MAINLAND : WORLD.ISLAND;
