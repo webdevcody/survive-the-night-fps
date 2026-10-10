@@ -137,8 +137,8 @@ const RGB = (r, g, b) => new THREE.Color().setRGB(r, g, b); // (as the sky shade
 const MOON_PLAIN = { disc: RGB(0.85, 0.88, 0.95), halo: RGB(0.55, 0.62, 0.75), shape: [0.99955, 0.99975, 300], wide: 0 };
 const MOON_BLOOD = {
   disc: C(0xff3a22), halo: C(0xc0281a), shape: [0.9991, 0.99945, 120], wide: 1,
-  dir: C(0xff4a30), dirI: 1.15, hemiSky: C(0x7a2e2a), hemiGround: C(0x1c0a0a), hemi: 1.0,
-  zenith: C(0x14040a), horizon: C(0x3a0e0c), glow: C(0x6a1410), fog: C(0x22090a), fogD: 1.1, tint: 0.7,
+  dir: C(0xff4a30), dirI: 1.45, hemiSky: C(0x9a3c34), hemiGround: C(0x240c0c), hemi: 1.2,
+  zenith: C(0x1a050c), horizon: C(0x4a1210), glow: C(0x7a1812), fog: C(0x300d0c), fogD: 1.0, tint: 0.7,
 };
 const MOON_CLEAR = {
   disc: C(0xf4f7ff), halo: C(0xaabce0), shape: [0.9994, 0.99968, 220], wide: 0.4,

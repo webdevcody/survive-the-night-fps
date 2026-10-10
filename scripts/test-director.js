@@ -159,10 +159,11 @@ const baseline = (() => {
   const w1 = g.waves[1];
   const before = w1.queue.length;
   let pulledAt = -1;
-  run(g, w1.start - 0.5, () => {
+  run(g, WAVE_TIMES[1] * (g.nightLen / 150) - 0.5, () => {
     if (g.pace.pulls && pulledAt < 0) pulledAt = elapsed(g);
   });
-  check('a quiet spell between waves brings the next wave\'s first group in early', g.pace.pulls === 1 && w1.pulled && !w1.started && w1.queue.length < before && pulledAt > 0 && pulledAt < w1.start, `pulls ${g.pace.pulls}, at ${pulledAt}, queue ${before} -> ${w1.queue.length}`);
+  const due = WAVE_TIMES[1] * (g.nightLen / 150);
+  check('a quiet spell between waves brings the next wave in early, its first group at once', g.pace.pulls === 1 && w1.pulled && w1.started && g.wave === 2 && w1.queue.length < before && pulledAt > 0 && pulledAt < due - 1, `pulls ${g.pace.pulls}, at ${pulledAt} (due ${due}), queue ${before} -> ${w1.queue.length}`);
   check('...once a wave', (run(g, 1), g.pace.pulls === 1));
   run(g, g.nightLen);
   check('pulling forward changes when they come, not how many', g.sent === total, `${g.sent}/${total}`);

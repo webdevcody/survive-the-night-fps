@@ -82,24 +82,24 @@ export function tick(g, dt) {
       if (pc.held < lim.holdMax && queued(g)) {
         pc.relaxT = Math.min(lim.relax, lim.holdMax - pc.held);
         pc.relaxes++;
-        g.track?.paceRelax?.();
       }
     }
   } else if (team >= lim.peak && pc.held < lim.holdMax && queued(g)) {
     pc.pending = true;
   }
-  // Build up: a quiet spell between waves brings the next wave's first group in early (once a wave)
-  const next = g.waves.find((wv) => !wv.started);
+  // Build up: a quiet spell between waves brings the next wave in early, its first group at once (once a wave). It
+  // starts the way a wave on time does (Game.updatePhase, just after this), so it is announced and the cemetery takes
+  // its share of it; its head count is the one it was planned with. (A wave that never starts on its own - the
+  // cemetery's share, start Infinity - is not one to bring forward.)
+  const next = g.waves.find((wv) => !wv.started && Number.isFinite(wv.start));
   const between = next && !g.waves.some((wv) => wv.started && wv.queue.length);
   if (between && !next.pulled && team < PACE.QUIET) pc.quietT += dt;
   else pc.quietT = 0;
   if (pc.quietT >= lim.quietTime) {
     pc.quietT = 0;
     next.pulled = true;
-    if (g.spawnHordeGroup(next.queue)) {
-      pc.pulls++;
-      g.track?.pacePull?.();
-    }
+    next.start = Math.min(next.start, g.nightLen - g.timeLeft);
+    pc.pulls++;
   }
   return false;
 }

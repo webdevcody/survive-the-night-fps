@@ -1607,7 +1607,7 @@ export class Game {
         const moon = this.global.moon;
         if (moon === MOON.BLOOD) {
           // a blood moon leads: it is the thing about tonight (the theme still says what the horde is made of)
-          ui.notify(`NIGHT ${arg}: BLOOD MOON`, 'danger', 6);
+          ui.notify(`NIGHT ${arg}: BLOOD MOON`, 'big', 6);
           ui.notify('More of them than any night yet, and they will not let up. Hold together.', 'sub', 6);
           if (th) ui.notify(`${th.name}: ${th.warn}`, 'toast', 8);
         } else {
@@ -1632,7 +1632,7 @@ export class Game {
         // dark (hud2.js Tonight, from Game.tonight), and the objective says where to board up
         // ...unless tonight is a blood moon: that is said out loud (and the sky turns red as the sun goes)
         if (this.global.moon === MOON.BLOOD) {
-          ui.notify('A BLOOD MOON IS RISING', 'danger', 6);
+          ui.notify('A BLOOD MOON IS RISING', 'big', 6);
           ui.notify('Tonight will hurt: more of them, and no let-up. Dig in.', 'sub', 6);
           a.stinger?.('boss');
         } else ui.notify('THE HORDE IS COMING', 'danger', 5);

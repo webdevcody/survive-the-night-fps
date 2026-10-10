@@ -158,7 +158,7 @@ export const BOSS_HP_PER_NIGHT = 0.1; // ...and this share of it for every night
 // its amount, going down DOWN, a leaper's pin or a roper's rope GRAB, a kill within KILL_RANGE m KILL; it sinks by
 // DECAY a second. The team's is its highest survivor's. Above PEAK the director waits for a break (no survivor hit
 // by the dead for BREAK s), then holds the wave queues for RELAX s - HOLD_MAX s a night at most, so nothing is still
-// queued at dawn. Under QUIET for QUIET_TIME s between waves, it brings the next wave's first group in early.
+// queued at dawn. Under QUIET for QUIET_TIME s between waves, it starts the next wave early (its first group at once).
 export const PACE = {
   MAX: 100,
   DOWN: 40,
