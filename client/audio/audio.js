@@ -205,6 +205,7 @@ def(S.SPITTER_SPIT, 'z_spit', 'zombie', 0.9, 0.08, 0.15, R_Z_SPIT);
 def(S.LEAPER_SCREECH, 'z_leaper', 'zombie', 0.9, 0.08, 0.15, R_Z_SCREECH);
 def(S.ROPER_SHOOT, 'z_roper', 'zombie', 0.9, 0.06);
 def(S.BOOMER_GURGLE, 'z_boomer', 'zombie', 0.9, 0.08, 0.15, R_Z_GURGLE);
+def(S.SMOKER_HISS, 'tyre_hiss', 'zombie', 0.9, 0.1); // (a long breath of gas let out: the burst tyre's hiss)
 def(S.EXPLOSION, 'explosion', 'explosion', 1, 0.05, 0.15, R_EXPLOSION);
 def(S.BAT_SCREECH, 'z_bat', 'zombie', 0.7, 0.1);
 def(S.BOSS_ROAR, 'z_boss', 'big', 1, 0.05, 0.15, R_Z_BOSS);

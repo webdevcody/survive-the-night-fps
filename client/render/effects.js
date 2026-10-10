@@ -978,9 +978,9 @@ export class Effects {
   }
 
   // ---------------------------------------------------------------- emitters
-  // kind: 'campfire' | 'torch' | 'fire' | 'acid' | 'smoke_red' | 'embers' | 'flare' | 'barrel', and the two a ruined
-  // city has (the mainland's world.lights): 'column', a pillar of dark smoke standing over it that is seen from the
-  // bridge, and 'blaze', a building on fire. em.loop: a sound that goes with it, stopped when it is removed.
+  // kind: 'campfire' | 'torch' | 'fire' | 'acid' | 'smoke_red' | 'smoke' (a smoker's cloud) | 'embers' | 'flare' |
+  // 'barrel', and the two a ruined city has (the mainland's world.lights): 'column', a pillar of dark smoke standing
+  // over it that is seen from the bridge, and 'blaze', a building on fire. em.loop: a sound that goes with it, stopped when it is removed.
   createEmitter(kind, x, y, z, opts = {}) {
     const em = { kind, x, y, z, acc: 0, intensity: opts.intensity ?? 1, radius: opts.radius ?? 1, active: true, loop: opts.loop || null };
     // (a column that has stood for a while: its smoke is already up there when the world appears)
@@ -1032,6 +1032,9 @@ export class Effects {
         break;
       case 'smoke_red':
         rate = 14;
+        break;
+      case 'smoke':
+        rate = 3 * em.radius;
         break;
       case 'embers':
         rate = 6;
@@ -1087,6 +1090,17 @@ export class Effects {
           const px = em.x + Math.cos(a) * d;
           const pz = em.z + Math.sin(a) * d;
           A.emit(px, em.y + 0.05, pz, 0, this.rnd(0.3, 0.8), 0, this.rnd(0.4, 0.9), 0.08, 0.25, 0.4, 1, 0.2, 0.9, 0.3, 0.8, 0.1, 0, 0, 1, TEX.GLOW);
+          break;
+        }
+        case 'smoke': {
+          // a smoker's cloud: slow, thick, near-black billows filling the ground it covers to over a survivor's head
+          const a = Math.random() * 6.283;
+          const d = Math.sqrt(Math.random()) * em.radius * 0.85;
+          const px = em.x + Math.cos(a) * d;
+          const pz = em.z + Math.sin(a) * d;
+          const py = this.world.floorAt(px, pz, em.y + 0.5);
+          const c = this.rnd(0.04, 0.065);
+          A.emit(px, py + this.rnd(0.3, 3.2), pz, this.rnd(-0.25, 0.25), this.rnd(0.05, 0.25), this.rnd(-0.25, 0.25), this.rnd(5, 7), this.rnd(1.6, 2.4), this.rnd(3, 4.5), c, c * 0.95, c * 0.9, 0.85, 0.12, 0.11, 0.1, 0, -0.03, 0.3, TEX.SMOKE, this.rnd(-0.15, 0.15));
           break;
         }
         case 'smoke_red':
