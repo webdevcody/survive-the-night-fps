@@ -23,6 +23,8 @@ import {
   BOSS_WAVE,
   BOSS_HP_PER_PLAYER,
   BOSS_HP_PER_NIGHT,
+  MOON,
+  BLOOD_MOON_HORDE,
   ESCAPE_TIME,
   ESCAPE_RADIUS,
   ESCAPE_DRIVE_TIME,
@@ -130,6 +132,7 @@ import { makeBox, COL, footprintContains, groundAt, resolveBody, overlapBoxes, c
 import { mulberry32 } from '../shared/rng.js';
 import { swimming, inRiver, DROWN_DPS, RIVER_DPS } from '../shared/swim.js';
 import { nightTheme, nightBoss } from '../shared/nights.js';
+import * as Director from './director.js';
 import { difficultyOf } from '../shared/difficulty.js';
 import { Nav } from './nav.js';
 import { ClientView, writeEntities, stageEntities } from './snapshot.js';
@@ -429,6 +432,9 @@ export class Game {
     this.stepAsked = 0;
     this.leftKits = new Map(); // leaverKey -> what is left of the starting kit of a player who left this run (parkKit)
     this.nightStats = { kills: 0, structLost: 0, downs: 0, deaths: 0, revives: 0 };
+    this.pace = Director.newPace(); // the pacing director's read of tonight (server/director.js)
+    this.moon = MOON.NORMAL; // tonight's moon, from the dusk horn to dawn (Director.pickMoon)
+    this.lastMoon = MOON.NORMAL; // last night's
     this.skullAwards = new Set(); // loadout economy ledger ids already emitted by this run
 
     this.lootPoints = [];
@@ -451,6 +457,7 @@ export class Game {
     this.stats = { bytesOut: 0, msgsOut: 0, lastReport: Date.now(), tickMs: 0 };
     this.tickStats = new TickStats(1000 / SERVER_TICK_RATE); // how long ticks take and where a slow one went (update)
     this.track = new MatchTracker(this, opts.analytics); // match analytics (analytics.js): a no-op without opts.analytics
+    this.director = Director; // the pacing director (director.js): combat.js and zombies.js tell it of kills and grabs
     this.inviteOnly = !!opts.inviteOnly; // only its link gets anyone in (rooms.js): the Plus One achievement
     // achievements (achievements.js). opts.achieve: where an account's go (the network thread); none: no accounts
     this.ach = new AchievementTracker(this, opts.achieve);
@@ -923,6 +930,7 @@ export class Game {
       flashlight: false,
       battery: FLASHLIGHT_MAX,
       lastDamageT: -99,
+      intensity: 0, // how hard tonight is landing on them, 0..PACE.MAX (server/director.js)
       useItem: null,
       hold: null,
       kills: 0,
@@ -1344,6 +1352,8 @@ export class Game {
     this.supplies = [0, 0, 0, 0, 0];
     this.warned = false;
     this.nightStats = { kills: 0, structLost: 0, downs: 0, deaths: 0, revives: 0 };
+    this.pace = Director.newPace();
+    this.moon = this.lastMoon = MOON.NORMAL;
     this.scheduleSupplyDrops();
     const w = this.world;
     // floor loot
@@ -1840,12 +1850,17 @@ export class Game {
   startNight() {
     this.phase = PHASE.NIGHT;
     this.timeLeft = this.nightLen;
+    // (no horn - a skip to night, the tests - no blood moon either, and no draw on the stream: a struggling team still gets its clear moon)
+    if (!this.warned) this.moon = Director.struggling(this) ? MOON.CLEAR : MOON.NORMAL;
     this.warned = false;
     this.nightStats = { kills: 0, structLost: 0, downs: 0, deaths: 0, revives: 0 };
+    this.pace = Director.newPace();
+    for (const p of this.players.values()) p.intensity = 0;
     this.phaseXp(false);
     const n = this.day;
     const humans = Math.max(1, this.humanCount());
-    const total = this.hordeSize(n, humans);
+    // a blood moon brings more of them (and the director gives no breathers: Director.paceLimits)
+    const total = Math.round(this.hordeSize(n, humans) * (this.moon === MOON.BLOOD ? BLOOD_MOON_HORDE : 1));
     const shares = [0.3, 0.33, 0.37];
     const scale = this.nightLen / NIGHT_LENGTH;
     // tonight's theme re-weights the blend below (the client works out the same theme from the seed to warn the team)
@@ -1946,6 +1961,8 @@ export class Game {
     this.waves = [];
     this.wave = 0;
     this.bossPending = null;
+    this.lastMoon = this.moon;
+    this.moon = MOON.NORMAL;
     this.scheduleSupplyDrops();
     const st = this.nightStats;
     this.emit((w) => {
@@ -3922,6 +3939,7 @@ export class Game {
       }
     }
     this.track.hurt(p, amount, src);
+    Director.hurt(this, p, amount, src);
     p.hp -= amount;
     p.lastDamageT = this.time;
     p.lastSrc = src;
@@ -3967,6 +3985,7 @@ export class Game {
     }
     this.nightStats.downs++;
     this.track.down(p);
+    Director.down(this, p);
     this.notify(NOTIFY.DOWNED, p.id);
     this.sound(SOUND.DOWNED, s.x, s.y + 0.6, s.z, 70);
     this.playersDirty = true;
@@ -4674,6 +4693,9 @@ export class Game {
     if (this.phase === PHASE.DAY) {
       if (!this.warned && this.timeLeft <= DUSK_WARNING) {
         this.warned = true;
+        // tonight's moon, read off how the team is doing (Director.pickMoon): the clients show it from now to dawn
+        this.moon = Director.pickMoon(this, this.day, this.rng);
+        this.globalDirty = true;
         this.notify(NOTIFY.HORDE_SOON, this.day);
         this.sound(SOUND.HORDE_HORN, 0, 0, 0, 0);
       }
@@ -4686,6 +4708,7 @@ export class Game {
       if (this.timeLeft <= 0) this.startNight();
     } else if (this.phase === PHASE.NIGHT) {
       const elapsed = this.nightLen - this.timeLeft;
+      const held = Director.tick(this, dt); // (a breather: the queues wait)
       for (let k = 0; k < this.waves.length; k++) {
         const wv = this.waves[k];
         if (!wv.started && elapsed >= wv.start) {
@@ -4695,7 +4718,7 @@ export class Game {
           this.cemetery.wave(wv); // (with a survivor near St. Agnes Cemetery, part of it comes up out of the graves)
           this.globalDirty = true;
         }
-        if (!wv.started || !wv.queue.length) continue;
+        if (!wv.started || !wv.queue.length || held) continue;
         wv.spawnT -= dt;
         if (wv.spawnT <= 0) {
           wv.spawnT = wv.interval * (0.7 + this.rng() * 0.6);
@@ -5124,6 +5147,7 @@ export class Game {
     const [got, need] = this.phase === PHASE.CROSSING ? this.skipVotes() : [0, 0];
     w.u8(Math.min(255, got));
     w.u8(Math.min(255, need));
+    w.u8(this.moon); // tonight's moon (MOON), from the dusk horn to dawn
     // workbenches, for the field map: structures themselves only replicate inside AOI_STRUCTURE_RADIUS
     const at = w.reserve8();
     let benches = 0;

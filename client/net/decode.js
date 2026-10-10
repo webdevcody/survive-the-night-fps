@@ -99,6 +99,7 @@ export function readGlobal(r, prev) {
     act: r.u8(), // which of the run's two maps is being played (shared/acts.js)
     skips: r.u8(), // the crossing: how many have asked to skip it...
     skipNeed: r.u8(), // ...out of how many would have to
+    moon: r.u8(), // tonight's moon (shared/constants.js MOON), from the dusk horn to dawn: blood, clear or plain
     benches: [],
     parts: [], // car supplies lying loose: dropped, or where whoever carried one died
   };

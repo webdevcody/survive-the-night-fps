@@ -62,12 +62,14 @@
 // thrown. Revives by a teammate are revivesGiven / revivesReceived; a medkit back on one's feet is
 // stats.medkitRevives (the match's revives count both).
 import { randomUUID } from 'node:crypto';
-import { PHASE, ESCAPE_RADIUS, SERVER_TICK_RATE } from '../shared/constants.js';
+import { PHASE, ESCAPE_RADIUS, SERVER_TICK_RATE, MOON } from '../shared/constants.js';
 import * as CONSTANTS from '../shared/constants.js';
 import { ITEM, ZTYPE, STRUCT, CONT, ZONE, KILLER, suppliesOf } from '../shared/defs.js';
 import { PROTOCOL_VERSION } from '../shared/protocol.js';
 import { MOUNTED_GUN } from '../shared/mountedgun.js';
 import { nightTheme } from '../shared/nights.js';
+
+const MOON_NAME = { [MOON.NORMAL]: 'normal', [MOON.BLOOD]: 'blood', [MOON.CLEAR]: 'clear' }; // (Game.moon, in the night records)
 
 export const SAMPLE_EVERY = 30; // seconds of game time between two samples
 const MOVE_MAX = 15; // m/s: a move faster than this between two once-a-second looks is a teleport or a respawn, not a walk
@@ -638,6 +640,7 @@ export class MatchTracker {
       startedAt: Date.now(),
       t: g.time,
       theme: theme ? theme.id : null,
+      moon: MOON_NAME[g.moon] ?? 'normal',
       boss: bossType === undefined ? null : zombieName(bossType),
       bossKilled: false,
       hordeSize: horde,
@@ -645,7 +648,7 @@ export class MatchTracker {
       playersStart: g.players.size,
       survivorsStart: survivors,
     };
-    this.event('night_start', null, { night: g.day, theme: m.night.theme, boss: m.night.boss, hordeSize: horde, hordeHpMul: m.night.hordeHpMul, survivors, players: g.players.size });
+    this.event('night_start', null, { night: g.day, theme: m.night.theme, moon: m.night.moon, boss: m.night.boss, hordeSize: horde, hordeHpMul: m.night.hordeHpMul, survivors, players: g.players.size });
   }
   // Game.startDay, with the day moved on and before the dead come back (night: the number of the night just over)
   dawn(night) {
@@ -676,6 +679,7 @@ export class MatchTracker {
       endedAt: Date.now(),
       durationS: r1(g.time - n.t),
       theme: n.theme,
+      moon: n.moon,
       boss: n.boss,
       bossKilled: n.bossKilled,
       hordeSize: n.hordeSize,
@@ -688,6 +692,8 @@ export class MatchTracker {
       downs: st.downs,
       deaths: st.deaths,
       revives: st.revives,
+      relaxes: g.pace?.relaxes ?? 0, // the pacing director's breathers and early groups tonight (server/director.js)
+      pulls: g.pace?.pulls ?? 0,
       outcome,
     });
   }

@@ -4,7 +4,7 @@
 import { ITEM_DEFS, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W, ACT_NOW } from '../game/act.js'; // (this act's: the car's supplies, or the plane's parts)
 import { WORLD, RUNWAY, nightRank } from '../../shared/acts.js';
-import { PHASE, DUSK_WARNING, BOSS_WAVE } from '../../shared/constants.js';
+import { PHASE, DUSK_WARNING, BOSS_WAVE, MOON } from '../../shared/constants.js';
 import { nightBoss, nightTheme } from '../../shared/nights.js';
 import { el, svgEl, fmtTime, clamp, replay } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
@@ -636,10 +636,13 @@ function newKinds(night, act) {
 }
 
 // ---------------------------------------------------------------- the dusk card
-// What tonight brings, one row a thing: its theme, the kinds that join the horde, its boss. A name and a few words on
-// what to do about it (the dawn card had the long version). Worked out from the seed like the dawn card's
-export function tonightBrief(seed, night, act) {
+// What tonight brings, one row a thing: its moon, its theme, the kinds that join the horde, its boss. A name and a few
+// words on what to do about it (the dawn card had the long version). Worked out from the seed like the dawn card's,
+// but for the moon: the server picks that at the horn, off how the team is doing (global.moon, server/director.js)
+export function tonightBrief(seed, night, act, moon = MOON.NORMAL) {
   const rows = [];
+  if (moon === MOON.BLOOD) rows.push({ kind: 'blood', ico: 'moon', name: 'Blood Moon', tag: 'Hard night', text: 'More of them, and no let-up. Dig in together.' });
+  else if (moon === MOON.CLEAR) rows.push({ kind: 'clear', ico: 'moon', name: 'Clear Moon', tag: 'Calm night', text: 'A bright moon and breathers between waves. Regroup.' });
   const th = nightTheme(seed, night, act);
   if (th) rows.push({ kind: 'theme', ico: 'horde', name: th.name, tag: '', text: th.brief || th.warn });
   for (const d of newKinds(night, act)) rows.push({ kind: 'new', ico: 'claw', name: d.name + 's', tag: 'New', text: d.introBrief || d.intro });

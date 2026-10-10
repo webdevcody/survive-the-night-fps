@@ -153,6 +153,38 @@ export const BOSS_WAVE = 1;
 export const BOSS_HP_PER_PLAYER = 0.6; // boss health: its base hp, plus this share of it for every survivor after the first
 export const BOSS_HP_PER_NIGHT = 0.1; // ...and this share of it for every night after the first
 
+// The pacing director (server/director.js, issue #297): a rough read of how hard tonight is landing on each survivor,
+// which moves *when* the waves' groups come, never how many. Intensity per survivor, 0..PACE.MAX: damage taken adds
+// its amount, going down DOWN, a leaper's pin or a roper's rope GRAB, a kill within KILL_RANGE m KILL; it sinks by
+// DECAY a second. The team's is its highest survivor's. Above PEAK the director waits for a break (no survivor hit
+// by the dead for BREAK s), then holds the wave queues for RELAX s - HOLD_MAX s a night at most, so nothing is still
+// queued at dawn. Under QUIET for QUIET_TIME s between waves, it brings the next wave's first group in early.
+export const PACE = {
+  MAX: 100,
+  DOWN: 40,
+  GRAB: 25,
+  KILL: 3,
+  KILL_RANGE: 6,
+  DECAY: 6,
+  PEAK: 70,
+  BREAK: 3,
+  RELAX: 20,
+  HOLD_MAX: 25,
+  QUIET: 15,
+  QUIET_TIME: 20,
+};
+// The moon (Game.moon, decided at the dusk horn and shown from then until dawn). A blood moon is a hard night and
+// looks it: a red moon, red light, a horde BLOOD_MOON_HORDE times the size, no breathers from the director and
+// quiet spells cut to BLOOD_QUIET_TIME. From night BLOOD_MOON_FROM, BLOOD_MOON_CHANCE of nights, never two running,
+// and never for a team that is already struggling (Director.struggling): that team gets a clear moon instead - a
+// bright, white one, more moonlight, none of the red - and a director that gives it a breather sooner and longer.
+export const MOON = { NORMAL: 0, BLOOD: 1, CLEAR: 2 };
+export const BLOOD_MOON_FROM = 2;
+export const BLOOD_MOON_CHANCE = 0.3;
+export const BLOOD_MOON_HORDE = 1.25;
+export const BLOOD_QUIET_TIME = 10;
+export const CLEAR_PACE = { PEAK: 50, RELAX: 25, HOLD_MAX: 40 };
+
 // Noise: how far (m) each loud thing carries to the dead. Every zombie inside that radius with nobody to chase
 // comes to look, so a louder noise pulls in more of them - and the louder it was where a zombie stood, the
 // harder it runs (NOISE_RUSH). Gunshots: WEAPONS[w].noise, default NOISE.GUNSHOT
