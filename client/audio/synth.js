@@ -680,24 +680,51 @@ export function zBoomer(sr, rng) {
     env: [[0, 0], [0.1, 0.8], [0.4, 1], [0.8, 0.6], [1, 0]],
   });
 }
+// a bat's call: dry and scratchy, claws dragged over bark and a rasp in the throat, nothing a bird would make. A run of
+// short scrapes (band-passed noise crackling with grit), a low buzzing rasp under some of them
 export function zBat(sr, rng) {
   const out = alloc(sr, 0.75);
   const count = 3 + Math.floor(rng() * 3);
+  const grain = Math.exp(-1 / (0.004 * sr)); // each grit crackle dies in a few ms
   let t = 0.01;
   for (let k = 0; k < count && t < 0.6; k++) {
-    const len = rrange(rng, 0.05, 0.11);
+    const len = rrange(rng, 0.06, 0.14);
     const c = new Float32Array(Math.floor(len * sr));
-    const f0 = rrange(rng, 2000, 2600);
-    const f1 = f0 * rrange(rng, 1.3, 1.7);
-    let ph = 0;
+    const hp = new Biquad().hp(sr, 500, 0.7);
+    const bp = new Biquad().bp(sr, rrange(rng, 1400, 2600), 1.6);
+    const grit = rrange(rng, 90, 160); // crackles a second
+    const rf = rrange(rng, 140, 220); // the rasp's buzz
+    const rasp = rng() < 0.5 ? rrange(rng, 0.3, 0.5) : 0;
+    let g = 0;
+    let rp = 0;
     for (let i = 0; i < c.length; i++) {
       const u = i / c.length;
-      const f = u < 0.4 ? lerp(f0, f1, u / 0.4) : lerp(f1, f0 * 1.1, (u - 0.4) / 0.6);
-      ph += (f * (1 + 0.04 * Math.sin(TAU * 55 * (i / sr)))) / sr;
-      c[i] = Math.tanh(Math.sin(TAU * ph) * 2.5) * hann(u) + (rng() * 2 - 1) * 0.15 * hann(u);
+      if (rng() < grit / sr) g = 0.5 + rng() * 0.5;
+      g *= grain;
+      rp = (rp + rf / sr) % 1;
+      const x = bp.run(hp.run(rng() * 2 - 1)) * (0.3 + g);
+      const r = (2 * rp - 1) * (0.5 + 0.5 * (rng() * 2 - 1)) * rasp;
+      c[i] = (x + r) * Math.min(1, u / 0.12) * Math.pow(1 - u, 1.2);
     }
     addNorm(out, c, sr, t, rrange(rng, 0.6, 1));
-    t += len + rrange(rng, 0.03, 0.09);
+    t += len + rrange(rng, 0.02, 0.07);
+  }
+  return finish(out, sr);
+}
+// a bat's wings, leather beating the air: a few quick beats, each a soft low whump with a papery flutter on its edge,
+// so the ones coming in can be heard before they are seen (entities.js plays it over and over while one flies near)
+export function batFlap(sr, rng) {
+  const beats = 3 + Math.floor(rng() * 2);
+  const gap = rrange(rng, 0.085, 0.11);
+  const out = alloc(sr, beats * gap + 0.15);
+  let t = 0.005;
+  for (let k = 0; k < beats; k++) {
+    const len = rrange(rng, 0.06, 0.08);
+    const body = noise(sr, rng, len, { lp: rrange(rng, 500, 800), env: (u) => (u < 0.3 ? u / 0.3 : (1 - u) / 0.7) ** 2 });
+    const flutter = noise(sr, rng, len * 0.6, { bp: [rrange(rng, 1800, 2600), 1.2], a: 0.002, d: 0.012 });
+    addNorm(out, body, sr, t, rrange(rng, 0.75, 1));
+    addNorm(out, flutter, sr, t + len * 0.35, 0.22);
+    t += gap * rrange(rng, 0.92, 1.08);
   }
   return finish(out, sr);
 }
@@ -2109,7 +2136,8 @@ export const SFX_DEFS = [
   { bank: 'z_leaper', n: 2, sr: MID, gen: zLeaper },
   { bank: 'z_roper', n: 2, sr: MID, gen: zRoper },
   { bank: 'z_boomer', n: 2, sr: MID, gen: zBoomer },
-  { bank: 'z_bat', n: 2, sr: HI, gen: zBat },
+  { bank: 'z_bat', n: 3, sr: HI, gen: zBat },
+  { bank: 'z_bat_flap', n: 3, sr: MID, gen: batFlap },
   { bank: 'z_boss', n: 2, sr: MID, gen: zBoss },
   { bank: 'z_shade_whisper', n: 3, sr: MID, gen: shadeWhisper },
   { bank: 'z_shade_freeze', n: 2, sr: HI, gen: shadeFreeze },
