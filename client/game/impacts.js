@@ -454,7 +454,10 @@ export class Impacts {
     this.wrecks.alarm(col, say, secs);
     const near = Math.hypot(col.x - g.renderPos.x, col.z - g.renderPos.z) < 45;
     if (say === 2 && near) g.ui.notify('CAR ALARM! Smash its bonnet to kill it', 'danger', 4);
-    else if (say === 1 && near && !this.told) {
+    else if (say === 3 && Math.hypot(col.x - g.renderPos.x, col.z - g.renderPos.z) < 15 && !this.toldArmed) {
+      this.toldArmed = true;
+      g.ui.notify('That car is armed: force its trunk and the alarm goes off.', 'toast', 6);
+    } else if (say === 1 && near && !this.told) {
       this.told = true;
       g.ui.notify('That alarm still has life in it. Another hard hit may set it off: a knife is quiet.', 'toast', 6);
     }

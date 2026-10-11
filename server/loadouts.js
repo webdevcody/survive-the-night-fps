@@ -19,8 +19,21 @@ for (const def of LOADOUT_CATALOG) if (def.source?.kind === 'boss') {
 const COMMON_POOL = LOADOUT_CATALOG.filter((def) => def.source?.kind !== 'boss').map((def) => def.id);
 const ALL_POOL = LOADOUT_CATALOG.map((def) => def.id);
 
+// A permanent loadout item drops off a boss (for each survivor who hurt it: Combat.killZombie) and out of a strongbox
+// this often. Bad-luck protection (#275): each chance that does not come up adds its PITY to the owner's next one, kept
+// in their collection across runs (server/userloadout.js, loadout_pity), until one drops and it starts again - so a
+// boss item is certain by the 18th boss, a strongbox item by the 50th strongbox (pityStreak). First guesses.
 export const LOADOUT_BOSS_CHANCE = 0.15;
+export const LOADOUT_BOSS_PITY = 0.05;
 export const LOADOUT_STRONGBOX_CHANCE = 0.02;
+export const LOADOUT_STRONGBOX_PITY = 0.02;
+export const pityChance = (base, step, misses) => Math.min(1, base + step * Math.max(0, misses | 0));
+// the most chances in a row that can all miss
+export const pityStreak = (base, step) => {
+  let n = 0;
+  while (pityChance(base, step, n) < 1) n++;
+  return n;
+};
 
 // (a player's loadout mods are a new object whenever they change: the sum is made once for them and their perks,
 // not each time it is asked for - every zombie asks of every survivor every tick)
@@ -97,7 +110,7 @@ export class Loadouts {
   use(owner) {
     let o = this.own.get(owner);
     if (!o) {
-      this.own.set(owner, (o = { items: [], slots: [null, null, null], loaded: false, n: 0 }));
+      this.own.set(owner, (o = { items: [], slots: [null, null, null], pity: { boss: 0, box: 0 }, loaded: false, n: 0 }));
       this.link.post({ op: 'enter', owner });
     }
     o.n++;
@@ -127,6 +140,7 @@ export class Loadouts {
     o.loaded = m.ok === true;
     o.items = Array.isArray(m.items) ? m.items : [];
     o.slots = Array.isArray(m.slots) ? m.slots : [null, null, null];
+    if (m.pity && typeof m.pity === 'object') o.pity = { boss: m.pity.boss | 0, box: m.pity.box | 0 };
     for (const p of this.game.players.values()) if (p.rejoinKey === m.owner) this.apply(p);
     this.game.cards?.loadoutsChanged?.(m.owner);
   }
@@ -310,19 +324,35 @@ export class Loadouts {
   nightReward(p, night) {
     this.skulls(p, nightSkulls(night), { kind: 'night', night }, `night:${night}`);
   }
-  bossReward(z, killer) {
-    this.skulls(killer, SKULL_EARN.BOSS_KILL, { kind: 'boss', boss: z.ztype }, `boss:${z.id}`);
+  // every survivor who brought it down (Combat.killZombie: whoever hurt it, the one who landed the kill among them)
+  bossReward(z, team) {
+    for (const p of team) this.skulls(p, SKULL_EARN.BOSS_KILL, { kind: 'boss', boss: z.ztype }, `boss:${z.id}`);
   }
   escapeReward(p, aboard, key) {
     this.skulls(p, aboard ? SKULL_EARN.ESCAPE_ABOARD : SKULL_EARN.ESCAPE_TEAM, { kind: 'escape', aboard: !!aboard, act: this.game.act }, key);
   }
-  bossDrop(z, killer) {
-    if (!killer?.rejoinKey || this.game.rng() >= LOADOUT_BOSS_CHANCE) return;
+  // one chance at a `kind` drop for p, raised by the chances they have missed in a row: whether it came up
+  roll(p, kind, base, step) {
+    const o = this.own.get(p.rejoinKey);
+    const pity = o?.pity || { boss: 0, box: 0 };
+    if (this.game.rng() < pityChance(base, step, pity[kind])) {
+      if (o) o.pity = { ...pity, [kind]: 0 }; // (the grant resets it in the store too)
+      return true;
+    }
+    if (o) o.pity = { ...pity, [kind]: pity[kind] + 1 };
+    this.link.post({ op: 'miss', owner: p.rejoinKey, kind });
+    return false;
+  }
+  // each of the team rolls for themselves: a drop for one is not taken from another
+  bossDrop(z, team) {
     const pool = BOSS_POOL.get(z.ztype) || ALL_POOL;
-    this.grant(killer, pool[(this.game.rng() * pool.length) | 0], { kind: 'boss', boss: z.ztype });
+    for (const p of team) {
+      if (!p?.rejoinKey || !this.roll(p, 'boss', LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY)) continue;
+      this.grant(p, pool[(this.game.rng() * pool.length) | 0], { kind: 'boss', boss: z.ztype });
+    }
   }
   containerDrop(p, ctype) {
-    if (!p?.rejoinKey || this.game.rng() >= LOADOUT_STRONGBOX_CHANCE) return;
+    if (!p?.rejoinKey || !this.roll(p, 'box', LOADOUT_STRONGBOX_CHANCE, LOADOUT_STRONGBOX_PITY)) return;
     const pool = COMMON_POOL.length ? COMMON_POOL : ALL_POOL;
     this.grant(p, pool[(this.game.rng() * pool.length) | 0], { kind: 'container', container: ctype });
   }

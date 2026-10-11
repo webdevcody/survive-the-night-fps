@@ -36,6 +36,11 @@ export const ownerKey = (accountId, guestId) => {
   return '';
 };
 
+// Bad-luck protection (server/loadouts.js): the drop kinds that keep a count of misses, and which a grant's source resets
+export const PITY_KINDS = ['boss', 'box'];
+export const pityKindOf = (source) => (source?.kind === 'boss' ? 'boss' : source?.kind === 'container' ? 'box' : '');
+const noPity = () => ({ boss: 0, box: 0 });
+
 function coll(items, slots) {
   const ids = new Set(items.map((it) => it.id));
   return { items, slots: cleanLoadoutSlots(slots, ids) };
@@ -88,7 +93,23 @@ export class PgLoadoutStore {
       ),
       this.db.query('SELECT slot, item_id FROM loadout_slots WHERE owner = $1 ORDER BY slot', [owner]),
     ]);
-    return rowsToColl(items.rows, slots.rows);
+    return { ...rowsToColl(items.rows, slots.rows), pity: await this.pity(owner) };
+  }
+  async pity(owner) {
+    const out = noPity();
+    for (const r of (await this.db.query('SELECT kind, misses FROM loadout_pity WHERE owner = $1', [owner])).rows) out[r.kind] = r.misses;
+    return out;
+  }
+  // one more chance at a `kind` drop that did not come up
+  async miss({ owner, kind }) {
+    await this.db.query(
+      `INSERT INTO loadout_pity (owner, user_id, kind, misses)
+         SELECT $1, $2::uuid, $3, 1
+          WHERE $2::uuid IS NULL OR EXISTS (SELECT 1 FROM users WHERE id = $2::uuid)
+       ON CONFLICT (owner, kind) DO UPDATE SET misses = loadout_pity.misses + 1, updated_at = now()`,
+      [owner, userOf(owner), kind]
+    );
+    return this.load(owner);
   }
 
   async grant({ id, owner, catalog, source = {} }) {
@@ -105,6 +126,8 @@ export class PgLoadoutStore {
           [itemId, owner, userOf(owner), catalog, JSON.stringify(source)]
         );
         granted = r.rows[0] ? rowsToColl(r.rows, []).items[0] : null;
+        const kind = pityKindOf(source);
+        if (granted && kind) await t.query('DELETE FROM loadout_pity WHERE owner = $1 AND kind = $2', [owner, kind]);
       }
       return { fresh, granted };
     });
@@ -494,6 +517,7 @@ export class MemoryLoadoutStore {
     this.slots = new Map(); // owner -> [item id|null]
     this.ledger = new Set();
     this.skulls = new Map(); // owner -> balance
+    this.pityCounts = new Map(); // owner -> { boss, box }: misses in a row (PITY_KINDS)
     this.skullLedger = new Map(); // id -> { kind, entries, at }
     this.listings = new Map(); // id -> listing
     this.wagerLocks = new Map(); // item id -> { id, room, match, owner }
@@ -508,10 +532,21 @@ export class MemoryLoadoutStore {
     const locked = new Set(this.wagerLocks.keys());
     const traded = new Set(this.tradeLocks.keys());
     const items = [...this.items.values()].filter((it) => it.owner === owner && !listed.has(it.id) && !locked.has(it.id) && !traded.has(it.id)).sort((a, b) => a.acquiredAt - b.acquiredAt || a.id.localeCompare(b.id));
-    return coll(
-      items.map(({ id, catalog, source, acquiredAt }) => ({ id, catalog, source: { ...source }, acquiredAt })),
-      this.slots.get(owner) || []
-    );
+    return {
+      ...coll(
+        items.map(({ id, catalog, source, acquiredAt }) => ({ id, catalog, source: { ...source }, acquiredAt })),
+        this.slots.get(owner) || []
+      ),
+      pity: { ...noPity(), ...this.pityCounts.get(owner) },
+    };
+  }
+  async miss({ owner, kind }) {
+    if (this.exists(owner)) {
+      const p = { ...noPity(), ...this.pityCounts.get(owner) };
+      p[kind]++;
+      this.pityCounts.set(owner, p);
+    }
+    return this.load(owner);
   }
   async grant({ id, owner, catalog, source = {} }) {
     const fresh = !this.ledger.has(id);
@@ -521,6 +556,8 @@ export class MemoryLoadoutStore {
       if (this.exists(owner)) {
         granted = { id: randomUUID(), owner, catalog, source: { ...source }, acquiredAt: Date.now() };
         this.items.set(granted.id, granted);
+        const kind = pityKindOf(source);
+        if (kind && this.pityCounts.has(owner)) this.pityCounts.set(owner, { ...this.pityCounts.get(owner), [kind]: 0 });
       }
     }
     return { fresh, granted: granted && { id: granted.id, catalog, source: { ...granted.source }, acquiredAt: granted.acquiredAt }, ...(await this.load(owner)) };
@@ -837,7 +874,7 @@ export class LoadoutService {
     }
   }
   msg(owner, c) {
-    return { t: 'loadout', op: 'coll', owner, ok: c.state === 'ok', items: c.items, slots: c.slots };
+    return { t: 'loadout', op: 'coll', owner, ok: c.state === 'ok', items: c.items, slots: c.slots, pity: c.pity || noPity() };
   }
   broadcast(owner) {
     const c = this.cache.get(owner);
@@ -938,6 +975,7 @@ export class LoadoutService {
     if (!c) return;
     c.items = got.items || [];
     c.slots = got.slots || Array(LOADOUT_SLOTS).fill(null);
+    if (got.pity) c.pity = got.pity;
     c.state = 'ok';
     this.broadcast(owner);
   }
@@ -948,6 +986,7 @@ export class LoadoutService {
       if (m.op === 'leave') return this.leave(room, m.owner);
       if (m.op === 'grant') return this.grantFromRoom(room, m);
       if (m.op === 'skulls') return this.skullsFromRoom(room, m);
+      if (m.op === 'miss') return this.missFromRoom(room, m);
       if (m.op === 'xfer') return this.xfer(room, m);
       if (m.op === 'trade_lock') return this.tradeLock(room, m);
       if (m.op === 'trade_unlock') return this.tradeUnlock(room, m);
@@ -987,6 +1026,7 @@ export class LoadoutService {
         if (this.cache.get(owner) !== c) return;
         c.items = got.items;
         c.slots = got.slots;
+        c.pity = got.pity;
         c.state = 'ok';
         this.broadcast(owner);
       },
@@ -1002,6 +1042,16 @@ export class LoadoutService {
     const rs = this.rooms.get(room);
     if (!isOwner(m.owner) || !rs?.has(m.owner) || !loadoutDef(m.catalog) || !GRANT_RE.test(String(m.id || ''))) return;
     this.grant(m.owner, m.catalog, m.source || {}, m.id).catch((err) => this.log(`loadout: grant failed (${err.message})`));
+  }
+  async miss(owner, kind) {
+    if (!isOwner(owner) || !PITY_KINDS.includes(kind)) return null;
+    const got = await this.run(() => this.store.miss({ owner, kind }));
+    this.update(owner, got);
+    return got;
+  }
+  missFromRoom(room, m) {
+    if (!isOwner(m.owner) || !this.rooms.get(room)?.has(m.owner)) return;
+    this.miss(m.owner, m.kind).catch((err) => this.log(`loadout: a missed drop was not counted (${err.message})`));
   }
   skullsFromRoom(room, m) {
     const rs = this.rooms.get(room);
