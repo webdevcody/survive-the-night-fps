@@ -816,14 +816,16 @@ export const EVT = {
   // much of it stands, to whoever joins). What stands below stands until dawn, and can be shot again
   TREE_BREAK: 38,
   // (private) your noise woke the dead: u8 what made it (HEARD), u8 how many it woke (to 255), u8 how far it
-  // carried (m, to 255). Sent to whoever made it when it woke HEARD_MIN or more, at most once a HEARD_GAP
+  // carried (m, to 255), u8 n, n x u16 the entity ids of the ones it woke (the nearest HEARD_IDS). Sent to whoever
+  // made it, each time it wakes HEARD_MIN or more
   HEARD: 39,
 };
 
 // EVT.HEARD: what made the noise, so the client can name it the first time ("Gunshot: heard 70 m")
 export const HEARD = { GUNSHOT: 1, BLAST: 2, MOLOTOV: 3, BUILD: 4, CHOP: 5, SALVAGE: 6, PRY: 7, HORN: 8, CAR_ALARM: 9 };
-export const HEARD_MIN = 3; // a noise has to wake this many of the dead to be worth a ring
-export const HEARD_GAP = 3; // s: no more than one ring this often (a magazine emptied is one ring, not thirty)
+export const HEARD_MIN = 1; // a noise has to wake this many of the dead to be told: one is the lesson
+export const HEARD_IDS = 32; // the most of the ones it woke named in it (the nearest: the minimap shows 70 m)
+export const HEARD_GAP = 1; // s: no more than one ring this often (the woken dead are lit every time) (client)
 
 export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7 };
 

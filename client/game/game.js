@@ -1569,14 +1569,14 @@ export class Game {
       bestiary(flags, mask) {
         bestiaryEvent(flags, mask);
       },
-      heard(what, woke, loud) {
+      heard(what, woke, loud, ids) {
         g.heardSeen ||= loadHeardSeen();
-        const sh = heardShow(what, woke, loud, { ember: g.room?.difficulty === 'ember', always: g.settings.noiseRings, seen: g.heardSeen });
+        const sh = heardShow(what, woke, loud, { always: g.settings.heardRings, seen: g.heardSeen });
         if (sh.label) {
           saveHeardSeen(g.heardSeen);
           g.ui.notify(sh.label, 'toast', 4);
         }
-        if (sh.ring) g.ui.hud?.minimap?.heard(loud);
+        if (sh.show) g.ui.hud?.minimap?.heard(loud, ids);
       },
       ping(pid, kind, x, y, z) {
         g.pings = g.pings.filter((p) => p.pid !== pid);
@@ -4338,12 +4338,12 @@ export class Game {
     for (const e of this.entities.ents.values()) {
       if (e.kind === ENT.PLAYER) {
         if (e.q[5] & PFLAG.DEAD) continue;
-        if (e.q[5] & PFLAG.ZOMBIE) enemies.push({ x: e.rx, z: e.rz, big: false });
+        if (e.q[5] & PFLAG.ZOMBIE) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false });
         else mates.push({ x: e.rx, z: e.rz, name: this.name(e.id), status: e.downed ? 'downed' : 'alive' });
       } else if (e.kind === ENT.ZOMBIE) {
-        if (!e.dead) enemies.push({ x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
+        if (!e.dead) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
       } else if (e.kind === ENT.DEER) {
-        if (!e.dead && e.variant & DEER_UNDEAD) enemies.push({ x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
+        if (!e.dead && e.variant & DEER_UNDEAD) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
       } else if (e.kind === ENT.CRATE && e.q[3] !== 2) crates.push({ x: e.rx, z: e.rz });
     }
     const carried = {};

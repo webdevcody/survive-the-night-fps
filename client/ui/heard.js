@@ -1,7 +1,7 @@
-// "You were heard" (EVT.HEARD): a noise of yours woke the dead. A ring on the minimap, as far as it carried, so a
-// player learns what is loud and how far it reaches. Named the first time for each kind of noise ("Gunshot: heard
-// 70 m away, woke 5"), remembered in this browser. After that it only shows on Ember, or with the setting on
-// (settings.js noiseRings).
+// "You were heard" (EVT.HEARD): a noise of yours woke the dead. A ring on the minimap, as far as it carried, and the
+// dots of the ones it woke lit for a moment, so a player learns what is loud, how far it reaches and what it brings.
+// Every time, unless the setting is off (settings.js heardRings); the noise is named the first time for each kind
+// ("Gunshot: heard 45 m away, woke 2"), remembered in this browser, and that first one shows with the setting off too.
 import { HEARD } from '../../shared/defs.js';
 import { lsGet, lsSet } from './dom.js';
 
@@ -21,11 +21,12 @@ export const HEARD_NAMES = {
 
 export const heardLabel = (what, woke, loud) => `${HEARD_NAMES[what] || 'Noise'}: heard ${loud} m away, woke ${woke}`;
 
-// What to show for one: { ring, label } (label null: the ring alone). seen: the kinds already named (a Set, added to)
-export function heardShow(what, woke, loud, { ember = false, always = false, seen }) {
+// What to show for one: { show, label } (show: the ring and the woken dead lit; label null: no name). seen: the
+// kinds already named (a Set, added to)
+export function heardShow(what, woke, loud, { always = true, seen }) {
   const first = !seen.has(what);
   if (first) seen.add(what);
-  return { ring: first || ember || always, label: first ? heardLabel(what, woke, loud) : null };
+  return { show: first || always, label: first ? heardLabel(what, woke, loud) : null };
 }
 
 export function loadHeardSeen() {

@@ -394,8 +394,10 @@ export function readEvents(r, handler, flags, ents) {
         break;
       }
       case EVT.HEARD: {
-        const what = r.u8(), woke = r.u8(), loud = r.u8();
-        handler.heard?.(what, woke, loud);
+        const what = r.u8(), woke = r.u8(), loud = r.u8(), n = r.u8();
+        const ids = [];
+        for (let i = 0; i < n; i++) ids.push(r.u16());
+        handler.heard?.(what, woke, loud, ids);
         break;
       }
       case EVT.PING:
