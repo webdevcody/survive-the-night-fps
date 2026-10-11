@@ -43,6 +43,10 @@ export class Splash {
     // the walk around the valley behind it (game/menutour.js) fades to black through this at every cut
     this.cut = el('div', 'sp-cut', root);
     this.cutK = 0;
+    // the line of the scene playing behind it (game/menureel.js: "Scavenge by day", "Hold the line together"...)
+    this.reel = el('div', 'sp-reel', root);
+    this.reel.setAttribute('aria-hidden', 'true');
+    this.reelText = '';
     el('div', 'sp-shade', root); // (the menu's side of the screen, darkened)
     el('div', 'ov-vignette', root);
     el('div', 'sp-fog', root);
@@ -488,6 +492,14 @@ export class Splash {
     if (k === this.cutK) return;
     this.cutK = k;
     this.cut.style.opacity = String(k);
+  }
+
+  // the scene's line ('' takes it down): it fades out, and the next one fades in
+  setReel(text) {
+    if (text === this.reelText) return;
+    this.reelText = text;
+    if (text) this.reel.textContent = text;
+    this.reel.classList.toggle('on', !!text);
   }
 
   show() {
