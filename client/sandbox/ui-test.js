@@ -240,7 +240,7 @@ const baseHud = {
     { kind: 'mate', x: 900, y: 420, icon: glyph('downed'), name: 'Old Hank', sub: 'DOWN · hold [E] to revive', cls: 'downed', scale: 1 },
     { kind: 'ping', x: 700, y: 360, icon: glyph('ping'), name: 'Marlowe: Loot', sub: '22m', cls: 'p2', scale: 1 },
   ],
-  objective: { supplies: [1, 0, 1, 0, 2], hints: [3, 1, 6, 4, 2, 9, 13], carried: { [ITEM.SPARE_TIRE]: 1 }, anyCarried: true, phase: PHASE.DAY, timeLeft: 134, finale: false, escapeT: 0, escapeReady: false, suppliesDone: false, wave: 0, waves: 3 },
+  objective: { day: 3, supplies: [1, 0, 1, 0, 2], hints: [3, 1, 6, 4, 2, 9, 13], carried: { [ITEM.SPARE_TIRE]: 1 }, anyCarried: true, phase: PHASE.DAY, timeLeft: 134, finale: false, escapeT: 0, escapeReady: false, suppliesDone: false, wave: 0, waves: 3 },
 };
 
 // ?pack=1: wearing a backpack (the grid's last cells open, two of them used)
@@ -481,6 +481,8 @@ switch (screen) {
     }
     // &achtrack=1: three achievements tracked under the objective (&tracked= to choose them)
     if (q.get('achtrack')) fakeAchievements();
+    // &ready=1: every supply in the car (&day=<n>: the day it is, which decides whether the final stand can begin)
+    if (q.get('ready')) Object.assign(h, { day: +(q.get('day') || h.day), objective: { ...baseHud.objective, day: +(q.get('day') || h.day), supplies: [1, 1, 1, 1, 3], carried: {}, anyCarried: false, suppliesDone: true, timeLeft: 300 } });
     // &weapon=<item id>&mag=<n>&reserve=<n>&reload=<0..1>: try the ammo block with any primary
     if (q.get('weapon')) Object.assign(h, { weapons: [+q.get('weapon'), ...baseHud.weapons.slice(1)], mag: +q.get('mag') || 0, reserve: +(q.get('reserve') ?? 24), reloading: q.get('reload') == null ? -1 : +q.get('reload') });
     ui.hideSplash();

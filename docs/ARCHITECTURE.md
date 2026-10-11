@@ -685,6 +685,11 @@ A run is two maps (issue #111, `shared/acts.js`). Act 1 is the island: fix the c
 off. That is no longer the victory: the car crosses a broken bridge (`PHASE.CROSSING`, a cutscene) to the mainland,
 act 2, where the same loop is played with a plane and flying out wins.
 
+The island's final stand can't be begun before night `STAND_NIGHT` (3) has fallen (`standOpen`, issue #269): the
+supplies still go in early, but the hold at the car is refused (with a chat line saying when) until then, so the
+island's escalation is played before the mainland. The objective tracker says so, and on the island carries a
+standing "Then: ... the mainland" line so the car never reads as the end. The admin's `/engine` skips the wait.
+
 - **A world has its own size.** `world.kind` (`WORLD.ISLAND` / `WORLD.MAINLAND`, which is also the act's number),
   `world.size` / `half` / `gridN`, `world.start` (where a run on it begins) and `world.posScale`. Nothing that
   walks, draws or maps a world reads `MAP_SIZE` any more (that constant is the island's 640 m): the nav grid, the

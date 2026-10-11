@@ -4169,7 +4169,7 @@ export class Game {
     });
     const loose = {};
     for (const p of this.looseParts()) loose[p.item] = (loose[p.item] || 0) + 1;
-    h.objective = { supplies: g.supplies, hints: g.hints, found: g.found, carried, loose, anyCarried, phase: g.phase, timeLeft: Math.ceil(g.timeLeft), finale: g.finale, escapeT: Math.ceil(g.escapeT), escapeReady: g.escapeReady, escapeStalled: g.escapeStalled, escapeLeaving: g.escapeLeaving, standWarm: g.standWarm, runwayBlocked: g.runwayBlocked, suppliesDone: g.suppliesDone, wave: g.wave, waves: g.waves };
+    h.objective = { supplies: g.supplies, hints: g.hints, found: g.found, carried, loose, anyCarried, phase: g.phase, day: g.day, timeLeft: Math.ceil(g.timeLeft), finale: g.finale, escapeT: Math.ceil(g.escapeT), escapeReady: g.escapeReady, escapeStalled: g.escapeStalled, escapeLeaving: g.escapeLeaving, standWarm: g.standWarm, runwayBlocked: g.runwayBlocked, suppliesDone: g.suppliesDone, wave: g.wave, waves: g.waves };
     // downed overlay
     h.downed = self.alive && s.downed ? { bleed: self.bleed || 0, reviving: !!self.beingRevived, mate: this.closestMate(rp) } : null;
     // compass + world markers
