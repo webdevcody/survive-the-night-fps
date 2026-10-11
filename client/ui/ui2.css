@@ -362,6 +362,18 @@
   border-bottom: 0;
 }
 
+/* the far goal under what to do now (issue #269): quiet, and folded away with the list at night and in the stand */
+.stn-ui .obj-next {
+  margin-top: calc(5 * var(--u));
+  font: italic max(10px, calc(12 * var(--u))) / 1.3 var(--f-type);
+  color: var(--bone-2);
+}
+
+.stn-ui .obj.compact .obj-next,
+.stn-ui.hud-b.hud-night:not(.inv-open) .obj.slim .obj-next {
+  display: none;
+}
+
 .stn-ui .obj-dir.dir-good {
   color: var(--good);
 }

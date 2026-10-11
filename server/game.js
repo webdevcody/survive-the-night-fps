@@ -118,7 +118,7 @@ import {
 import { C2S, S2C, SNAP, SELF, ACT, SALVAGE_FROM, WORN, WORN_DO, UNDO_NO, ENT, HOLD, CAR_ID, REJECT_REASON, LEFT_CODE, CHATF, PLF, PROGF, WELCOMEF, PROTOCOL_VERSION, Writer, Reader, readInput, writeBoard, qpos, dqpos, usePos, qangle8, qangle16, dqangle16, dqpitch } from '../shared/protocol.js';
 import { XP, XPS, XP_SRC, levelOf, perkMask } from '../shared/progress.js';
 import { worldFor } from '../shared/worlds.js';
-import { WORLD, nightRank, ARRIVAL_DAY, MAINLAND_DAY_MORE, CROSSING, TAKEOFF_TIME, RUNWAY, BRIDGEHEAD, PLANE_REACH } from '../shared/acts.js';
+import { WORLD, nightRank, standOpen, STAND_NIGHT, ARRIVAL_DAY, MAINLAND_DAY_MORE, CROSSING, TAKEOFF_TIME, RUNWAY, BRIDGEHEAD, PLANE_REACH } from '../shared/acts.js';
 import { fellTree, regrowTrees, cutTree, treeFoot, treeTop } from '../shared/felling.js';
 import { hitTree, treeBroken, treeCutMax, TREE_CUT_MIN, TREE_PIECE_MIN } from './trees.js';
 import { blowOf, BLOW } from '../shared/surfaces.js';
@@ -2930,6 +2930,8 @@ export class Game {
         return;
       }
       if (!this.allSuppliesIn()) return this.interact(p, CAR_ID);
+      // (the island's stand waits for night STAND_NIGHT: shared/acts.js standOpen. /engine still starts it at once)
+      if (!standOpen(this.act, this.day, this.phase === PHASE.NIGHT)) return this.sendChat(p, 0, CHATF.SYSTEM, `The car is ready, but the final stand can't begin before night ${STAND_NIGHT}. Hold out until then.`);
       p.hold = { kind: HOLD.ENGINE, target: CAR_ID, t: 0, need: ENGINE_START_TIME };
       return;
     }

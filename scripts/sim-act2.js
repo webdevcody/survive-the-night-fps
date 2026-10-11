@@ -14,7 +14,7 @@ const { Game } = await import('../server/game.js');
 const { C2S, S2C, ACT, CAR_ID, HOLD, SNAP, PLF, UNDO_NO, PROTOCOL_VERSION, Writer, Reader, qpos, dqpos, usePos, POS_SCALE, POS_SCALE_WIDE } = await import('../shared/protocol.js');
 const { PHASE, ESCAPE_DRIVE_TIME, ENGINE_START_TIME, GAME_OVER_DELAY, SLOT_PRIMARY, SLOT_PISTOL, SLOT_MELEE, SLOT_BUILD, INVENTORY_MAX, dayLength, MAP_SIZE } = await import('../shared/constants.js');
 const { ITEM, WEAPONS, AMMO, AMMO_ITEMS, ZTYPE, ZONE, ZONE_NAMES, NOTIFY, EVT, CACHE_GAVE, PLANE_PARTS, PLANE_NEED, SUPPLIES, ZOMBIE_DEFS, SCHEMATICS, SCHEM_BIT, CONT_DEFS, schematicRumours } = await import('../shared/defs.js');
-const { WORLD, MAINLAND_SIZE, CROSSING, TAKEOFF_TIME, RUNWAY, BRIDGEHEAD, ARRIVAL_DAY, MAINLAND_DAY_MORE, MAINLAND_NIGHT } = await import('../shared/acts.js');
+const { WORLD, MAINLAND_SIZE, CROSSING, TAKEOFF_TIME, RUNWAY, BRIDGEHEAD, ARRIVAL_DAY, MAINLAND_DAY_MORE, MAINLAND_NIGHT, STAND_NIGHT } = await import('../shared/acts.js');
 const { nightBoss, nightTheme, MAINLAND_BOSSES, NIGHT_THEMES } = await import('../shared/nights.js');
 const { readHeader, readGlobal, readSelf } = await import('../client/net/decode.js');
 const { envelope, encode, decode } = await import('../server/handoff.js');
@@ -171,7 +171,12 @@ const nearHead = (game) => game.zombies.filter((z) => !z.dead && Math.hypot(z.x 
   const car = game.world.car;
   for (const p of [a, b]) put(game, p, car.x + 2, car.z + 2);
   game.supplies = [1, 1, 1, 1, 3];
+  // (the island's stand waits for night STAND_NIGHT, scripts/test-standgate.js: the hold is begun as if on a later
+  // day, and the run goes back to its own, which the arrival's checks below are written for)
+  const day = game.day;
+  game.day = STAND_NIGHT + 1;
   ann.act(ACT.HOLD_BEGIN, CAR_ID);
+  game.day = day;
   ticks(game, ENGINE_START_TIME + 0.3);
   check("the car's final stand begins as it always has", game.escape.active && ann.global.finale && !ann.global.escapeReady, JSON.stringify(game.escape));
   game.escape.t = 0.2;

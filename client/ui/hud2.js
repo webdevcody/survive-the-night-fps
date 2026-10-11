@@ -3,7 +3,7 @@
 // Same conventions as hud.js: update() is called every frame and only touches the DOM on change.
 import { ITEM_DEFS, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W, ACT_NOW } from '../game/act.js'; // (this act's: the car's supplies, or the plane's parts)
-import { WORLD, RUNWAY, nightRank } from '../../shared/acts.js';
+import { WORLD, RUNWAY, nightRank, standOpen, STAND_NIGHT } from '../../shared/acts.js';
 import { PHASE, DUSK_WARNING, BOSS_WAVE } from '../../shared/constants.js';
 import { nightBoss, nightTheme } from '../../shared/nights.js';
 import { el, svgEl, fmtTime, clamp, replay } from './dom.js';
@@ -275,6 +275,8 @@ export class Objective {
     this.pips = Array.from({ length: SUPPLY_NEED.reduce((a, b) => a + b, 0) }, () => el('i', '', pips));
     this.hCount = el('span', 'obj-count', head, '');
     this.directive = el('div', 'obj-dir', this.root, '');
+    // the far goal (issue #269): on the island, that the car is not the end of the run
+    this.next = el('div', 'obj-next', this.root, '');
     this.list = el('div', 'obj-list', this.root);
     this.rows = SUPPLIES.map((item, i) => {
       const r = el('div', 'obj-row', this.list);
@@ -420,6 +422,9 @@ export class Objective {
         dir = plane ? (o.standWarm ? `Defend the plane · engines warm in ${fmtTime(o.escapeT)}` : `Hold the fuel truck · tanks full in ${fmtTime(o.escapeT)}`) : `Defend the car · engine ready in ${fmtTime(o.escapeT)}`;
         tone = 'danger';
       }
+    } else if (o.suppliesDone && !standOpen(this.act, o.day, o.phase === PHASE.NIGHT)) {
+      dir = `Every supply is in. The final stand can't begin before night ${STAND_NIGHT}: hold out and stock up for it.`;
+      tone = 'good';
     } else if (o.suppliesDone) {
       dir = plane ? `Every part is in. Hold ${bindTag('interact')} at the plane to start fuelling - then hold the truck, the plane and the runway.` : `Every supply is in. Hold ${bindTag('interact')} at the car to start the engine - then survive the final stand.`;
       tone = 'good';
@@ -438,8 +443,11 @@ export class Objective {
     this.directive.textContent = dir;
     this.directive.className = 'obj-dir' + (tone ? ' dir-' + tone : '');
     this.directive.hidden = !dir;
+    const next = plane ? '' : 'Then: drive over the old bridge to the mainland, where the airfield is.';
+    this.next.textContent = next;
+    this.next.hidden = !next;
     this.root.classList.toggle('compact', o.phase === PHASE.NIGHT || o.finale);
-    this.headTip.body = `${done} of ${total} ${W.parts} are in the ${W.thing}. Install them all, ${W.start} and ${W.go}.` + (dir ? `\n\nNow: ${dir}` : '');
+    this.headTip.body = `${done} of ${total} ${W.parts} are in the ${W.thing}. Install them all, ${W.start} and ${W.go}.` + (dir ? `\n\nNow: ${dir}` : '') + (next ? `\n\n${next}` : '');
     if (this.tipFor) this._hover(this.tipFor); // (what it says may just have changed)
   }
 }

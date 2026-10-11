@@ -59,3 +59,11 @@ export const RUNWAY = { FUEL_TIME: 60, WARM_TIME: 50, HOLD: 12, CLEAR: 2, STRIP:
 //   a knife and a hammer, for whoever has no blade or nothing to build with (the tools every survivor starts with)
 // Whoever the checkpoint brought back from the dead dropped everything where they fell: they come over with the floor.
 export const BRIDGEHEAD = { MAGS: 2, ROUNDS: 60, BANDAGES: 1, PISTOL: ITEM.PISTOL, MELEE: ITEM.KNIFE, BUILD: ITEM.HAMMER };
+
+// The island's final stand can't be begun before night STAND_NIGHT has fallen (issue #269): a team that found every
+// supply on day 1 used to drive off before night 3, skipping most of the island's escalation and arriving on the
+// mainland under-geared for its night-4 horde. The supplies can still go in early; only starting the engine waits.
+// (The mainland's runway stand has no such floor: the team arrives on night MAINLAND_NIGHT's horde at the least.)
+// night: the phase is PHASE.NIGHT (passed as a flag so this file needs nothing from constants.js)
+export const STAND_NIGHT = 3;
+export const standOpen = (act, day, night) => act === WORLD.MAINLAND || day > STAND_NIGHT || (day === STAND_NIGHT && night);
