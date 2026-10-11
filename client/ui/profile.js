@@ -10,6 +10,11 @@ import { duration } from './account.js';
 import { BRANCH_ICON } from './perktree.js';
 import { PERKS, PERK_GROUPS, perkIds } from '../../shared/progress.js';
 import { accountState } from '../net/account.js';
+import { bestiaryView } from '../net/bestiary.js';
+import { achievementsView } from '../net/achievements.js';
+import { fetchLoadout } from '../net/loadout.js';
+import { lastProgress } from '../net/progress.js';
+import { achievementTally, bestiaryTally, cardTally, loadoutTally, perkTally, tallyPct, tallyText } from '../../shared/collections.js';
 import { fetchProfile, onSocialChange, isFriendName, requestedName, askedByName, requestFriend, acceptFriend, declineFriend } from '../net/friends.js';
 
 const num = (n) => (n | 0).toLocaleString('en-US');
@@ -66,6 +71,11 @@ export class ProfilePanel extends Panel {
     this.perksH = el('div', 'fr-h', this.body, 'Perks');
     this.perks = el('div', 'pf-perks', this.body);
 
+    // yours only: how much of each collection you have, and so how much is left (issue #286)
+    this.collH = el('div', 'fr-h', this.body, 'Your collections');
+    this.coll = el('div', 'ac-more pf-coll', this.body);
+    this.loadoutTally = null; // the loadout's, once /api/loadout answered
+
     this.saidEl = el('div', 'fr-said pf-said', this.body, '');
     this.acts = el('div', 'pf-acts', this.foot);
     el('span', 'gb-gap', this.foot);
@@ -89,6 +99,17 @@ export class ProfilePanel extends Panel {
     }
     this.render();
     if (p.account && !same) this.load(p.account);
+    if (p.self) this.loadLoadout();
+  }
+
+  async loadLoadout() {
+    try {
+      const d = await fetchLoadout();
+      this.loadoutTally = loadoutTally(d?.items);
+    } catch {
+      /* the line says it is not known */
+    }
+    if (this.visible && this.p?.self) this.render();
   }
 
   async load(name) {
@@ -209,7 +230,28 @@ export class ProfilePanel extends Panel {
       c.title = q.text;
       svgEl('i', 'pf-perk-br', c, glyph(BRANCH_ICON[q.group]));
     }
+    this.renderColl();
     this.renderActs();
+  }
+
+  renderColl() {
+    const mine = !!this.p?.self;
+    this.collH.hidden = this.coll.hidden = !mine;
+    this.coll.textContent = '';
+    if (!mine) return;
+    const found = this.ui.cards?.c?.s;
+    const perks = lastProgress()?.perks || perkIds(this.p.perks >>> 0);
+    for (const [label, t] of [
+      ['Bestiary', bestiaryTally(bestiaryView().mask)],
+      ['Loadout items', this.loadoutTally],
+      ['Dead Hand cards', found?.loaded ? cardTally(found.found) : null],
+      ['Achievements', achievementTally(achievementsView().unlocked)],
+      ['Perks', perkTally(perks)],
+    ]) {
+      const b = el('span', 'ac-bit', this.coll);
+      el('span', '', b, label);
+      el('b', '', b, t ? `${tallyText(t)} · ${tallyPct(t)}%` : '—');
+    }
   }
 
   // what you can do about them: send a request, answer theirs, or nothing

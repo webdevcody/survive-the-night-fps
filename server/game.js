@@ -114,6 +114,7 @@ import {
   THROW_ITEMS,
   isFirearm,
   salvageOf,
+  HEARD,
 } from '../shared/defs.js';
 import { C2S, S2C, SNAP, SELF, ACT, SALVAGE_FROM, WORN, WORN_DO, UNDO_NO, ENT, HOLD, CAR_ID, REJECT_REASON, LEFT_CODE, CHATF, PLF, PROGF, WELCOMEF, PROTOCOL_VERSION, Writer, Reader, readInput, writeBoard, qpos, dqpos, usePos, qangle8, qangle16, dqangle16, dqpitch } from '../shared/protocol.js';
 import { XP, XPS, XP_SRC, levelOf, perkMask } from '../shared/progress.js';
@@ -128,6 +129,7 @@ import { MineNav } from './minenav.js';
 import { createPlayerState, copyPlayerState, samePlayerState, snapPlayerState, hashPlayerState, simulatePlayer, eyeHeight, currentWeapon, DRAW_TIME, radioKeyed } from '../shared/playersim.js';
 import { makeBox, COL, footprintContains, groundAt, resolveBody, overlapBoxes, canReach } from '../shared/collision.js';
 import { mulberry32 } from '../shared/rng.js';
+import { supplyHelpLevel, SUPPLY_HELP, SUPPLY_HELP_AT } from '../shared/supplyhelp.js';
 import { swimming, inRiver, DROWN_DPS, RIVER_DPS } from '../shared/swim.js';
 import { nightTheme, nightBoss } from '../shared/nights.js';
 import { difficultyOf } from '../shared/difficulty.js';
@@ -411,6 +413,9 @@ export class Game {
     this.supplies = [0, 0, 0, 0, 0]; // installed per SUPPLIES entry
     this.supplyHints = [255, 255, 255, 255, 255, 255, 255]; // zones: 4 parts + 3 jerry cans
     this.supplyFound = 0; // a bit per hint: that one has been taken from its hiding place (nothing left to search there)
+    this.supplyHintSpots = []; // per hint: the world.partSpots index it is hidden at (-1: none). The crows circle over it
+    this.supplyClock = 0; // s since the act's supplies were hidden...
+    this.supplyHelp = 0; // ...and the help a team that has found none of them gets by now (shared/supplyhelp.js)
     this.unlocked = 0; // schematics bitmask
     this.schemHints = [255, 255, 255, 255, 255]; // zones: where each schematic (SCHEMATICS order) is rumoured to be
     this.fallen = new Set(); // who left dead since the last sunrise (leaverKey: removePlayer, handleJoin)
@@ -951,7 +956,7 @@ export class Game {
       best: 0, // the furthest day they have ever seen dawn on (from the record)
       perks: 0, // the perks in force (a bitmask of ids; s.perks carries it into the simulation)
       perksNext: -1, // picked during a night: in force from dawn (-1: nothing waiting)
-      nightKills: 0, // kills this night (or day): past XP.killsFull they earn half
+      nightKills: 0, // kills this night (or day): the first XP.killsFull carry the fresh-night bonus
       nightRevives: 0,
       lastChance: false, // Second Chance spent this night
       progDirty: true, // S2C.PROGRESS is out of date (sendProgress)
@@ -1075,16 +1080,23 @@ export class Game {
   // leaderboard's stats
   award(p, src, n) {
     if (!p) return;
-    n = Math.round(n * playerMods(p).xp * this.diff.xp);
+    this.creditXp(p, src, this.xpScaled(p, n));
+  }
+  xpScaled(p, n) {
+    return Math.round(n * playerMods(p).xp * this.diff.xp);
+  }
+  // n XP already scaled, for `src`
+  creditXp(p, src, n) {
     if (n <= 0) return;
     const was = this.levelOf(p);
-    p.xpRun[src] += n;
+    p.xpRun[src] = (p.xpRun[src] | 0) + n; // (| 0: a run brought over from a build that had fewer sources)
     this.records.bump(p.rec, 'xp', n);
     p.progDirty = true;
     if (this.levelOf(p) !== was) this.playersDirty = true;
   }
-  // one of the dead put down by a survivor: what it was worth, less past the night's first XP.killsFull, and nothing
-  // for one that had been stuck for a while (z.wedgeT) - the dead piled up at a wall they will never get round
+  // one of the dead put down by a survivor: half what it was worth, the other half as the fresh-night bonus on the
+  // night's first XP.killsFull, and nothing for one that had been stuck for a while (z.wedgeT) - the dead piled up at
+  // a wall they will never get round
   killXp(p, z, headshot) {
     if (p.zombie) return;
     const pm = playerMods(p);
@@ -1093,12 +1105,18 @@ export class Game {
     this.loadouts.onKill(p);
     if (z.wedgeT > WEDGED_FOR) return;
     if (z.boss) return this.award(p, XPS.bosses, XP.boss);
-    const half = ++p.nightKills > XP.killsFull;
-    const base = XP.kinds[z.ztype] ?? XP.kill;
-    this.award(p, XPS.kills, half ? Math.ceil(base / 2) : base);
-    if (headshot) this.award(p, XPS.headshots, half ? Math.ceil(XP.headshot / 2) : XP.headshot);
+    const fresh = ++p.nightKills <= XP.killsFull;
+    this.killPart(p, XPS.kills, XP.kinds[z.ztype] ?? XP.kill, fresh);
+    if (headshot) this.killPart(p, XPS.headshots, XP.headshot, fresh);
   }
-  // A new night or a new day: the diminishing returns start over. dawn: also what is earned for seeing it, and the
+  // the half a kill always earns, and with a fresh night the rest as the bonus: scaled whole, so the two add up to
+  // what the full amount scales to
+  killPart(p, src, full, fresh) {
+    const half = this.xpScaled(p, Math.ceil(full / 2));
+    this.creditXp(p, src, half);
+    if (fresh) this.creditXp(p, XPS.fresh, this.xpScaled(p, full) - half);
+  }
+  // A new night or a new day: the fresh-night bonus comes back. dawn: also what is earned for seeing it, and the
   // perks picked during the night come into force
   phaseXp(dawn, night = 0) {
     for (const p of this.players.values()) {
@@ -1132,7 +1150,7 @@ export class Game {
     w.u8(S2C.PROGRESS);
     w.varu(this.xpOf(p));
     w.u8((p.xpLoaded ? PROGF.LOADED : 0) | (p.rec ? PROGF.KEPT : 0));
-    for (const v of p.xpRun) w.varu(v);
+    for (let i = 0; i < XP_SRC.length; i++) w.varu(p.xpRun[i] | 0);
     p.session.conn.send(w.bytes());
     this.stats.bytesOut += w.o;
     this.stats.msgsOut++;
@@ -1621,6 +1639,9 @@ export class Game {
     const places = this.act === WORLD.MAINLAND ? [] : shuffle([...byPlace.values()].map(shuffle));
     this.supplySpots = [];
     this.supplyFound = 0;
+    this.supplyHintSpots = [];
+    this.supplyClock = 0;
+    this.supplyHelp = 0;
     const { items, need } = this.sup;
     // on the mainland a part is at one of its own set places (world.partSpots[k].supply: shared/mainland.js)
     const own = (i) => shuffle(this.world.partSpots.filter((sp) => sp.supply === i));
@@ -1629,18 +1650,18 @@ export class Game {
     let turn = 0;
     this.supplyHints = items.flatMap((item, i) => new Array(need[i]).fill(i)).map((i, hint) => {
       const item = items[i];
-      const at = set[i].pop();
-      if (at) {
-        this.spawnItem(item, 1, at.x, at.y, at.z, { permanent: true, hint });
-        this.supplySpots.push(at);
-        return at.zone;
-      }
-      for (let tries = 0; tries < places.length; tries++) {
-        const sp = places[turn++ % places.length].pop();
-        if (!sp) continue;
+      const hide = (sp) => {
         this.spawnItem(item, 1, sp.x, sp.y, sp.z, { permanent: true, hint });
         this.supplySpots.push(sp);
+        this.supplyHintSpots[hint] = this.world.partSpots.indexOf(sp);
         return sp.zone;
+      };
+      this.supplyHintSpots[hint] = -1;
+      const at = set[i].pop();
+      if (at) return hide(at);
+      for (let tries = 0; tries < places.length; tries++) {
+        const sp = places[turn++ % places.length].pop();
+        if (sp) return hide(sp);
       }
       return 255;
     });
@@ -3030,7 +3051,7 @@ export class Game {
   pryHeave(p, c, pry) {
     if (pry.weapon) this.strike(p, pry.weapon, false, pry.x, pry.y, pry.z, pry.dx, pry.dy, pry.dz);
     else this.sound(SOUND.SEARCH, c.x, c.y, c.z, 18);
-    this.zm.noise(c.x, c.z, PRY.noise);
+    this.zm.noise(c.x, c.z, PRY.noise, undefined, p, HEARD.PRY);
   }
 
   searchCache(p, c) {
@@ -3069,7 +3090,7 @@ export class Game {
     if (this.zombies.length >= MAX_ZOMBIES_ALIVE) return;
     this.notify(NOTIFY.CAR_ALARM, 0);
     this.sound(SOUND.HORDE_HORN, c.x, c.y, c.z, 140);
-    this.zm.noise(c.x, c.z, NOISE.CAR_ALARM);
+    this.zm.noise(c.x, c.z, NOISE.CAR_ALARM, undefined, p, HEARD.CAR_ALARM);
     let spawned = 0;
     for (let i = 0; i < count && this.zombies.length < MAX_ZOMBIES_ALIVE; i++) {
       const sp = this.pickCarAlarmSpawn(p, c, humans);
@@ -3179,14 +3200,14 @@ export class Game {
       const plankChance = (weapon === ITEM.MACHETE ? 0.35 : weapon === ITEM.HAMMER ? 0.15 : 0.22) + (col.tv === 5 ? 0.15 : 0);
       if (r() < plankChance) this.giveOrDrop(p, ITEM.WOOD, 1);
       if (!dead && r() < 0.07) this.giveOrDrop(p, ITEM.HERB, 1);
-      this.zm.noise(x, z, NOISE.CHOP); // (what it sounds like is the blow's: EVT.STRIKE)
+      this.zm.noise(x, z, NOISE.CHOP, undefined, p, HEARD.CHOP); // (what it sounds like is the blow's: EVT.STRIKE)
     } else {
       this.giveOrDrop(p, ITEM.SCRAP, weapon === ITEM.HAMMER ? 1 + (r() < 0.5 ? 1 : 0) : 1);
       if (r() < 0.3) this.giveOrDrop(p, ITEM.NAILS, 2 + Math.floor(r() * 3));
       if (r() < 0.08) this.giveOrDrop(p, ITEM.TAPE, 1);
       if (r() < 0.05) this.giveOrDrop(p, ITEM.WIRE, 1);
       if (r() < 0.04) this.giveOrDrop(p, ITEM.BATTERY, 1);
-      this.zm.noise(x, z, NOISE.SALVAGE);
+      this.zm.noise(x, z, NOISE.SALVAGE, undefined, p, HEARD.SALVAGE);
     }
     if (g.left > 0) return;
     // that was the last of it. A tree comes down, away from whoever cut it, and is out of the world until dawn;
@@ -3808,7 +3829,7 @@ export class Game {
     this.track.build(p, type);
     if (type === STRUCT.WORKBENCH) this.globalDirty = true;
     this.sound(SOUND.BUILD, x, y + 0.8, z, 35);
-    this.zm.noise(x, z, NOISE.BUILD, y);
+    this.zm.noise(x, z, NOISE.BUILD, y, p, HEARD.BUILD);
   }
 
   demolish(p, id) {
@@ -3856,7 +3877,7 @@ export class Game {
     p.actionT = this.time;
     p.invDirty = true;
     this.sound(SOUND.BUILD, e.x, e.y + 0.8, e.z, 30);
-    this.zm.noise(e.x, e.z, NOISE.BUILD, e.y);
+    this.zm.noise(e.x, e.z, NOISE.BUILD, e.y, p, HEARD.BUILD);
   }
 
   damageStructure(e, amount) {
@@ -4194,7 +4215,7 @@ export class Game {
         const t = found[0].id;
         const pack = this.zm.newPack();
         let made = 0;
-        for (let i = 0; i < n; i++) if (this.zm.spawn(t, s.x - Math.sin(s.yaw) * 12 + (this.rng() - 0.5) * 4, s.z - Math.cos(s.yaw) * 12 + (this.rng() - 0.5) * 4, { horde: true, boss: ZOMBIE_DEFS[t].boss, pack })) made++;
+        for (let i = 0; i < n; i++) if (this.zm.spawn(t, s.x - Math.sin(s.yaw) * 12 + (this.rng() - 0.5) * 4, s.z - Math.cos(s.yaw) * 12 + (this.rng() - 0.5) * 4, { horde: true, boss: ZOMBIE_DEFS[t].boss, pack, force: true })) made++;
         this.sendChat(p, 0, CHATF.SYSTEM, `spawned ${made} x ${ZOMBIE_DEFS[t].name}`);
         break;
       }
@@ -4258,6 +4279,10 @@ export class Game {
       }
       case 'airdrop':
         this.spawnSupplyDrop();
+        break;
+      case 'stuck':
+        // /stuck [1-3]: the clock to that step of the help a team that has found no supply gets (shared/supplyhelp.js)
+        this.supplyClock = SUPPLY_HELP_AT[Math.min(SUPPLY_HELP_AT.length, Math.max(1, +args[1] || 1)) - 1];
         break;
       case 'parts':
         this.supplies = this.sup.need.slice();
@@ -4597,6 +4622,7 @@ export class Game {
     this.vehicles.update();
     ts.mark(T_INPUTS);
     this.updatePhase(dt);
+    this.updateSupplyHelp(dt);
     this.cemetery.update(dt);
     ts.mark(T_PHASE);
     this.updatePlayers(dt);
@@ -4633,6 +4659,34 @@ export class Game {
     const due = ts.end();
     this.stats.tickMs = this.stats.tickMs * 0.95 + ts.ms * 0.05;
     if (due) this.log(`slow tick ${ts.slowText(`players ${this.players.size} zombies ${this.zombies.length} ents ${this.all.length}`)}`);
+  }
+
+  // A team that has found no supply by the times in SUPPLY_HELP_AT gets a little more help at each (shared/supplyhelp.js):
+  // the rumour narrowed, then the spot on the compass, then a voice on the radio. Finding one takes it all away.
+  updateSupplyHelp(dt) {
+    this.supplyClock += dt;
+    const lvl = supplyHelpLevel(this.supplyClock, this.supplyFound !== 0 || this.supplies.some((n) => n > 0));
+    if (lvl === this.supplyHelp) return;
+    if (lvl === SUPPLY_HELP.RADIO) {
+      // the one nearest to a survivor
+      let best = -1;
+      let bestD = Infinity;
+      this.supplyHintSpots.forEach((si, k) => {
+        const sp = this.world.partSpots[si];
+        if (!sp || this.supplyFound & (1 << k)) return;
+        for (const p of this.players.values()) {
+          if (!p.alive || p.zombie) continue;
+          const d = Math.hypot(p.state.x - sp.x, p.state.z - sp.z);
+          if (d < bestD) {
+            bestD = d;
+            best = k;
+          }
+        }
+      });
+      if (best >= 0) this.notify(NOTIFY.SUPPLY_HINT, best);
+    }
+    this.supplyHelp = lvl;
+    this.globalDirty = true;
   }
 
   hordeAlive() {
@@ -5110,6 +5164,8 @@ export class Game {
     for (let i = 0; i < 5; i++) w.u8(this.supplies[i]); // (this act's: suppliesOf)
     for (let i = 0; i < 7; i++) w.u8(this.supplyHints[i] ?? 255);
     w.u8(this.supplyFound);
+    for (let i = 0; i < 7; i++) w.u16(this.supplyHintSpots[i] >= 0 ? this.supplyHintSpots[i] : 0xffff);
+    w.u8(this.supplyHelp);
     w.u8(this.unlocked);
     for (let i = 0; i < SCHEMATICS.length; i++) w.u8(this.schemHints[i] ?? 255);
     w.u8(this.phase === PHASE.NIGHT ? this.wave : 0);

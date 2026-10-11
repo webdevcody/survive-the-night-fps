@@ -1,5 +1,5 @@
 // What the match records say, for tuning the game: `npm run report` prints every analytics_* question
-// (server/db/migrations/003_analytics.sql) asked of DATABASE_URL.
+// (server/db/migrations/003_analytics.sql, 004 and 020) asked of DATABASE_URL.
 //   npm run report                       the last 30 days
 //   npm run report -- --days 7
 //   npm run report -- --since 2026-10-01
@@ -33,6 +33,7 @@ const QUESTIONS = [
   ['supply_pacing', 'Pacing: minutes into a match each car supply is first found / installed'],
   ['retention', 'Do players come back (by matches played)'],
   ['difficulty', 'How hard players say it is (end screen votes: avg 1 too easy .. 5 too hard, the rest % of votes)'],
+  ['moments', "A run's best and worst moment (end screen picks: how many picked each, of how many answered in that bucket)"],
   ['server_health', 'Server health'],
 ];
 

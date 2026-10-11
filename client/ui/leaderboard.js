@@ -4,21 +4,22 @@
 // game. A click on a column sorts by it. The game asks the server for the board while this is open and hands
 // each answer to set(). On the splash, an HTTP request supplies the all-time list instead.
 // It leads with you (issue #219): your place in the stat picked, how far the next place is, and your places in the
-// others. In a game it is the side sheet (sheet.js): down the right-hand side, a row shows only the stat picked,
+// others. The columns go nights, revives, wins, kills, and it opens sorted by nights (issue #302: a co-op board
+// leads with what the team did, not with kills). In a game it is the side sheet (sheet.js): down the right-hand side, a row shows only the stat picked,
 // and tabs on its edge go to the player list and Friends; on the splash it stays the card in the middle.
-import { BOARD_STATS, BOARD_TOP } from '../../shared/protocol.js';
+import { BOARD_STATS, BOARD_ORDER, BOARD_TOP, boardSort } from '../../shared/protocol.js';
 import { el, svgEl, lsGet, lsSet } from './dom.js';
 import { glyph } from './icons.js';
 import { bindLabel, liveText } from '../game/binds.js';
 import { SheetTabs, undock, sheetLeft, sheetCame } from './sheet.js';
 
-const STORE = 'stn.board'; // 'all:kills': the list and the column last looked at
+const STORE = 'stn.board'; // 'all:nights': the list and the column last looked at
 // per stat: column head, its glyph, what it counts
 const COLS = {
-  kills: ['Kills', 'skull', 'The dead you put down: zombies and turned players'],
   nights: ['Nights', 'moon', 'Nights you were still alive at the end of'],
-  wins: ['Wins', 'car', 'Runs your team escaped from'],
   revives: ['Revives', 'cross', 'Teammates you got back on their feet'],
+  wins: ['Wins', 'car', 'Runs your team escaped from'],
+  kills: ['Kills', 'skull', 'The dead you put down: zombies and turned players'],
 };
 const LISTS = [
   ['all', 'All time'],
@@ -33,7 +34,7 @@ export class Leaderboard {
     this.data = null; // { total, rows } as last sent (shared/protocol.js readBoard)
     const [list, sort] = lsGet(STORE, '').split(':');
     this.list = LISTS.some(([id]) => id === list) ? list : 'all';
-    this.sort = BOARD_STATS.includes(sort) ? sort : BOARD_STATS[0];
+    this.sort = boardSort(sort);
     this.key = '';
     this.error = '';
     this.lobbyMode = false;
@@ -91,7 +92,7 @@ export class Leaderboard {
     const hd = el('div', 'lb-row lb-hd', table);
     el('span', 'lb-rank', hd, '#');
     el('span', 'lb-name', hd, 'Player');
-    this.sortBtns = BOARD_STATS.map((k) => {
+    this.sortBtns = BOARD_ORDER.map((k) => {
       const [label, ico, what] = COLS[k];
       const b = el('button', 'lb-col', hd);
       b.type = 'button';
@@ -202,7 +203,7 @@ export class Leaderboard {
     el('span', 'lb-nm', name, row.name);
     if (row.me) el('span', 'lb-tag', name, 'you');
     else if (row.here && this.list === 'all') el('span', 'lb-tag here', name, 'in this game');
-    for (const k of BOARD_STATS) el('span', 'lb-val' + (k === this.sort ? ' on' : ''), r, num(row[k]));
+    for (const k of BOARD_ORDER) el('span', 'lb-val' + (k === this.sort ? ' on' : ''), r, num(row[k]));
   }
 
   // The "you" block, from what the server sends: your row with your place in every stat (its ranks: how many are
@@ -250,8 +251,9 @@ export class Leaderboard {
     this.youNext.hidden = !next;
     // your places in the other stats: a click picks that stat
     this.youOthers.textContent = '';
-    BOARD_STATS.forEach((s, j) => {
+    BOARD_ORDER.forEach((s) => {
       if (s === k) return;
+      const j = BOARD_STATS.indexOf(s); // (ranks come in the wire's order)
       const b = el('button', 'lb-you-other', this.youOthers);
       b.type = 'button';
       b.title = `Sort by ${COLS[s][0].toLowerCase()}`;
@@ -269,7 +271,7 @@ export class Leaderboard {
     if (key === this.key) return;
     this.key = key;
     this.listBtns.forEach((b, i) => b.classList.toggle('on', LISTS[i][0] === this.list));
-    this.sortBtns.forEach((b, i) => b.classList.toggle('on', BOARD_STATS[i] === k));
+    this.sortBtns.forEach((b, i) => b.classList.toggle('on', BOARD_ORDER[i] === k));
     this.body.textContent = '';
     this.mine.textContent = '';
     this.mine.hidden = true;

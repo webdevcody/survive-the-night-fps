@@ -1,6 +1,18 @@
 // Iteration 2 HUD pieces: compass strip, objective tracker ("field notes"), world markers (teammate
 // nameplates, pings, the car), damage direction arrows and the dusk card. (Downed and the dawn lines: endscreens.js)
 // Same conventions as hud.js: update() is called every frame and only touches the DOM on change.
+//
+// ---------------------------------------------------------------- what matters most (#272)
+// Not everything on screen is equally important. In each phase the HUD and the menus follow one order, and the thing
+// at the top is the loudest on screen: the biggest, the reddest, the one that moves or the one with room round it.
+// A redesign of any screen says how it follows this order, and passes the greyscale test: take a screenshot, take the
+// colour out, and the top item still stands out most. (A night can put ~120 of the dead on screen: README.)
+//   Night:          a downed teammate > your own health and bleed-out > the wave and the boss > ammo > the rest
+//   Day:            time to dusk > the objective > the compass > loot and [E] prompts
+//   Final stand:    the car's (or the plane's) health > downed teammates > your own health
+//   Menus:          one primary action per screen (inventory, cards, auction, loadouts), the rest quieter
+// A teammate in danger is as loud as you are: a downed one gets a solid red plate, a pulsing compass chip that keeps
+// its place over every other marker (Compass, RANK below), a red toast and an alarm (game/matedown.js).
 import { ITEM_DEFS, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W, ACT_NOW } from '../game/act.js'; // (this act's: the car's supplies, or the plane's parts)
 import { WORLD, RUNWAY, nightRank } from '../../shared/acts.js';

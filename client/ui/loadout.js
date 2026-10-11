@@ -1,11 +1,13 @@
 import { AMMO_NAMES, ITEM_DEFS, ZOMBIE_DEFS } from '../../shared/defs.js';
-import { LOADOUT_RARITY, LOADOUT_RARITY_NAMES, LOADOUT_SLOTS, LOADOUT_TYPES, loadoutDef, loadoutTypeName } from '../../shared/loadout.js';
+import { LOADOUT_CATALOG, LOADOUT_RARITY, LOADOUT_RARITY_NAMES, LOADOUT_SLOTS, LOADOUT_TYPES, loadoutDef, loadoutTypeName } from '../../shared/loadout.js';
 import { AUCTION, SKULLS, sellerProceeds } from '../../shared/economy.js';
 import { el, svgEl } from './dom.js';
 import { glyph } from './icons.js';
 import { Panel } from './games.js';
 import { buyAuctionListing, cancelAuctionListing, fetchAuction, fetchLoadout, listAuctionItem, saveLoadout } from '../net/loadout.js';
 import { accountState } from '../net/account.js';
+import { bestiaryView } from '../net/bestiary.js';
+import { loadoutCounts, loadoutTally, silhouette, tallyText } from '../../shared/collections.js';
 
 const fmtGrant = (def) => {
   const g = def.grant || {};
@@ -96,6 +98,7 @@ export class LoadoutPanel extends Panel {
     this.typeFilter = 'all';
     this.rarityFilter = 0;
     this.sort = 'rarity';
+    this.showMissing = true; // the items not found yet, as silhouettes after the owned ones (issue #286)
     this.busy = false;
     this.err = '';
     this.root.classList.add('loadout-panel');
@@ -202,6 +205,16 @@ export class LoadoutPanel extends Panel {
       this.render();
     });
     field('Sort', this.sortSel);
+    this.showSel = el('select', '', null);
+    for (const [value, label] of [['all', 'Owned and missing'], ['owned', 'Owned only']]) {
+      const o = el('option', '', this.showSel, label);
+      o.value = value;
+    }
+    this.showSel.addEventListener('change', () => {
+      this.showMissing = this.showSel.value === 'all';
+      this.render();
+    });
+    field('Show', this.showSel);
     this.count = el('span', 'lo-count', this.controls);
   }
   visibleItems() {
@@ -215,6 +228,14 @@ export class LoadoutPanel extends Panel {
       newest: (a, b) => (b.acquiredAt || 0) - (a.acquiredAt || 0) || b.id.localeCompare(a.id),
     }[this.sort];
     return items.sort(cmp);
+  }
+  // the catalog's items not owned yet that the filters let through, rarest first: [def]
+  missingDefs() {
+    if (!this.showMissing || !this.data) return [];
+    const have = loadoutCounts(this.data.items);
+    return LOADOUT_CATALOG.filter((def) => !have.has(def.id) && (this.typeFilter === 'all' || def.type === this.typeFilter) && (!this.rarityFilter || def.rarity >= this.rarityFilter)).sort(
+      (a, b) => b.rarity - a.rarity || a.type.localeCompare(b.type) || a.id - b.id
+    );
   }
   renderSlots(byId = this.byId()) {
     this.slotBox.textContent = '';
@@ -249,12 +270,11 @@ export class LoadoutPanel extends Panel {
     this.grid.textContent = '';
     const all = this.data?.items || [];
     const items = this.visibleItems();
-    if (this.count) this.count.textContent = all.length ? `${items.length} shown / ${all.length} owned` : '';
-    if (!all.length) {
-      el('p', 'gb-empty lo-empty', this.grid, this.busy ? 'Loading your collection...' : this.err || 'No loadout items yet. Bosses and strongboxes can unlock them.');
-      return;
-    }
-    if (!items.length) {
+    const missing = this.missingDefs();
+    if (this.count) this.count.textContent = this.data ? `${tallyText(loadoutTally(all))} found${all.length ? ` · ${all.length} owned` : ''}` : '';
+    if (!all.length) el('p', 'gb-empty lo-empty', this.grid, this.busy ? 'Loading your collection...' : this.err || 'No loadout items yet. Bosses and strongboxes can unlock them.');
+    if (!all.length && !missing.length) return;
+    if (all.length && !items.length && !missing.length) {
       el('p', 'gb-empty lo-empty', this.grid, 'No items match these filters.');
       return;
     }
@@ -273,11 +293,37 @@ export class LoadoutPanel extends Panel {
         this.render();
       });
     }
+    const seen = bestiaryView().mask;
+    for (const def of missing) {
+      const g = silhouette(def, seen);
+      const key = `cat:${def.id}`;
+      const b = el('button', `lo-card lo-ghost r${g.rarity}${key === this.selected ? ' on' : ''}`, this.grid);
+      b.type = 'button';
+      b.title = `Not found yet · ${g.source}`;
+      const top = el('span', 'lo-card-top', b);
+      svgEl('i', 'lo-card-ico', top, glyph(typeIcon(def)));
+      el('span', 'lo-card-r', top, LOADOUT_RARITY_NAMES[g.rarity]);
+      el('b', '', b, '???');
+      el('small', '', b, g.source);
+      b.addEventListener('click', () => {
+        this.selected = key;
+        this.render();
+      });
+    }
   }
   renderDetail(byId = this.byId()) {
     this.detail.textContent = '';
     this.balance.textContent = `${SKULLS.NAME}: ${priceText(this.data?.balance || 0)}`;
     if (this.err) el('p', 'ac-note bad', this.detail, this.err);
+    if (this.selected.startsWith('cat:')) {
+      const def = loadoutDef(+this.selected.slice(4));
+      if (!def) return;
+      const g = silhouette(def, bestiaryView().mask);
+      el('h3', '', this.detail, g.name);
+      el('p', `lo-meta r${g.rarity}`, this.detail, `${LOADOUT_RARITY_NAMES[g.rarity]} ${loadoutTypeName(g.type)} · not found yet`);
+      el('p', 'lo-line', this.detail, `Where to look: ${g.source}`);
+      return;
+    }
     const owned = byId.get(this.selected);
     const def = owned && loadoutDef(owned.catalog);
     if (!def) return;
@@ -317,8 +363,9 @@ export class LoadoutPanel extends Panel {
   render() {
     const byId = this.byId();
     const visible = this.visibleItems();
-    if (this.selected && visible.length && !visible.some((it) => it.id === this.selected)) this.selected = visible[0].id;
-    if (this.selected && !visible.length && this.data?.items?.length) this.selected = '';
+    const ghost = this.selected.startsWith('cat:') && this.missingDefs().some((def) => `cat:${def.id}` === this.selected);
+    if (this.selected && !ghost && visible.length && !visible.some((it) => it.id === this.selected)) this.selected = visible[0].id;
+    if (this.selected && !ghost && !visible.length) this.selected = '';
     this.root.classList.toggle('busy', this.busy);
     const a = accountState();
     this.guest.hidden = !a.ready || !a.accounts || a.offline || !!a.user || !(this.data?.items?.length || this.data?.balance);

@@ -12,11 +12,22 @@
 //  - weather (s.wind 0..1+, s.rain 0..1): wind swells the wind beds and sets the trees creaking, rain and gales
 //    quiet the birds and crickets, a rain bed plays (a muffled drumming under a roof) and thunder is placed at each
 //    lightning strike.
+//  - home (s.home, issue #303): at night, inside the walls the team has built (home.js), the outside beds duck and
+//    darken under a warm room tone and fewer calls carry in; stepping back out brings the full night back, a touch
+//    louder for a moment. One night theme (s.homeless) leaves the home bed out: nowhere feels safe.
 import { clamp01, smooth, bell, rand, expWait, gustField, windField } from './curves.js';
 
 const TAU = Math.PI * 2;
 const POOL = 10;
 const MAX_HRTF = 3;
+// home: how far the outside beds duck and darken, the room tone's level, and the crossfade's time constant (s): the
+// change is 95% done in 3 time constants, ~1 s
+const HOME_DUCK = 0.55;
+const HOME_LP = 1600;
+export const HOME_TONE = 0.16;
+export const HOME_TC = 0.35;
+const HOME_FEWER = 0.6; // share of the one-shots (calls, dread) that no longer carry in
+const EXPOSED_SWELL = 0.2; // stepping out: the night comes back this much louder, settling over a few seconds
 
 // weather quiet: birds hide from rain and gales
 const shelter = (s) => (1 - 0.85 * (s.rain || 0)) * (1 - 0.8 * smooth(0.5, 1, s.wind || 0));
@@ -220,19 +231,28 @@ export class Ambience {
     this.e = engine;
     const c = (this.ctx = engine._ctx);
     this.out = engine._ambIn;
+    // the outside beds go through the home duck (a gain and a low-pass), the rest straight to the ambience bus
+    this.homeLP = c.createBiquadFilter();
+    this.homeLP.type = 'lowpass';
+    this.homeLP.frequency.value = 20000;
+    this.homeLP.Q.value = 0.5;
+    this.homeLP.connect(this.out);
+    this.outside = c.createGain();
+    this.outside.connect(this.homeLP);
     this.windLP = c.createBiquadFilter();
     this.windLP.type = 'lowpass';
     this.windLP.frequency.value = 3000;
     this.windLP.Q.value = 0.5;
-    this.windLP.connect(this.out);
+    this.windLP.connect(this.outside);
     this.beds = {
       wind: new Bed(this, 'bed_wind', this.windLP),
       pines: new Bed(this, 'bed_pines', this.windLP),
-      crickets: new Bed(this, 'bed_crickets', this.out),
-      drone: new Bed(this, 'bed_drone', this.out),
+      crickets: new Bed(this, 'bed_crickets', this.outside),
+      drone: new Bed(this, 'bed_drone', this.outside),
       horde: new Bed(this, 'bed_horde', this.out),
       fire: new Bed(this, 'loop_campfire', this.out),
       rain: new Bed(this, 'bed_rain', null),
+      home: new Bed(this, 'bed_home', this.out),
     };
     // rain: open sky, or a muffled drumming under a roof
     this.rainLP = c.createBiquadFilter();
@@ -252,7 +272,7 @@ export class Ambience {
     this.coverLP.type = 'lowpass';
     this.coverLP.frequency.value = 20000;
     this.coverLP.Q.value = 0.5;
-    this.coverLP.connect(this.out);
+    this.coverLP.connect(this.outside);
     this.rbeds = {};
     for (const [k, d] of Object.entries(REC_BEDS)) this.rbeds[k] = new RecBed(this, k, d, d.rain ? this.rainLP : d.dry ? this.out : this.coverLP);
     this.rbedList = Object.values(this.rbeds);
@@ -300,6 +320,32 @@ export class Ambience {
     this.threat = 0; // smoothed: silences the forest
     this.fear = 0; // smoothed zombie proximity: drives the fear heartbeat
     this.wind = { speed: 5, gust: 0.5, strength: 0.3 };
+    this.home = 0; // 0..1: how much of the home bed is wanted (inside the walls, at night)
+    this.exposedAt = -1e9; // when the listener last stepped out of the walls at night
+    this._out = 1;
+    this._hlp = 20000;
+  }
+
+  // the home crossfade: the outside beds duck and darken, the room tone comes up. Returns how few of the one-shots
+  // still carry in (1 = all of them).
+  _home(now, s, tf) {
+    const h = s.home && !s.homeless && !s.menu && !s.dead ? smooth(0.2, 0.7, tf.night) : 0;
+    if (this.home > 0.5 && h <= 0.5) this.exposedAt = now;
+    this.home = h;
+    const swell = EXPOSED_SWELL * (1 - smooth(1.5, 6, now - this.exposedAt)) * smooth(0.2, 0.7, tf.night);
+    const out = (1 - HOME_DUCK * h) * (1 + swell);
+    if (Math.abs(out - this._out) > 0.005) {
+      this._out = out;
+      this.outside.gain.setTargetAtTime(out, now, HOME_TC);
+    }
+    const lp = h > 0.01 ? Math.round(20000 * Math.pow(HOME_LP / 20000, h)) : 20000;
+    if (Math.abs(lp - this._hlp) > 50) {
+      this._hlp = lp;
+      this.homeLP.frequency.setTargetAtTime(lp, now, HOME_TC);
+    }
+    if (h > 0.01 && !this.e._pools.get('bed_home')?.length) this.e._need('bed_home');
+    this.beds.home.set(HOME_TONE * h, now, HOME_TC);
+    return 1 - HOME_FEWER * h;
   }
 
   get rec() {
@@ -523,6 +569,7 @@ export class Ambience {
     const d = 1 - n;
     const cover = Math.max(s.underCover ? 1 : 0, s.indoor);
     const tf = this._timeOfDay(now, s, dt);
+    const fewer = this._home(now, s, tf);
 
     // threat: quick to hush the forest, slow to trust it again
     const raw = s.menu || s.dead ? 0 : Math.max(s.danger, s.horde ? 0.55 : 0, s.boss ? 0.7 : 0);
@@ -608,7 +655,7 @@ export class Ambience {
     for (let i = 0; i < PROC_EVENTS.length; i++) {
       const ev = PROC_EVENTS[i];
       if (ev.by && (rec.covers(ev.by[0]) || (ev.by[1] && rec.covers(ev.by[1])))) continue;
-      const perMin = ev.rate(s, d, n);
+      const perMin = ev.rate(s, d, n) * fewer;
       if (perMin <= 0) continue;
       this.pT[i] -= (perMin / 60) * dt;
       if (this.pT[i] > 0) continue;
@@ -625,7 +672,7 @@ export class Ambience {
     }
     for (let i = 0; i < REC_EVENTS.length; i++) {
       const ev = REC_EVENTS[i];
-      const perMin = ev.rate(s, tf, quiet, w);
+      const perMin = ev.rate(s, tf, quiet, w) * fewer;
       // get(): keeps an active species decoded (or decodes it on demand); skipped until it is
       if (perMin <= 0 || !rec.get(ev.key)) continue;
       this.rT[i] -= (perMin / 60) * dt;
@@ -634,7 +681,7 @@ export class Ambience {
       if (now - this.rLast[i] < ev.gap) continue;
       if (this._fireRec(ev, now)) this.rLast[i] = now;
     }
-    const dreadPerMin = s.menu || s.dead ? 0 : 0.6 * (tf.night + 0.4 * tf.dusk) * (1 + 4 * this.threat) * (1 - 0.6 * cover);
+    const dreadPerMin = s.menu || s.dead ? 0 : 0.6 * (tf.night + 0.4 * tf.dusk) * (1 + 4 * this.threat) * (1 - 0.6 * cover) * fewer;
     if (dreadPerMin > 0.01) {
       this.dreadT -= (dreadPerMin / 60) * dt;
       if (this.dreadT <= 0) {

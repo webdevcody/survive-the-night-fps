@@ -2,11 +2,12 @@
 // turned with you so the way you face is always up, with the field map's markers on it. What matters wherever it is
 // (the car, waypoints, the team, pings, supply drops, a car supply lying loose) waits on the rim, in its direction, while it is out of range;
 // the places a car supply or a schematic is rumoured to be in only show once they are in range.
-// Enemies in range are red dots on a canvas of their own, redrawn every frame (a horde is too many to be DOM markers).
+// Enemies in range are red dots on a canvas of their own, redrawn every frame (a horde is too many to be DOM markers);
+// the ones a noise of yours just woke are lit amber for a moment (heard).
 // The car supplies shrink to a row of icons under it (Objective's slim mode).
-import { ZONE_NAMES, ITEM, schematicRumours } from '../../shared/defs.js';
+import { ZONE_NAMES, ITEM, HEARD_GAP, schematicRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W } from '../game/act.js'; // (this act's)
-import { el, svgEl } from './dom.js';
+import { el, svgEl, replay } from './dom.js';
 import { badge, setBadge, initial } from './mapmarks.js';
 import { itemIcon, glyph } from './icons.js';
 import { MAP_PPM, mapX, mapY } from './mapcanvas.js';
@@ -14,6 +15,8 @@ import { MAP_PPM, mapX, mapY } from './mapcanvas.js';
 const RANGE = 70; // m from you to the rim
 const RIM = 9; // px: a pinned marker sits this far inside the rim
 const LABEL_IN = 0.82; // a place's name shows while it is inside this much of the radius
+const WOKE_T = 2.5; // s the dead a noise of yours woke stay lit
+const WOKE_PULSE = 0.8; // s a ring takes to pulse out of one
 
 export class Minimap {
   constructor(parent) {
@@ -29,6 +32,10 @@ export class Minimap {
     this.marks = el('div', 'mmap-mks', this.root);
     svgEl('i', 'mmap-you', this.root, glyph('arrowUp'));
     this.north = el('b', 'mmap-n', this.root, 'N');
+    this.ring = el('i', 'mmap-heard', this.root); // a noise of yours that woke the dead (heard.js)
+    this.ringT = -Infinity; // when it last went out (s, performance.now)
+    this.woke = new Map(); // entity id -> when a noise of yours woke it (s): lit for WOKE_T
+    this.still = matchMedia('(prefers-reduced-motion: reduce)');
     this.pool = [];
     this.distPool = [];
     this.labPool = [];
@@ -56,6 +63,49 @@ export class Minimap {
     if (this.root.hidden === !v) return;
     this.root.hidden = !v;
     this.drawn = '';
+  }
+
+  // a noise of yours woke the dead: a ring out from you as far as it carried (to the rim, past RANGE), at most one a
+  // HEARD_GAP, and the ones it woke (entity ids) lit
+  heard(loud, ids = []) {
+    const now = performance.now() / 1000;
+    for (const id of ids) this.woke.set(id, now);
+    if (now - this.ringT < HEARD_GAP) return;
+    this.ringT = now;
+    this.ring.style.setProperty('--r', (Math.min(1, loud / RANGE) * 100).toFixed(1) + '%');
+    replay(this.ring, 'on');
+  }
+
+  // the dead a noise of yours just woke, over their red dots: amber, fading out over WOKE_T, a ring pulsing out of each
+  // (held still with reduced motion)
+  _woke(enemies, at, r, sc, dot) {
+    const eg = this.eg;
+    const now = performance.now() / 1000;
+    for (const [id, t0] of this.woke) if (now - t0 >= WOKE_T) this.woke.delete(id);
+    if (!this.woke.size) return;
+    const still = this.still.matches;
+    eg.lineWidth = Math.max(1, 1.4 * sc);
+    for (const e of enemies) {
+      const t0 = this.woke.get(e.id);
+      if (t0 === undefined) continue;
+      const [px, py] = at(e.x, e.z);
+      if (px * px + py * py > (r - 2) * (r - 2)) continue;
+      const age = now - t0;
+      const fade = 1 - (age / WOKE_T) ** 2;
+      const cx = (px + r) * sc, cy = (py + r) * sc, rad = (e.big ? dot * 1.7 : dot) * 1.15;
+      eg.globalAlpha = fade;
+      eg.fillStyle = '#ffb347';
+      eg.beginPath();
+      eg.arc(cx, cy, rad, 0, Math.PI * 2);
+      eg.fill();
+      const p = still ? 0.35 : (age / WOKE_PULSE) % 1;
+      eg.globalAlpha = fade * (1 - p);
+      eg.strokeStyle = '#ffc478';
+      eg.beginPath();
+      eg.arc(cx, cy, rad * (1.4 + 2.2 * p), 0, Math.PI * 2);
+      eg.stroke();
+    }
+    eg.globalAlpha = 1;
   }
 
   // screen: the field map (MapScreen: its world and baked map). d: what it shows (Game.mapData())
@@ -138,6 +188,7 @@ export class Minimap {
       eg.stroke();
     }
     this.enN = en;
+    if (this.woke.size) this._woke(d.enemies || [], at, r, sc, dot);
 
     // markers: the field map's own badges (mapmarks.js), so the key learnt there reads here. What matters waits on the
     // rim while it is out of range, in its direction; pins that would sit on one another are spread apart round the

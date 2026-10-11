@@ -86,6 +86,8 @@ export function readGlobal(r, prev) {
     supplies: [r.u8(), r.u8(), r.u8(), r.u8(), r.u8()],
     hints: [r.u8(), r.u8(), r.u8(), r.u8(), r.u8(), r.u8(), r.u8()],
     found: r.u8(), // a bit per hint: that supply has been taken from its hiding place
+    spots: [r.u16(), r.u16(), r.u16(), r.u16(), r.u16(), r.u16(), r.u16()], // the world.partSpots index each hint is hidden at (0xffff: none): the crows circle over it
+    help: r.u8(), // the help a team that has found nothing yet gets by now (SUPPLY_HELP in shared/supplyhelp.js)
     unlocked: r.u8(),
     schemHints: [r.u8(), r.u8(), r.u8(), r.u8(), r.u8()], // the place each schematic is rumoured to be in
     wave: r.u8(),
@@ -391,6 +393,13 @@ export function readEvents(r, handler, flags, ents) {
       case EVT.PONG: {
         const held = r.u8();
         handler.pong?.(held);
+        break;
+      }
+      case EVT.HEARD: {
+        const what = r.u8(), woke = r.u8(), loud = r.u8(), n = r.u8();
+        const ids = [];
+        for (let i = 0; i < n; i++) ids.push(r.u16());
+        handler.heard?.(what, woke, loud, ids);
         break;
       }
       case EVT.PING:
