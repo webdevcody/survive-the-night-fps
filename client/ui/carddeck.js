@@ -202,7 +202,7 @@ export class DeckBuilder {
       t.root.title = have ? '' : `Not owned yet. ${CARD_SOURCE}.`;
       t.root.classList.toggle('in', inDeck > 0);
       t.root.classList.toggle('off', c.k !== K.LEADER && df >= 0 && c.f !== F.NEUTRAL && c.f !== df);
-      t.root.classList.toggle('full', c.k !== K.LEADER && inDeck >= cap);
+      t.root.classList.toggle('full', have > 0 && c.k !== K.LEADER && inDeck >= cap); // (one not owned is greyed, not dimmed as full)
       want.push(t.root);
     }
     const g = this.grid;
