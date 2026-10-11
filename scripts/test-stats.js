@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Game } from '../server/game.js';
 import { PlayerStats } from '../server/stats.js';
-import { C2S, S2C, PROTOCOL_VERSION, BOARD_STATS, BOARD_TOP, BOARDF, Writer, Reader, writeBoard, readBoard } from '../shared/protocol.js';
+import { C2S, S2C, PROTOCOL_VERSION, BOARD_STATS, BOARD_ORDER, boardSort, BOARD_TOP, BOARDF, Writer, Reader, writeBoard, readBoard } from '../shared/protocol.js';
 import { ZTYPE, KILLER } from '../shared/defs.js';
 
 let failed = 0;
@@ -105,6 +105,14 @@ const file = join(dir, 'deep', 'stats.json');
   b = s.board(null, new Set());
   // (the best 20 by kills, and P1 and P5 for their nights)
   check('a player without a record still gets the board, with no row of their own', b.rows.length === BOARD_TOP + 2 && !b.rows.some((r) => r.flags & BOARDF.ME), `${b.rows.length} rows`);
+
+  // the order the leaderboard shows (issue #302): team play first, kills last but still there
+  check('the board opens sorted by nights survived, revives and wins next, kills last', BOARD_ORDER.join() === 'nights,revives,wins,kills' && [...BOARD_ORDER].sort().join() === [...BOARD_STATS].sort().join() && boardSort('') === 'nights' && boardSort(undefined) === 'nights' && boardSort('junk') === 'nights', BOARD_ORDER.join());
+  check('...and a column a player picked stays picked, kills too', boardSort('kills') === 'kills' && boardSort('revives') === 'revives');
+  b = s.board(null, new Set());
+  const k = boardSort('');
+  const byDefault = b.rows.filter((r) => r[k] > 0).sort((x, y) => y[k] - x[k] || x.name.localeCompare(y.name));
+  check('sorted by default, the most nights lead, not the most kills', byDefault[0].name === 'P1' && byDefault.map((r) => r.nights).join() === '9,4,4,4', byDefault.map((r) => `${r.name}:${r.nights}`).join());
 
   // on the wire
   const rows = [

@@ -223,6 +223,26 @@ export function bedDrone(sr, rng) {
   }
   return normalize(noiseLoop, 0.8);
 }
+// home: the room tone inside the team's walls at night (issue #303). A warm, close murmur - low rumble, the wind
+// heard through planks, a faint creak of timber - with none of the drone's minor-second beating
+export function bedHome(sr, rng) {
+  const Ls = 10;
+  const X = 1.5;
+  const n = Math.ceil((Ls + X) * sr);
+  const outs = [];
+  for (let ch = 0; ch < 2; ch++) {
+    const c = new Float32Array(n);
+    const br = new Brown(rng);
+    const lp = new Biquad().lp(sr, 140, 0.7);
+    const pk = new Pink(rng);
+    const thru = new Biquad().bp(sr, 380, 0.8); // the wind, through the boards
+    const w = new Wander(rng, sr, 0.08);
+    const w2 = new Wander(rng, sr, 0.2);
+    for (let i = 0; i < n; i++) c[i] = lp.run(br.next()) * 1.4 * (0.8 + 0.2 * w.next()) + thru.run(pk.next()) * 0.25 * (0.6 + 0.4 * w2.next());
+    outs.push(c);
+  }
+  return finishLoop(outs, sr, X, 0.7);
+}
 export function bedHorde(sr, rng) {
   const Ls = 8;
   const X = 1;
@@ -801,6 +821,7 @@ export const AMB_DEFS = [
   { bank: 'bed_pines', n: 1, sr: LO, gen: bedPines },
   { bank: 'bed_crickets', n: 1, sr: MID, gen: bedCrickets },
   { bank: 'bed_drone', n: 1, sr: LO, gen: bedDrone },
+  { bank: 'bed_home', n: 1, sr: LO, group: 'late', gen: bedHome },
   { bank: 'bed_horde', n: 1, sr: LO, group: 'late', gen: bedHorde },
   { bank: 'bed_rain', n: 1, sr: MID, group: 'late', gen: bedRain },
   { bank: 'amb_thunder', n: 3, sr: LO, group: 'late', gen: thunder },

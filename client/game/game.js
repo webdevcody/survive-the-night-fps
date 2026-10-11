@@ -71,6 +71,7 @@ import { LookWarmer } from './lookwarm.js';
 import { SPAWN_KEY } from '../ui/spawnmenu.js';
 import { treeAt, fellTree, regrowTrees, cutTree, treeFoot, treeTop } from '../../shared/felling.js';
 import { nightTheme } from '../../shared/nights.js';
+import { HomeSense, HOME_WALLS, HOMELESS_THEMES } from '../audio/home.js';
 import { shotDirections, shotSpread, shotClimb, aimingWith, currentWeapon, eyeHeight } from '../../shared/playersim.js';
 import { stepClimb, punchOf, punchAt, crosshairGap } from './aimview.js';
 import { pryWeapon } from '../../shared/trunk.js';
@@ -307,6 +308,8 @@ export class Game {
     this.localFlashT = 0;
     this.openness = 0;
     this.indoor = 0;
+    this.homeSense = new HomeSense(); // inside the team's walls (the night's home bed: audio/home.js)
+    this._homeStructs = [];
     this.under = 0; // how far down the mine the eye is (0..1)
     this._envOver = { under: 0 };
     this._wxDown = {};
@@ -450,6 +453,16 @@ export class Game {
     return Math.max(0, 1 - occ);
   }
 
+  // tonight's theme leaves the home bed out (audio/home.js), worked out from the seed once a night
+  homeless(night) {
+    const key = `${this.seed}:${this.act}:${night}`;
+    if (this._homelessKey !== key) {
+      this._homelessKey = key;
+      this._homeless = HOMELESS_THEMES.has(nightTheme(this.seed, night, this.act)?.id);
+    }
+    return this._homeless;
+  }
+
   // surroundings for the audio reverb: openness (few trees within 14 m) and a roof overhead
   probeSurroundings(pos) {
     const w = this.world;
@@ -458,6 +471,10 @@ export class Game {
     this.openness = Math.max(0, 1 - trees / 7);
     raycastWorld(w, pos.x, pos.y, pos.z, 0, 1, 0, 10, _sunRay, COL.NOBULLET | COL.NOBLOCK | COL.TREE);
     this.indoor = _sunRay.t >= 0 && !_sunRay.terrain ? 1 : 0;
+    const hs = this._homeStructs;
+    hs.length = 0;
+    for (const e of this.entities.ents.values()) if (e.kind === ENT.STRUCTURE && HOME_WALLS.has(e.stype)) hs.push({ x: e.rx, z: e.rz, yaw: (e.rot8 / 256) * Math.PI * 2, stype: e.stype });
+    this.homeSense.update(pos.x, pos.z, hs);
   }
 
   // jet: how bright our own flamethrower's stream is burning (its fire light's intensity, 0 when it is out)
@@ -3588,6 +3605,8 @@ export class Game {
       cycle: this.env.cycle,
       open: this.openness,
       indoor: Math.max(this.indoor, this.under),
+      home: this.homeSense.home,
+      homeless: g.phase === PHASE.NIGHT && this.homeless(g.day),
     });
 
     // overlays by phase
