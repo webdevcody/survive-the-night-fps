@@ -119,6 +119,11 @@ export class Loadouts {
     if (p.loadoutEntered) this.unuse(p.rejoinKey);
     p.loadoutEntered = false;
   }
+  // the Skull shop cosmetics a player's owner has bought (shared/skullshop.js): none until their collection is here
+  cosmetics(p) {
+    const o = p?.rejoinKey ? this.own.get(p.rejoinKey) : null;
+    return o?.loaded && o.cosmetics ? o.cosmetics : [];
+  }
   fromStore(m) {
     if (m.op === 'xfered') return this.game.cards?.fromLoadoutStore(m);
     if (m.op !== 'coll') return;
@@ -127,7 +132,11 @@ export class Loadouts {
     o.loaded = m.ok === true;
     o.items = Array.isArray(m.items) ? m.items : [];
     o.slots = Array.isArray(m.slots) ? m.slots : [null, null, null];
-    for (const p of this.game.players.values()) if (p.rejoinKey === m.owner) this.apply(p);
+    o.cosmetics = Array.isArray(m.cosmetics) ? m.cosmetics : [];
+    for (const p of this.game.players.values()) if (p.rejoinKey === m.owner) {
+      this.apply(p);
+      this.game.ownLook?.(p);
+    }
     this.game.cards?.loadoutsChanged?.(m.owner);
   }
   xfer(id, kind, moves, match = '') {

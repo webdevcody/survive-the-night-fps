@@ -116,6 +116,10 @@ window.fetch = async (url, opts) => {
     const body = statusMode === 'full' ? { players: 8, max: 8, phase: PHASE.NIGHT, day: 4 } : { players: 3, max: 8, phase: PHASE.NIGHT, day: 2 };
     return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
   }
+  if (path.includes('/api/loadout/shop')) {
+    await new Promise((r) => setTimeout(r, 80));
+    return new Response(JSON.stringify({ owned: [1, 10], balance: 260 }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
   if (path.includes('/api/loadout/auction')) {
     await new Promise((r) => setTimeout(r, 80));
     return new Response(JSON.stringify({ ...demoAuction }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -450,7 +454,8 @@ switch (screen) {
     break;
   }
   // who to play as: the picker (&customs=N, &choice=...), and the character creator (&section=body|face|hair|clothes|
-  // gear; &from=N: made like roster survivor N; &edit=demo0: one of the saved; else a stranger)
+  // gear; &from=N: made like roster survivor N; &edit=demo0: one of the saved; else a stranger; &wear=topColor:gold,...:
+  // those set after - the Skull shop's dyes, say, with the shop mocked as owning Blood red and Gold)
   case 'picker': {
     buildScene(bg || 'fire');
     ui.showSplash();
@@ -467,6 +472,11 @@ switch (screen) {
       const saved = q.has('edit') && getCustom(q.get('edit'));
       if (saved) panel.edit({ id: saved.id, name: saved.name, values: saved.values });
       else await panel.create(q.has('from') ? +q.get('from') : null);
+      if (q.get('wear')) {
+        const c = panel.creator;
+        const wear = Object.fromEntries(q.get('wear').split(',').map((kv) => kv.split(':')));
+        setTimeout(() => c.set({ ...c.values, ...wear }), 300);
+      }
     }, 50);
     break;
   }

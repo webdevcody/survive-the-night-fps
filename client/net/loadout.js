@@ -11,3 +11,6 @@ export const listAuctionItem = (itemId, price) => post('/api/loadout/auction/lis
 export const buyAuctionListing = (listingId) => post('/api/loadout/auction/buy', { listingId }, 6000);
 export const cancelAuctionListing = (listingId) => post('/api/loadout/auction/cancel', { listingId }, 6000);
 
+// the Skull shop (shared/skullshop.js): -> { shop, owned: [id], balance }
+export const fetchShop = () => call('/api/loadout/shop', asGuest(), 6000);
+export const buyCosmetic = (cosmetic) => post('/api/loadout/shop/buy', { guestId: playerId(), cosmetic }, 6000);

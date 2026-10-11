@@ -8,6 +8,10 @@
 // choice that would change something else says so on hover ("Also changes: Collar to Shirt"). The dice roll the
 // whole survivor, or the tab's section only. The turntable is a model of its own (CharacterStage.previewOf), made again
 // as the look changes; on the Face and Hair tabs the camera comes in to the head, and dragging it turns them.
+//
+// The Skull shop's dyes (shared/skullshop.js) are among the colours, marked with their price until bought: anyone may
+// try one on, and a look wearing one not yet theirs offers it for Zombie Skulls under the turntable. Until it is
+// bought, everyone else in the game sees that field's default colour instead.
 import { APPEARANCE, normalize, relevant, optionsFor, randomLook, rerollSection, defaults } from '../../shared/appearance.js';
 import { SECTIONS } from '../../shared/wardrobe.js';
 import { CHARACTERS } from '../../shared/characters.js';
@@ -16,6 +20,8 @@ import { glyph } from './icons.js';
 import { Panel } from './games.js';
 import { saveCustom, deleteCustom, getCustom, noteFor, cleanName, customs, NAME_MAX, MAX_CUSTOMS } from './customs.js';
 import { getStage, looksModule } from './stage.js';
+import { cosmeticOf, lockedCosmetics } from '../../shared/skullshop.js';
+import { fetchShop, buyCosmetic } from '../net/loadout.js';
 
 const A = APPEARANCE;
 const HEAD_TABS = new Set(['face', 'hair']);
@@ -63,6 +69,9 @@ export class CreatorPanel extends Panel {
     });
     this.note = el('p', 'cr-note', left, '');
     this.note.hidden = true;
+    this.shopBar = el('div', 'cr-shop', left);
+    this.shopBar.hidden = true;
+    this.shop = { owned: new Set(), balance: 0, ready: false, busy: false, err: '' };
     // ---- the right: a tab per section, its dice, its fields
     const right = el('div', 'cr-right', wrap);
     const bar = el('div', 'cr-bar', right);
@@ -129,6 +138,7 @@ export class CreatorPanel extends Panel {
     this.title(id ? 'Change your survivor' : 'Make a survivor');
     this.tab(this.section);
     super.show();
+    this.loadShop();
     const st = await getStage();
     if (this.root.hidden) return;
     this.view.appendChild(st.canvas);
@@ -151,6 +161,53 @@ export class CreatorPanel extends Panel {
     };
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(frame);
+  }
+
+  // ---- the Skull shop
+  async loadShop() {
+    try {
+      const got = await fetchShop();
+      this.shop = { ...this.shop, owned: new Set(got.owned || []), balance: got.balance | 0, ready: true, err: '' };
+    } catch {
+      this.shop = { ...this.shop, ready: false };
+    }
+    if (!this.root.hidden) this.render();
+  }
+
+  async buy(c) {
+    if (this.shop.busy) return;
+    this.shop.busy = true;
+    this.shop.err = '';
+    this.renderShop();
+    try {
+      const got = await buyCosmetic(c.id);
+      this.shop = { ...this.shop, owned: new Set(got.owned || []), balance: got.balance | 0, ready: true };
+    } catch (err) {
+      this.shop.err = err.message || 'That did not go through.';
+    }
+    this.shop.busy = false;
+    this.render();
+  }
+
+  // what this look wears that is not theirs yet, and the button to buy it
+  renderShop() {
+    const bar = this.shopBar;
+    bar.textContent = '';
+    const locked = this.shop.ready ? lockedCosmetics(this.values, this.shop.owned) : [];
+    bar.hidden = !locked.length && !this.shop.err;
+    if (bar.hidden) return;
+    if (locked.length) {
+      el('p', 'cr-shop-txt', bar, `${locked.map((c) => c.label).join(', ')}: from the Skull shop. Until you buy ${locked.length > 1 ? 'them' : 'it'}, everyone else sees the plain colour. You have ${this.shop.balance} Zombie Skulls.`);
+      const row = el('div', 'cr-shop-row', bar);
+      for (const c of locked) {
+        const b = el('button', 'btn btn-ghost cr-shop-buy', row, `Buy ${c.label}: ${c.price} Skulls`);
+        b.type = 'button';
+        b.disabled = this.shop.busy || this.shop.balance < c.price;
+        if (this.shop.balance < c.price) b.title = `You need ${c.price - this.shop.balance} more Zombie Skulls: they come from nights survived, bosses and escapes.`;
+        b.addEventListener('click', () => this.buy(c));
+      }
+    }
+    if (this.shop.err) el('p', 'cr-shop-err', bar, this.shop.err);
   }
 
   title(t) {
@@ -202,6 +259,7 @@ export class CreatorPanel extends Panel {
       else this.picks(ctl, f);
     }
     this.fields.scrollTop = top;
+    this.renderShop();
   }
 
   picks(ctl, f) {
@@ -235,7 +293,14 @@ export class CreatorPanel extends Panel {
         b.textContent = o.label;
       }
       b.title = o.label;
-      b.setAttribute('aria-label', o.label);
+      const c = cosmeticOf(f, o.name);
+      if (c) {
+        const mine = this.shop.owned.has(c.id);
+        b.classList.add('cr-swatch-shop');
+        b.classList.toggle('cr-locked', !mine);
+        b.title = mine ? `${o.label} (yours, from the Skull shop)` : `${o.label}: ${c.price} Zombie Skulls in the Skull shop. Try it on here.`;
+      }
+      b.setAttribute('aria-label', b.title);
       const on = this.values[f.key] === o.name;
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));

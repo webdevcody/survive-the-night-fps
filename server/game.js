@@ -159,6 +159,7 @@ import { checkEnvelope, worldPrint, sameWorld, HandoffError } from './handoff.js
 import { saveGame, loadGame } from './gamestate.js';
 import { CHARACTER_NONE, characterFor, defaultCharacter } from '../shared/characters.js';
 import { readLook, canonicalBytes } from '../shared/appearance.js';
+import { ownedLookBytes } from '../shared/skullshop.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 const MAX_ZOMBIES_ALIVE = 120;
@@ -840,8 +841,11 @@ export class Game {
     session.player = p;
     p.admin = !!account?.isAdmin || this.devAdmin;
     p.character = characterFor(choice, p.id);
-    p.look = look;
     p.rejoinKey = key; // who can take this body back after a drop ('' : nobody - no account and no browser id)
+    // the look they asked for; everyone is shown it without the Skull shop dyes they have not bought (ownLook, again
+    // once their collection is here)
+    p.lookAsked = look;
+    p.look = ownedLookBytes(look, this.loadouts.cosmetics(p));
     p.rec = this.records.enter(pid, base, account);
     p.account = account ? account.id : ''; // their account's id, '' for a guest
     p.guestKey = account ? '' : idKey(pid); // a guest's browser id as stats.js files it ('' without one): never the id itself
@@ -5343,6 +5347,24 @@ export class Game {
     one.str(p.friend || '');
     const bytes = one.bytes();
     for (const q of this.players.values()) if (q !== p) q.session.conn.send(bytes);
+  }
+
+  // A player's look with what their owner has bought from the Skull shop now (Loadouts.fromStore: their collection,
+  // come in or changed): everyone is told when that changes it.
+  ownLook(p) {
+    const look = ownedLookBytes(p.lookAsked ?? p.look, this.loadouts.cosmetics(p));
+    if (String(look) === String(p.look)) return;
+    p.look = look;
+    if (!look && !this.lookIds?.has(p.id)) return;
+    if (look) (this.lookIds ||= new Set()).add(p.id);
+    const w = new Writer(80);
+    w.u8(S2C.LOOKS);
+    w.u8(1);
+    w.u16(p.id);
+    w.u8(look ? look.length : 0);
+    if (look) for (const b of look) w.u8(b);
+    const bytes = w.bytes();
+    for (const q of this.players.values()) if (q.session) q.session.conn.send(bytes);
   }
 
   // Custom survivors' looks (S2C.LOOKS, the character creator): a player joining or coming back is told everyone's

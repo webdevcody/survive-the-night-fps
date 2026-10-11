@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { idKey } from './stats.js';
 import { LOADOUT_SLOTS, cleanLoadoutSlots, loadoutDef } from '../shared/loadout.js';
 import { AUCTION, SKULL_EARN, auctionFee } from '../shared/economy.js';
+import { cosmeticDef } from '../shared/skullshop.js';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 export const OWNER_RE = new RegExp(`^(a:${UUID}|g:[0-9a-f]{64})$`);
@@ -452,6 +453,28 @@ export class PgLoadoutStore {
     });
   }
 
+  // ---- the Skull shop (shared/skullshop.js): cosmetics bought once each
+  async cosmetics(owner) {
+    if (!isOwner(owner)) return [];
+    return (await this.db.query('SELECT cosmetic_id FROM loadout_cosmetics WHERE owner = $1 ORDER BY cosmetic_id', [owner])).rows.map((r) => r.cosmetic_id);
+  }
+  async buyCosmetic(owner, cosmetic) {
+    const def = cosmeticDef(cosmetic);
+    if (!isOwner(owner) || !def) throw marketErr('bad_cosmetic', 'That is not in the Skull shop.');
+    return this.db.tx(async (t) => {
+      // (the row first: a second purchase of the same thing, at the same moment or later, finds it and pays nothing)
+      const ledger = `cosmetic:${randomUUID()}`;
+      const got = await t.query(
+        `INSERT INTO loadout_cosmetics (owner, user_id, cosmetic_id, ledger_id) VALUES ($1, $2::uuid, $3, $4)
+         ON CONFLICT (owner, cosmetic_id) DO NOTHING RETURNING cosmetic_id`,
+        [owner, userOf(owner), def.id, ledger]
+      );
+      if (!got.rows.length) throw marketErr('owned', 'You already have that.');
+      await this.applySkulls(t, ledger, 'cosmetic_buy', [{ owner, delta: -def.price }], { cosmetic: def.id, price: def.price });
+      return { cosmetic: def.id, price: def.price, balance: await this.balanceIn(t, owner) };
+    });
+  }
+
   async mergeGuest(account, guest) {
     return this.db.tx(async (t) => {
       const moved = (await t.query('UPDATE loadout_items SET owner = $1, user_id = $2::uuid, updated_at = now() WHERE owner = $3 RETURNING id', [account, userOf(account), guest])).rows.map((r) => r.id);
@@ -482,7 +505,17 @@ export class PgLoadoutStore {
         );
         skulls = gb;
       }
-      return { items: moved.length, slots: guestSlots.length, skulls };
+      // (what the guest bought in the Skull shop is the account's too; one it already had stays as it was)
+      const cosmetics = (
+        await t.query(
+          `INSERT INTO loadout_cosmetics (owner, user_id, cosmetic_id, ledger_id, acquired_at)
+             SELECT $1, $2::uuid, cosmetic_id, ledger_id, acquired_at FROM loadout_cosmetics WHERE owner = $3
+           ON CONFLICT (owner, cosmetic_id) DO NOTHING RETURNING cosmetic_id`,
+          [account, userOf(account), guest]
+        )
+      ).rows.length;
+      await t.query('DELETE FROM loadout_cosmetics WHERE owner = $1', [guest]);
+      return { items: moved.length, slots: guestSlots.length, skulls, cosmetics };
     });
   }
 }
@@ -498,6 +531,7 @@ export class MemoryLoadoutStore {
     this.listings = new Map(); // id -> listing
     this.wagerLocks = new Map(); // item id -> { id, room, match, owner }
     this.tradeLocks = new Map(); // item id -> { room, trade, owner }
+    this.cosmeticsOwned = new Map(); // owner -> Set of cosmetic ids (the Skull shop)
     this.accounts = null;
   }
   exists(owner) {
@@ -808,7 +842,28 @@ export class MemoryLoadoutStore {
       this.skullLedger.set(`guest-merge:${randomUUID()}`, { kind: 'guest_merge', entries: [{ owner: guest, delta: -gb }, { owner: account, delta: gb }], meta: { guest, account }, at: Date.now() });
       skulls = gb;
     }
-    return { items, slots: nslots, skulls };
+    let cosmetics = 0;
+    const gc = this.cosmeticsOwned.get(guest);
+    if (gc) {
+      const ac = this.cosmeticsOwned.get(account) || new Set();
+      for (const c of gc) if (!ac.has(c)) (ac.add(c), cosmetics++);
+      this.cosmeticsOwned.set(account, ac);
+      this.cosmeticsOwned.delete(guest);
+    }
+    return { items, slots: nslots, skulls, cosmetics };
+  }
+  async cosmetics(owner) {
+    return [...(this.cosmeticsOwned.get(owner) || [])].sort((a, b) => a - b);
+  }
+  async buyCosmetic(owner, cosmetic) {
+    const def = cosmeticDef(cosmetic);
+    if (!isOwner(owner) || !def || !this.exists(owner)) throw marketErr('bad_cosmetic', 'That is not in the Skull shop.');
+    const have = this.cosmeticsOwned.get(owner) || new Set();
+    if (have.has(def.id)) throw marketErr('owned', 'You already have that.');
+    this.applySkullEntries(`cosmetic:${randomUUID()}`, 'cosmetic_buy', [{ owner, delta: -def.price }], { cosmetic: def.id, price: def.price });
+    have.add(def.id);
+    this.cosmeticsOwned.set(owner, have);
+    return { cosmetic: def.id, price: def.price, balance: await this.balance(owner) };
   }
 }
 
@@ -837,7 +892,7 @@ export class LoadoutService {
     }
   }
   msg(owner, c) {
-    return { t: 'loadout', op: 'coll', owner, ok: c.state === 'ok', items: c.items, slots: c.slots };
+    return { t: 'loadout', op: 'coll', owner, ok: c.state === 'ok', items: c.items, slots: c.slots, cosmetics: c.cosmetics || [] };
   }
   broadcast(owner) {
     const c = this.cache.get(owner);
@@ -856,8 +911,19 @@ export class LoadoutService {
     if (!isOwner(owner)) return { ...coll([], []), balance: 0 };
     return this.run(async () => {
       await this.store.expireListings();
-      return { ...(await this.store.load(owner)), balance: await this.store.balance(owner) };
+      return { ...(await this.store.load(owner)), balance: await this.store.balance(owner), cosmetics: await this.store.cosmetics(owner) };
     });
+  }
+  async cosmetics(owner) {
+    if (!isOwner(owner)) return [];
+    return this.run(() => this.store.cosmetics(owner));
+  }
+  // the Skull shop: one cosmetic bought with Zombie Skulls. The games the owner is in hear of it (their look).
+  async buyCosmetic(owner, cosmetic) {
+    const got = await this.run(() => this.store.buyCosmetic(owner, cosmetic));
+    this.reload([owner]);
+    this.changed?.([owner]);
+    return got;
   }
   async equip(owner, slots) {
     if (!isOwner(owner)) return coll([], []);
@@ -982,11 +1048,12 @@ export class LoadoutService {
   }
   fetch(owner, c = this.cache.get(owner)) {
     if (!c) return;
-    this.run(() => this.store.load(owner)).then(
+    this.run(async () => ({ ...(await this.store.load(owner)), cosmetics: await this.store.cosmetics(owner) })).then(
       (got) => {
         if (this.cache.get(owner) !== c) return;
         c.items = got.items;
         c.slots = got.slots;
+        c.cosmetics = got.cosmetics;
         c.state = 'ok';
         this.broadcast(owner);
       },

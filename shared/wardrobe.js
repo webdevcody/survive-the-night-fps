@@ -152,6 +152,21 @@ export const PALETTES = {
       { id: 32, name: 'rust', label: 'Rust', hex: 0xc8501a, tags: ['bright'] },
       { id: 29, name: 'hardhat', label: 'Safety yellow', hex: 0xe2b21a, tags: ['hivis'] },
       { id: 33, name: 'lime', label: 'Hi-vis lime', hex: 0xc6e032, tags: ['hivis'] },
+      // the Skull shop's dyes (shared/skullshop.js; prices: SKULL_SHOP in shared/economy.js): bought once with Zombie
+      // Skulls, then offered in every field this palette dyes. Never rolled by the dice (weight 0); the server shows
+      // the field's default to everyone instead while its wearer has not bought it.
+      { id: 38, name: 'blood', label: 'Blood red', hex: 0x5e0b0e, tags: ['dark'], shop: 1, weight: 0 },
+      { id: 39, name: 'bile', label: 'Bile green', hex: 0x8a9a1a, tags: ['bright'], shop: 2, weight: 0 },
+      { id: 40, name: 'bruise', label: 'Bruise purple', hex: 0x4b2a5e, tags: ['dark'], shop: 3, weight: 0 },
+      { id: 41, name: 'toxic', label: 'Toxic green', hex: 0x5fd12e, tags: ['bright'], shop: 4, weight: 0 },
+      { id: 42, name: 'ultraviolet', label: 'Ultraviolet', hex: 0x5b2bd6, tags: ['bright'], shop: 5, weight: 0 },
+      { id: 43, name: 'hotpink', label: 'Hot pink', hex: 0xd8337e, tags: ['bright'], shop: 6, weight: 0 },
+      { id: 44, name: 'arctic', label: 'Arctic white', hex: 0xf4f7f8, tags: ['light'], shop: 7, weight: 0 },
+      { id: 45, name: 'electric', label: 'Electric blue', hex: 0x1aa6d9, tags: ['bright'], shop: 8, weight: 0 },
+      { id: 46, name: 'copper', label: 'Copper', hex: 0xb06a3b, tags: ['bright', 'earth'], shop: 9, weight: 0 },
+      { id: 47, name: 'gold', label: 'Gold', hex: 0xc9a227, tags: ['bright'], shop: 10, weight: 0 },
+      { id: 48, name: 'silver', label: 'Silver', hex: 0xb8bcc2, tags: ['light', 'neutral'], shop: 11, weight: 0 },
+      { id: 49, name: 'void', label: 'Void black', hex: 0x0b0b10, tags: ['dark'], shop: 12, weight: 0 },
     ],
   },
   // belts, gloves, boots and shoes
