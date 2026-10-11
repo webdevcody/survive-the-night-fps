@@ -376,6 +376,7 @@ const LOCAL = {
   zombie_player_growl: { bank: 'zp_growl', vol: 0.65, jit: 0.07, rec: R_ZP_GROWL },
   death: { bank: 'death_local', vol: 0.9, bus: 'ui', send: 0 },
   notify: { bank: 'notify', vol: 0.3, bus: 'ui', jit: 0.02, send: 0 },
+  mate_down: { bank: 'mate_down', vol: 0.35, bus: 'ui', jit: 0, send: 0 }, // a teammate is down (game/matedown.js)
   achieve: { bank: 'achieve', vol: 0.4, bus: 'ui', jit: 0, send: 0 },
   achieve_rare: { bank: 'achieve_rare', vol: 0.45, bus: 'ui', jit: 0, send: 0 },
   chat: { bank: 'chat', vol: 0.25, bus: 'ui', jit: 0.02, send: 0 },

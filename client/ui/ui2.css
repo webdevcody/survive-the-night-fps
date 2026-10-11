@@ -1062,17 +1062,19 @@
 .stn-ui .wmk.k-mate.crit .wmk-name {
   color: var(--blood-lite);
 }
-/* down: no bar, a solid red plate that says so - the only filled nameplate there is */
+/* down: no bar, a solid red plate that says so - the only filled nameplate there is. The top of the night's order
+   (hud2.js), so it must stand out in greyscale too, where dark red is just dark: a white rim, a larger name */
 .stn-ui .wmk.k-mate.downed {
   color: var(--blood-lite);
 }
 .stn-ui .wmk.k-mate.downed .wmk-txt {
-  padding: calc(3 * var(--u)) calc(9 * var(--u));
-  background: rgba(157, 17, 23, 0.92);
-  box-shadow: 0 0 0 1px rgba(6, 5, 4, 0.7);
+  padding: calc(4 * var(--u)) calc(12 * var(--u));
+  background: rgba(157, 17, 23, 0.95);
+  box-shadow: 0 0 0 calc(2 * var(--u)) #fff, 0 0 0 calc(3 * var(--u)) rgba(6, 5, 4, 0.7), 0 0 calc(14 * var(--u)) rgba(157, 17, 23, 0.8);
 }
 .stn-ui .wmk.k-mate.downed .wmk-name {
   color: #fff;
+  font-size: 1.3em;
 }
 .stn-ui .wmk.k-mate.downed .wmk-ico {
   animation: stn-warnpulse 0.7s ease-in-out infinite;
