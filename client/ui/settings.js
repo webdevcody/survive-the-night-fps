@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fullscreen: true,
   weaponSway: true,
   keyHints: true,
+  fullHud: false, // on a player's first runs the HUD keeps to health, ammo, the goal and the compass (firstrun.js)
   holdToDrop: true, // the drop key has to be held a moment (game/drophold.js), so a stray press keeps the gun
   showFps: true,
   achBanners: true, // a banner when an achievement unlocks (ui/achievements.js)...
@@ -83,7 +84,7 @@ export function sanitizeSettings(s) {
       if (Number.isFinite(v)) out[k] = clamp(v, NUM_RANGES[k][0], NUM_RANGES[k][1]);
     }
     for (const k in ENUMS) if (ENUMS[k].includes(s[k])) out[k] = s[k];
-    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes', 'heardRings']) if (typeof s[k] === 'boolean') out[k] = s[k];
+    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'fullHud', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes', 'heardRings']) if (typeof s[k] === 'boolean') out[k] = s[k];
   }
   return out;
 }
@@ -197,6 +198,7 @@ const TABS = [
       { head: 'On screen' },
       { k: 'highlight', label: 'Interaction highlight', type: 'seg', options: ['off', 'subtle', 'strong'], hint: 'A faint outline on what you can use, while you look at it up close' },
       { k: 'keyHints', label: 'Key hints', type: 'toggle', hint: 'Names a key when it would help, until you have used it twice' },
+      { k: 'fullHud', label: 'Show the whole HUD', type: 'toggle', hint: 'Your first three runs leave out the minimap, the info line and achievement banners. On: show them from the start' },
       { k: 'showFps', label: 'Show FPS counter', type: 'toggle' },
       { k: 'hudScale', label: 'HUD size', type: 'range', min: 0.75, max: 1.5, step: 0.05, fmt: pct, hint: 'Text and blocks on screen while you play. On a small window the HUD folds to a compact layout' },
       { k: 'heardRings', label: 'Noise rings', type: 'toggle', hint: 'When your noise wakes the dead: a ring on the minimap as far as it carried, and the ones it woke lit up. Off: only the first time for each kind of noise' },

@@ -1,8 +1,11 @@
 // Contextual key hints: one line on the HUD naming the key that answers what is happening right now (it is
-// dark and the light is off, hurt with a bandage in the pack, run out of stamina with an energy drink in it, dusk
-// with planks to build with), plus the map and the inventory once each in the first minute. A hint goes as soon
-// as its moment has passed and is retired for good once the player has done the thing twice. Only a change of
-// hint touches the DOM.
+// dark and the light is off, hurt with a bandage in the pack, run out of stamina with an energy drink in it, one of
+// the dead closing in, dusk with planks to build with), plus the map and the inventory once each in the first
+// minute. A hint goes as soon as its moment has passed and is retired for good once the player has done the thing
+// twice. Only a change of hint touches the DOM.
+//
+// The order is what a new player needs first (#270): the goal (the opening card and the field notes say it, so no
+// key hint does), then the threat - attack it, or sprint away - then the map, the inventory and building.
 import { PHASE, DUSK_WARNING, SLOT_BUILD } from '../../shared/constants.js';
 import { CONSUMABLES, STRUCT_DEFS, STRUCT_ORDER, SCHEM_BIT } from '../../shared/defs.js';
 import { planCost } from '../../shared/autocraft.js';
@@ -15,17 +18,21 @@ const DARK = 0.6; // Environment.night: dusk ends on 0.6, so anything above is t
 const HURT = 0.5; // of full health
 const LOW_STAMINA = 15; // of 100
 const LOW_BATTERY = 10; // % - a light that would die within seconds is not worth pointing at
-const EARLY_FROM = 6; // seconds of daytime play: after the opening title card...
+const THREAT = 0.2; // Game.danger: one of the dead within 20 m (1 at arm's length, 0 at 25 m)...
+const CLOSE = 0.5; // ...and within 12.5 m: time to run if fighting is not going well
+const EARLY_FROM = 12; // seconds of daytime play: after the opening title card and the goal under it...
 const EARLY_UNTIL = 60; // ...and within the first minute, the map and the inventory get a mention,
 const EARLY_SHOW = 20; // this long each unless the key is pressed sooner
 const EVERY = 0.2; // seconds between looks at the situation
 
 // most urgent first: only the first one that applies is shown. action: the keybind it names (game/binds.js) - a hint
 // for an action the player has left without a key is never shown
-const HINTS = [
+export const HINTS = [
   { id: 'flashlight', action: 'flashlight', text: 'Flashlight' },
   { id: 'heal', action: 'heal', text: 'Heal' },
   { id: 'drink', action: 'drink', text: 'Energy drink' },
+  { id: 'attack', action: 'fire', text: 'Attack' },
+  { id: 'sprint', action: 'sprint', text: 'Sprint away' },
   { id: 'build', action: 'slot' + (SLOT_BUILD + 1), text: 'Build a shelter' }, // (the weapon slots are on the digits, slot 0 on [1])
   { id: 'map', action: 'map', text: 'Field map', early: true },
   { id: 'inventory', action: 'inventory', text: 'Inventory & crafting', early: true },
@@ -68,6 +75,8 @@ export class KeyHints {
     now.flashlight = !!g.localFlash;
     now.heal = !!CONSUMABLES[self.useItem]?.heal;
     now.drink = !!CONSUMABLES[self.useItem]?.drink;
+    now.attack = s.cooldown > 0 && !s.zombie; // a shot or a swing went out
+    now.sprint = !!s.sprinting && !s.zombie;
     now.build = s.slot === SLOT_BUILD && !s.zombie;
     now.map = !!g.ui.mapOpen;
     now.inventory = !!g.ui.inventoryOpen;
@@ -114,6 +123,12 @@ export class KeyHints {
       case 'drink':
         // spent, or nearly, with a can in the pack
         return (g.prediction.state.exhausted || g.prediction.state.stamina < LOW_STAMINA) && !self.useItem && g.inventory.slots.some((it) => it && CONSUMABLES[it.item]?.drink);
+      case 'attack':
+        // once a page is enough: after the first blow it is the next hint's turn
+        return g.danger > THREAT && !this.done.attack;
+      case 'sprint':
+        // close, once the hint above has had its turn, and with the legs to run
+        return g.danger > CLOSE && (this.done.attack || (this.counts.attack | 0) >= RETIRE) && !g.prediction.state.sprinting && !g.prediction.state.exhausted && g.prediction.state.stamina >= LOW_STAMINA;
       case 'build':
         return day && g.global.timeLeft <= DUSK_WARNING && g.prediction.state.slot !== SLOT_BUILD && this.canBuild();
       default:

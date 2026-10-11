@@ -4,6 +4,8 @@
 import { PHASE, MAX_PLAYERS } from '../../shared/constants.js';
 import { DIFFICULTIES, NIGHTFALL, difficultyLabel } from '../../shared/difficulty.js';
 import { el, svgEl } from './dom.js';
+import { loadRecord } from './records.js';
+import { isFirstRun, suggestedDifficulty, rememberDifficulty, NEW_DIFFICULTY } from './firstrun.js';
 import { glyph } from './icons.js';
 import { listGames, createGame } from '../net/lobby.js';
 import './ux-splash.css'; // (the splash's layout and these panels as sheets beside it)
@@ -157,7 +159,8 @@ export class GameCreator extends Panel {
     this.splash = splash;
     this.sub.textContent = 'you get a link to send your friends';
     this.inviteOnly = false;
-    this.difficulty = NIGHTFALL.id;
+    this.difficulty = NIGHTFALL.id; // (each show() starts on the suggested one)
+    this.first = false; // no run in this browser's record yet
     this.seats = MAX_PLAYERS;
     this.cap = MAX_PLAYERS;
 
@@ -257,7 +260,7 @@ export class GameCreator extends Panel {
   sync() {
     for (const [d, b] of this.diffBtns) b.classList.toggle('on', d.id === this.difficulty);
     const picked = DIFFICULTIES.find((d) => d.id === this.difficulty) || NIGHTFALL;
-    this.diffHint.textContent = `${picked.name}. ${picked.blurb}`;
+    this.diffHint.textContent = `${picked.name}${this.first && picked.id === NEW_DIFFICULTY ? ', suggested for your first game' : ''}. ${picked.blurb}`;
     for (const [only, b] of this.whoBtns) b.classList.toggle('on', only === this.inviteOnly);
     this.whoHint.textContent = this.inviteOnly ? 'only people you send the link to' : 'listed under Browse games for anybody';
     this.go.disabled = this.busy;
@@ -266,6 +269,11 @@ export class GameCreator extends Panel {
 
   show() {
     super.show();
+    // Ember for a brand-new player, else the last one picked here (firstrun.js)
+    const rec = loadRecord();
+    this.first = isFirstRun(rec);
+    this.difficulty = suggestedDifficulty(rec);
+    this.sync();
     this.err.hidden = true;
     this.name.placeholder = `${this.splash.playerName()}'s game`;
     setTimeout(() => this.visible && this.name.focus({ preventScroll: true }), 30);
@@ -279,6 +287,7 @@ export class GameCreator extends Panel {
     try {
       const host = this.splash.playerName();
       const g = await createGame({ name: this.name.value.trim() || `${host}'s game`, host, inviteOnly: this.inviteOnly, maxPlayers: this.seats, difficulty: this.difficulty });
+      rememberDifficulty(this.difficulty);
       this.hide();
       this.splash.join(g.code);
     } catch (err) {

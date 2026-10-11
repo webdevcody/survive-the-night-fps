@@ -405,7 +405,7 @@ export class Hud {
   }
 
   // The HUD's modes, as classes on the root (ux-hud.css): its size (the HUD size setting), compact (a short window at
-  // that size), and the night (the objective and the tracked recipe fold to a line, the feed keeps the team's deaths)
+  // that size), simple (a player's first runs), and the night (the objective and the tracked recipe fold to a line, the feed keeps the team's deaths)
   _mode(h) {
     const c = this.c;
     const k = clamp(+this.ui.settings.hudScale || 1, 0.5, 2);
@@ -420,6 +420,12 @@ export class Hud {
       this.ui.root.classList.toggle('hud-compact', compact);
       c.teamKey = c.teamRef = undefined;
       this._feedMode();
+      this._relayout();
+    }
+    const simple = !!h.simpleHud; // a player's first runs: health, ammo, the goal and the compass (firstrun.js)
+    if (c.simple !== simple) {
+      c.simple = simple;
+      this.ui.root.classList.toggle('hud-simple', simple);
       this._relayout();
     }
     const night = h.phase === PHASE.NIGHT || !!h.finale;
