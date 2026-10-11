@@ -1415,13 +1415,14 @@ export class Wrecks {
     }
   }
 
-  // EVT.WRECK_ALARM: say 0 quiet, 1 chirp, 2 ringing for secs
+  // EVT.WRECK_ALARM: say 0 quiet, 1 chirp, 2 ringing for secs, 3 armed (its trunk sets it off: a chirp and a blink)
   alarm(col, say, secs) {
     const prop = wreckOf(col);
     if (!prop) return;
     if (say === 0) return void this.alarms.delete(prop);
+    if (say === 3 && this.ringing(prop)) return;
     this.alarms.set(prop, { until: say === 2 ? this.time + secs : this.time + 0.75, ring: say === 2, blink: 0, whoop: 0, n: 0 });
-    if (say === 1) this.on.sound?.('car_chirp', prop.x, prop.y + 0.9, prop.z, 1);
+    if (say === 1 || say === 3) this.on.sound?.('car_chirp', prop.x, prop.y + 0.9, prop.z, say === 3 ? 0.6 : 1);
   }
   ringing(prop) {
     return !!this.alarms.get(prop)?.ring;

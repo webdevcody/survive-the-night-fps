@@ -127,7 +127,7 @@ import { PRY, pryTime, pryWeapon, trunkCar, hasBootLid } from '../shared/trunk.j
 import { MineNav } from './minenav.js';
 import { createPlayerState, copyPlayerState, samePlayerState, snapPlayerState, hashPlayerState, simulatePlayer, eyeHeight, currentWeapon, DRAW_TIME, radioKeyed } from '../shared/playersim.js';
 import { makeBox, COL, footprintContains, groundAt, resolveBody, overlapBoxes, canReach } from '../shared/collision.js';
-import { mulberry32 } from '../shared/rng.js';
+import { mulberry32, hash2 } from '../shared/rng.js';
 import { swimming, inRiver, DROWN_DPS, RIVER_DPS } from '../shared/swim.js';
 import { nightTheme, nightBoss } from '../shared/nights.js';
 import { difficultyOf } from '../shared/difficulty.js';
@@ -178,7 +178,12 @@ const CMDS_PER_TICK = CMD_RATE / SERVER_TICK_RATE; // commands a client issues p
 const CMD_QUEUE_MAX = 24; // commands a client can have waiting (0.4 s of them); older ones are dropped
 const CMD_CATCH_UP = 1.05; // a client's command allowance refills this much faster than it issues them (processInputs)
 const TREE_CHOPS = 6; // blows of an axe (or a knife...) a tree gives wood for: the last brings it down
-const CAR_ALARM_CHANCE = 0.1;
+// A trunk's alarm is set when the car is (at the start, and again when the boot is refilled at dawn), not rolled when
+// it comes open: an armed car blinks and chirps at a survivor who comes near (Game.tellArmedTrunks), so forcing its
+// boot is a choice - or a lure. Only a trunk behind a wreck the clients draw can be armed (it has lamps to blink).
+const CAR_ALARM_CHANCE = 0.1; // of the trunks with a car, the share that are armed
+const CAR_ALARM_TELL_RANGE = 12; // m: a survivor this near an armed car sees it blink and hears it chirp
+const CAR_ALARM_TELL_EVERY = 2; // s between its chirps while someone is that near
 const CAR_ALARM_MIN_ZOMBIES = 6;
 const CAR_ALARM_MAX_ZOMBIES = 7;
 const CAR_ALARM_SPAWN_MIN = 62;
@@ -424,6 +429,8 @@ export class Game {
     // collider -> { left, day } and, of a wreck that was hit, { hits, alarm, ringT, pulseT } (shared/wrecks.js)
     this.gather = new Map();
     this.ringing = new Set(); // the wrecks (colliders) whose alarm is going
+    this.trunkCols = new WeakMap(); // trunk -> its car's collider (trunkCol)
+    this.armedT = 0; // s to the next look for survivors near an armed trunk (tellArmedTrunks)
     this.stepMode = false; // the clock held by the admin /step (room-worker.js): ticks only as they are asked for
     this.stepCredit = 0;
     this.stepAsked = 0;
@@ -1356,6 +1363,7 @@ export class Game {
       const e = { kind: ENT.CACHE, ctype: c.ctype, x: c.x, y: c.y, z: c.z, zone: c.zone, state: 0, schem: 0 };
       if (this.spawnEntity(e)) this.caches.push(e);
     }
+    for (const c of this.caches) this.armTrunk(c);
     this.placeSchematics();
     this.placeSupplies();
     this.cemetery.reset();
@@ -1982,7 +1990,10 @@ export class Game {
     if (this.dawnReturn) this.returnFallen();
     // the valley restocks a little: some searched containers are refilled, trees & wrecks regrow
     for (const c of this.caches) {
-      if (c.state === 1 && !CONT_DEFS[c.ctype].once && this.rng() < 0.4) c.state = 0;
+      if (c.state === 1 && !CONT_DEFS[c.ctype].once && this.rng() < 0.4) {
+        c.state = 0;
+        this.armTrunk(c);
+      }
     }
     this.gather.clear(); // (and with it what every wreck took: they are whole again, and quiet)
     this.ringing.clear();
@@ -3053,7 +3064,40 @@ export class Game {
       c.schem = 0;
     }
     this.sound(SOUND.SEARCH, c.x, c.y, c.z, 20);
-    if (c.ctype === CONT.TRUNK && this.rng() < CAR_ALARM_CHANCE) this.triggerCarAlarm(p, c);
+    if (c.alarm) {
+      c.alarm = false;
+      this.triggerCarAlarm(p, c);
+    }
+  }
+
+  // Whether a trunk's car is armed, until its boot is next refilled: a hash of where it is, the day and the world's
+  // seed (no draw on the game's dice, so nothing else in the valley comes out differently).
+  armTrunk(c) {
+    c.alarm = false;
+    if (c.ctype !== CONT.TRUNK || !this.trunkCol(c)) return;
+    c.alarm = hash2(Math.round(c.x * 4), Math.round(c.z * 4) + Math.imul(this.day, 7919), this.seed) < CAR_ALARM_CHANCE;
+  }
+  // the collider of the car a trunk is the boot of (what EVT.WRECK_ALARM names), or null
+  // (kept here, not on the container: a container's fields go with it in a handoff, a collider cannot)
+  trunkCol(c) {
+    if (this.trunkCols.has(c)) return this.trunkCols.get(c);
+    const car = trunkCar(this.world, c);
+    const col = (car && this.world.staticGrid.query(car.x, car.z, 1, []).find((q) => q.tag === car && wreckOf(q))) || null;
+    this.trunkCols.set(c, col);
+    return col;
+  }
+  // Every CAR_ALARM_TELL_EVERY s, each armed car with a survivor near it blinks its lamps and chirps (ALARM_SAY.ARMED)
+  tellArmedTrunks(dt) {
+    if ((this.armedT -= dt) > 0) return;
+    this.armedT = CAR_ALARM_TELL_EVERY;
+    const humans = this.humans();
+    if (!humans.length) return;
+    for (const c of this.caches) {
+      if (!c.alarm || c.state !== 0) continue;
+      if (!humans.some((p) => Math.hypot(p.state.x - c.x, p.state.z - c.z) < CAR_ALARM_TELL_RANGE)) continue;
+      const col = this.trunkCol(c);
+      if (col) this.tellAlarm(col, ALARM_SAY.ARMED, this.gather.get(col) || {});
+    }
   }
 
   triggerCarAlarm(p, c) {
@@ -4459,7 +4503,16 @@ export class Game {
         break;
       case 'alarm': {
         // /alarm: the nearest wreck that can have one has a live battery (its next hard blow makes it chirp).
-        // /alarm ring: it goes off now
+        // /alarm ring: it goes off now. /alarm trunk: the nearest boot's car is armed (forcing it sets it off)
+        if (args[1] === 'trunk') {
+          let near = null;
+          for (const c of this.caches) if (c.ctype === CONT.TRUNK && c.state === 0 && this.trunkCol(c) && (!near || Math.hypot(c.x - s.x, c.z - s.z) < Math.hypot(near.x - s.x, near.z - s.z))) near = c;
+          if (near) {
+            near.alarm = true;
+            this.armedT = 0;
+          }
+          break;
+        }
         let best = null;
         for (const col of this.world.staticGrid.query(s.x, s.z, 12, [])) {
           const prop = wreckOf(col);
@@ -4605,6 +4658,7 @@ export class Game {
     this.updateCrates(dt);
     this.fixtures.update(dt);
     if (this.ringing.size) this.updateAlarms(dt);
+    this.tellArmedTrunks(dt);
     this.recordHistory();
     this.track.tick();
     this.ach.tick();
