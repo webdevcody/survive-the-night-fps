@@ -1620,6 +1620,28 @@ export function buildFail(sr, rng) {
   addNorm(out, c, sr, 0.03, 0.5);
   return finish(out, sr);
 }
+// a teammate is down (game/matedown.js): a falling two-note alarm, twice, over a burst of radio hiss. Unlike the soft
+// notify chime it has to cut through a full horde, so it is bright (a square through a lowpass, high and low notes a
+// fifth apart) and repeats once, the way a car alarm does
+export function mateDownAlarm(sr, rng) {
+  const out = alloc(sr, 0.8);
+  addNorm(out, noise(sr, rng, 0.09, { bp: [1800, 0.9], a: 0.002, d: 0.03 }), sr, 0, 0.35);
+  const note = (hz, len) => {
+    const c = new Float32Array(Math.floor(len * sr));
+    const lp = new Biquad().lp(sr, 3200, 0.8);
+    let ph = 0;
+    for (let i = 0; i < c.length; i++) {
+      ph += hz / sr;
+      c[i] = lp.run((ph % 1) < 0.5 ? 1 : -1) * Math.min(1, i / (0.004 * sr)) * Math.min(1, (c.length - i) / (0.02 * sr));
+    }
+    return c;
+  };
+  for (let k = 0; k < 2; k++) {
+    addNorm(out, note(988, 0.15), sr, 0.03 + k * 0.36, 0.8);
+    addNorm(out, note(659, 0.17), sr, 0.2 + k * 0.36, 0.8);
+  }
+  return finish(out, sr);
+}
 export function playerDeathLocal(sr, rng) {
   const out = alloc(sr, 2.2);
   addNorm(out, humanDeath(sr, rng), sr, 0, 0.85);
@@ -2193,6 +2215,7 @@ export const SFX_DEFS = [
   { bank: 'can_open', n: 1, sr: HI, gen: canOpenSnd },
   { bank: 'drink', n: 2, sr: HI, gen: drinkSnd },
   { bank: 'build_fail', n: 1, sr: HI, gen: buildFail },
+  { bank: 'mate_down', n: 1, sr: HI, gen: mateDownAlarm },
   // footsteps
   { bank: 'step_dirt', n: 5, sr: MID, gen: (sr, r) => footstep(sr, r, 'dirt') },
   { bank: 'step_grass', n: 4, sr: MID, gen: (sr, r) => footstep(sr, r, 'grass') },

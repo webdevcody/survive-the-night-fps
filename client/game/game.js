@@ -107,6 +107,7 @@ import { Highlight } from './highlight.js';
 import { Input } from './input.js';
 import { TouchPad } from '../ui/touchpad.js';
 import { actionsOf, bindTag, bindPair, bindLabel } from './binds.js';
+import { mateDown } from './matedown.js';
 import { DropHold } from './drophold.js';
 import { SkyFlares } from './skyflares.js';
 import { Voice } from './voice.js';
@@ -1689,7 +1690,7 @@ export class Game {
       case NOTIFY.DOWNED:
         if (arg === this.myId) {
           a.stinger?.('death');
-        } else ui.notify(`${this.name(arg)} is down! Hold ${bindTag('interact')} on them to revive.`, 'danger', 5);
+        } else mateDown(this, arg);
         break;
       case NOTIFY.REVIVED:
         ui.notify(arg === this.myId ? "You're back on your feet." : `${this.name(arg)} is back up.`, 'good', 3);
