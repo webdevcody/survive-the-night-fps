@@ -312,10 +312,19 @@ hints and controls lists name whatever the keys are now.
 
 The HUD names a key at the moment it answers something: the flashlight when night falls and the light is off,
 quick heal when you are under half health with something that heals in the pack, a quick drink when you
-run yourself out of stamina with an energy drink in the pack, the build slot at the dusk
-warning if you carry enough to build, and the map and the inventory once each in the first minute. Each hint
-stops for good once you have done the thing twice (remembered in the browser); Settings -> Key hints turns
-them off.
+run yourself out of stamina with an energy drink in the pack, attack when one of the dead closes in (and,
+once you have, sprint away when it gets close), the build slot at the dusk warning if you carry enough to
+build, and the map and the inventory once each in the first minute, after the opening card. The order is
+what a new player needs first: the goal (the opening card and the objective tracker say it), then the
+threat, then the map, the inventory and building. Each hint stops for good once you have done the thing
+twice (remembered in the browser); Settings -> Key hints turns them off.
+
+**First run.** A player with no finished run in this browser starts their first one turned to face the car,
+with "Fix the car: 7 parts" under the opening card and the rumoured places already on the compass. In every
+run, 20 seconds into day 1, one walker turns up about 38 m ahead of a survivor and shambles over, unless one
+of the dead is already within 45 m. The new-game card starts on Ember for a brand-new player and on the last
+difficulty picked after that. A player's first three runs keep the HUD simple: no minimap, info line or
+achievement banners (Settings -> Show the whole HUD shows them from the start).
 
 ## The game
 

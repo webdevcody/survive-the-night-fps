@@ -441,6 +441,11 @@ switch (screen) {
     buildScene(bg || 'fire');
     ui.showSplash();
     if (q.get('settings')) setTimeout(() => ui.settingsPanel.show(), 50);
+    // &newgame=1: the new-game card (&runs=N: N runs in this browser's record, so not a brand-new player)
+    if (q.get('newgame')) {
+      if (q.get('runs')) localStorage.setItem('stn.runs', JSON.stringify({ v: 1, runs: [], total: { runs: +q.get('runs'), escapes: 0, streak: 0 }, best: {} }));
+      setTimeout(() => ui.splash.creator.show(), 50);
+    }
     break;
   }
   case 'auction': {
@@ -481,6 +486,7 @@ switch (screen) {
     }
     // &achtrack=1: three achievements tracked under the objective (&tracked= to choose them)
     if (q.get('achtrack')) fakeAchievements();
+    if (q.get('simple')) h.simpleHud = true; // &simple=1: a player's first runs (firstrun.js)
     // &weapon=<item id>&mag=<n>&reserve=<n>&reload=<0..1>: try the ammo block with any primary
     if (q.get('weapon')) Object.assign(h, { weapons: [+q.get('weapon'), ...baseHud.weapons.slice(1)], mag: +q.get('mag') || 0, reserve: +(q.get('reserve') ?? 24), reloading: q.get('reload') == null ? -1 : +q.get('reload') });
     ui.hideSplash();

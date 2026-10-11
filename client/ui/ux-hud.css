@@ -539,3 +539,23 @@
 .stn-ui.hud-b.hud-compact.hud-night:not(.inv-open) .obj.slim {
   max-width: max(140px, calc(180 * var(--u)));
 }
+
+/* ------------------------------------------------------------------ the simple HUD (#270)
+   A player's first runs (client/ui/firstrun.js; Settings -> Show the whole HUD turns it off) keep to health, ammo, the
+   goal and the compass, with the team, the clock and the chat: the minimap, the info line and the achievement banners
+   wait. display:none, not visibility, so the side columns' measuring (hud.js _layout) leaves them out. */
+.stn-ui.hud-b.hud-simple .mmap,
+.stn-ui.hud-b.hud-simple .hud-info,
+.stn-ui.hud-b.hud-simple .ach-toasts {
+  display: none !important;
+}
+
+/* with no map above it, the objective moves up into the corner (and, compact, back to the edge from beside the map) */
+.stn-ui.hud-b.hud-simple:not(.inv-open) .obj.slim {
+  top: calc(24 * var(--u));
+}
+
+.stn-ui.hud-b.hud-simple.hud-compact:not(.inv-open) .obj.slim,
+.stn-ui.hud-b.hud-simple.hud-compact .trk {
+  left: calc(24 * var(--u));
+}

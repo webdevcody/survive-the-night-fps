@@ -142,7 +142,8 @@ import { createDeer } from '../render/models/deer.js';
 import { createPickup } from '../render/models/pickups.js';
 import { createSupplyCrate, createProjectile } from '../render/models/misc.js';
 import { itemIcon, glyph } from '../ui/icons.js';
-import { recordRun } from '../ui/records.js';
+import { recordRun, loadRecord } from '../ui/records.js';
+import { isFirstRun, earlyRuns, simpleHud, yawTowards, goalLine } from '../ui/firstrun.js';
 import { KeyHints } from '../ui/keyhints.js';
 import { radialIndex } from '../ui/build.js';
 import { screenLeft } from '../ui/screentabs.js';
@@ -220,6 +221,8 @@ const mmss = (t) => {
   const n = Math.ceil(t);
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 };
+const FACE_CAR_NEAR = 80; // m: a first run's opening look turns to the car once we stand this near it (turnToCar)...
+const FACE_CAR_WAIT = 10; // ...within this many seconds of the run's start, or not at all
 const RUN_JOIN_GRACE = 60; // seconds into day one by which a player must have joined for the run to go on their record
 const BOARD_EVERY = 4000; // ms between two requests for the leaderboard while it is open
 // Turning while aimed is slowed by the gun's zoom, tan(aimed fov / 2) / tan(hip fov / 2) (the ratio of the two
@@ -1229,6 +1232,7 @@ export class Game {
     if (g.phase === PHASE.DAY || g.phase === PHASE.NIGHT || g.phase === PHASE.CROSSING) {
       if (this.runOn) return;
       this.runOn = true;
+      this.earlyRuns = earlyRuns(loadRecord()); // (the simple HUD: firstrun.js)
       // how much of the run was played before we saw it: nothing when it starts under us
       const gone = g.phase === PHASE.DAY && g.day === 1 ? g.phaseLen - g.timeLeft : Infinity;
       // kills0: our score when the run began. The server's count can carry over from the run before
@@ -1252,6 +1256,19 @@ export class Game {
         team: this.players.size,
       });
     }
+  }
+
+  // The first look of a player's first run (#270): at the car they came in, once our own state is at the start beside
+  // it. The look is ours to set: the server takes the yaw our commands send.
+  turnToCar(dt) {
+    this.faceCar -= dt;
+    if (!this.prediction.hasServerState || !this.self.alive) return;
+    const s = this.prediction.state;
+    const car = this.world.car;
+    if (Math.hypot(car.x - s.x, car.z - s.z) > FACE_CAR_NEAR) return;
+    this.faceCar = 0;
+    this.input.yaw = yawTowards(s.x, s.z, car.x, car.z);
+    this.input.pitch = 0;
   }
 
   onInventory(r) {
@@ -1821,6 +1838,12 @@ export class Game {
         this.introPending = false;
         ui.notify(`DAY ${arg}`, 'big', 5);
         ui.notify('Your car died on Route 9. Find the supplies to fix it - before the dark finds you.', 'sub', 6);
+        if (isFirstRun(loadRecord())) {
+          // a player's first run opens on the goal (#270): turned to face the car, the parts it needs in one line,
+          // and where the nearest is rumoured to be already on the compass (buildMarkers)
+          this.faceCar = FACE_CAR_WAIT;
+          ui.notify(`${goalLine(SUPPLY_NEED.reduce((a, n) => a + n, 0))}. The compass shows where each is rumoured to be.`, 'toast', 8);
+        }
         break;
       case NOTIFY.PLAYER_JOINED:
       case NOTIFY.PLAYER_LEFT:
@@ -3596,6 +3619,7 @@ export class Game {
     // HUD
     this.updateHud(dt, s, aiming, wdef);
     this.keyHints.update(dt);
+    if (this.faceCar > 0) this.turnToCar(dt);
     // the drop key held long enough (and still able to: alive, on their feet, the controls live, the same weapon out)
     const canDrop = !!self.alive && !s.zombie && !s.downed && this.input.enabled;
     if (this.dropHold.update(dt, s.slot, canDrop) === 'drop' && s.weapons[s.slot] && s.slot !== SLOT_THROW) this.conn.action(ACT.DROP_WEAPON, s.slot);
@@ -4177,7 +4201,8 @@ export class Game {
     this.buildMarkers(h, rp);
     // the minimap: only while it is on screen (the leaderboard, and Friends docked over it, are a side sheet in a
     // game, with the minimap still in view beside them)
-    h.minimap = !h.zombie && !this.ui.inventoryOpen && !this.ui.mapOpen && !(this.ui.boardOpen && this.ui.board.lobbyMode) && !this.ui.bestiaryOpen && !this.ui.cardsOpen ? this.mapData(counts) : null;
+    h.simpleHud = simpleHud(this.earlyRuns, this.settings);
+    h.minimap = !h.simpleHud && !h.zombie && !this.ui.inventoryOpen && !this.ui.mapOpen && !(this.ui.boardOpen && this.ui.board.lobbyMode) && !this.ui.bestiaryOpen && !this.ui.cardsOpen ? this.mapData(counts) : null;
     h.cards = this.cards.hud(); // (Dead Hand under way with its screen shut, or a teammate's ask)
     this.ui.updateHud(h);
     this.pushInventoryToUI(false);
