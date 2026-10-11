@@ -3358,7 +3358,7 @@ import { ESCAPE_TIME, ESCAPE_RADIUS, ESCAPE_DRIVE_TIME } from '../shared/constan
   check('the zombie cap holds through a stand of eight who do not shoot', eight.peak <= 120 && eight.sent > one.sent && eight.sent <= eight.size && eight.far === 0, `peak ${eight.peak} zombies, ${eight.sent} of ${eight.size} came`);
 }
 
-// one new kind of the dead a night (ZOMBIE_DEFS minNight): none before its night, the new one there for certain on
+// one new kind of the dead a night, bats with the spitters on night 3 (ZOMBIE_DEFS minNight): none before its night, the new one there for certain on
 // its night, and from their night on at least one shade and never more than six
 {
   const early = [];
@@ -3376,7 +3376,9 @@ import { ESCAPE_TIME, ESCAPE_RADIUS, ESCAPE_DRIVE_TIME } from '../shared/constan
   }
   const fresh = [];
   for (let n = 2; n <= 9; n++) fresh.push(Object.values(ZOMBIE_DEFS).filter((d) => !d.boss && d.minNight === n).length);
-  check('one new kind of the dead a night, and none before its night', fresh.every((k) => k === 1) && !early.length, early.join(', ') || `new on nights 2-9: ${fresh.join('/')}`);
+  // bats join with the spitters on night 3, so night 7 brings no new kind
+  const want = [1, 2, 1, 1, 1, 0, 1, 1];
+  check('one new kind of the dead a night (two on night 3, none on 7), and none before its night', fresh.every((k, i) => k === want[i]) && !early.length, early.join(', ') || `new on nights 2-9: ${fresh.join('/')}`);
   check('...each one in the horde on its night', !missing.length, missing.join(', '));
   check('...and from their night on, one to six shades', shades.every((k) => k >= 1 && k <= 6), `nights ${ZOMBIE_DEFS[ZTYPE.SHADE].minNight}-10: ${shades.join('/')}`);
 }

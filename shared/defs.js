@@ -553,7 +553,8 @@ export const ZTYPE = {
 // ahead of the body, bodyTop = top of the body cylinder (default headY - headR).
 // shade: only moves in darkness; while any light is on it, it is frozen and takes litResist x damage
 // legs: its legs can be shot (LEG_* in constants.js): a hit trips it, a leg can be blown off, with both gone it crawls
-// minNight: the night it joins the horde. One new kind a night (Game.startNight), each said on the dawn card before it
+// minNight: the night it joins the horde. One new kind a night (Game.startNight), save bats, which join the spitters on
+// night 3 and leave night 7 with none new; each said on the dawn card before it
 // and on the dusk card under the clock with its introBrief (the intro in a few words); by day the further a place is
 // from the car, the more of the specials it holds, whatever the night (ZombieManager.daySpecial). A boss's minNight is
 // the first night it can be drawn (BOSS_POOL)
@@ -576,7 +577,7 @@ export const ZOMBIE_DEFS = {
   // breachWindup s and bursts against it. That piece takes breachDmg on top of the blast (with it, any wood piece
   // goes; a metal wall loses about 40%) - unless the boomer is shot first, which leaves only the blast
   [ZTYPE.BOOMER]: { name: 'Boomer', hp: 70, speed: 1.7, dmg: 0, rate: 1, range: 2.2, radius: 0.6, height: 1.8, headY: 1.62, headR: 0.2, structDmg: 0, loot: 0.6, blastRadius: 5.5, blastDmg: 45, breachHold: 0.8, breachWindup: 1.2, breachRange: 12, breachDmg: 750, minNight: 4, legs: true, intro: 'Boomers join the horde: they burst against your walls. Shoot them far off.', introBrief: 'Burst against your walls. Shoot them far off.' },
-  [ZTYPE.BAT]: { name: 'Bat', hp: 28, speed: 7.5, dmg: 5, rate: 0.9, range: 1.3, radius: 0.3, height: 0.4, headY: 0.2, headR: 0.2, structDmg: 0, loot: 0.08, flying: true, common: true, minNight: 7, intro: 'Bats join the horde: they fly over every wall. Shotguns and melee.', introBrief: 'Fly over every wall. Shotguns and melee.' },
+  [ZTYPE.BAT]: { name: 'Bat', hp: 28, speed: 7.5, dmg: 5, rate: 0.9, range: 1.3, radius: 0.3, height: 0.4, headY: 0.2, headR: 0.2, structDmg: 0, loot: 0.08, flying: true, common: true, minNight: 3, intro: 'Bats join the horde: they fly over every wall. Shotguns and melee.', introBrief: 'Fly over every wall. Shotguns and melee.' },
   // night bosses: hp is what one survivor faces (+ BOSS_HP_PER_PLAYER of it per extra survivor, Game.spawnBosses),
   // sized so that the rounds a survivor has left once the horde has had its share can bring one down before sunrise
   [ZTYPE.BOSS_ABOMINATION]: { name: 'The Abomination', hp: 4000, speed: 3.0, dmg: 55, rate: 1.8, range: 3.4, radius: 1.5, height: 4.2, headY: 3.7, headR: 0.5, structDmg: 600, loot: 1, knock: 16, boss: true, minNight: 4, tip: 'It slams the ground and throws boulders. Spread out and keep moving.', tipBrief: 'Slams and throws boulders. Spread out, keep moving.' },
