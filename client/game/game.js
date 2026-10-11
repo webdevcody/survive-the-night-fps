@@ -71,6 +71,7 @@ import { LookWarmer } from './lookwarm.js';
 import { SPAWN_KEY } from '../ui/spawnmenu.js';
 import { treeAt, fellTree, regrowTrees, cutTree, treeFoot, treeTop } from '../../shared/felling.js';
 import { nightTheme } from '../../shared/nights.js';
+import { HomeSense, HOME_WALLS, HOMELESS_THEMES } from '../audio/home.js';
 import { shotDirections, shotSpread, shotClimb, aimingWith, currentWeapon, eyeHeight } from '../../shared/playersim.js';
 import { stepClimb, punchOf, punchAt, crosshairGap } from './aimview.js';
 import { pryWeapon } from '../../shared/trunk.js';
@@ -82,6 +83,7 @@ const _wcHit = { t: -1, col: null, terrain: false };
 const WC_RAYS = [[0, 0], [0.3, -0.25]]; // (right, up) of the view: straight on, and out past the right hand
 import { zombieHitbox, playerHitbox, rayHitbox } from '../../shared/hitbox.js';
 import { difficultyOf } from '../../shared/difficulty.js';
+import { heardShow, loadHeardSeen, saveHeardSeen } from '../ui/heard.js';
 import { deerHitbox, DEER_UNDEAD } from '../../shared/deer.js';
 import { readHeader, readGlobal, readSelf, readEntities, readEvents } from '../net/decode.js';
 import { Connection } from '../net/connection.js';
@@ -309,6 +311,8 @@ export class Game {
     this.localFlashT = 0;
     this.openness = 0;
     this.indoor = 0;
+    this.homeSense = new HomeSense(); // inside the team's walls (the night's home bed: audio/home.js)
+    this._homeStructs = [];
     this.under = 0; // how far down the mine the eye is (0..1)
     this._envOver = { under: 0 };
     this._wxDown = {};
@@ -452,6 +456,16 @@ export class Game {
     return Math.max(0, 1 - occ);
   }
 
+  // tonight's theme leaves the home bed out (audio/home.js), worked out from the seed once a night
+  homeless(night) {
+    const key = `${this.seed}:${this.act}:${night}`;
+    if (this._homelessKey !== key) {
+      this._homelessKey = key;
+      this._homeless = HOMELESS_THEMES.has(nightTheme(this.seed, night, this.act)?.id);
+    }
+    return this._homeless;
+  }
+
   // surroundings for the audio reverb: openness (few trees within 14 m) and a roof overhead
   probeSurroundings(pos) {
     const w = this.world;
@@ -460,6 +474,10 @@ export class Game {
     this.openness = Math.max(0, 1 - trees / 7);
     raycastWorld(w, pos.x, pos.y, pos.z, 0, 1, 0, 10, _sunRay, COL.NOBULLET | COL.NOBLOCK | COL.TREE);
     this.indoor = _sunRay.t >= 0 && !_sunRay.terrain ? 1 : 0;
+    const hs = this._homeStructs;
+    hs.length = 0;
+    for (const e of this.entities.ents.values()) if (e.kind === ENT.STRUCTURE && HOME_WALLS.has(e.stype)) hs.push({ x: e.rx, z: e.rz, yaw: (e.rot8 / 256) * Math.PI * 2, stype: e.stype });
+    this.homeSense.update(pos.x, pos.z, hs);
   }
 
   // jet: how bright our own flamethrower's stream is burning (its fire light's intensity, 0 when it is out)
@@ -1584,6 +1602,15 @@ export class Game {
       },
       bestiary(flags, mask) {
         bestiaryEvent(flags, mask);
+      },
+      heard(what, woke, loud, ids) {
+        g.heardSeen ||= loadHeardSeen();
+        const sh = heardShow(what, woke, loud, { always: g.settings.heardRings, seen: g.heardSeen });
+        if (sh.label) {
+          saveHeardSeen(g.heardSeen);
+          g.ui.notify(sh.label, 'toast', 4);
+        }
+        if (sh.show) g.ui.hud?.minimap?.heard(loud, ids);
       },
       ping(pid, kind, x, y, z) {
         g.pings = g.pings.filter((p) => p.pid !== pid);
@@ -3610,6 +3637,8 @@ export class Game {
       cycle: this.env.cycle,
       open: this.openness,
       indoor: Math.max(this.indoor, this.under),
+      home: this.homeSense.home,
+      homeless: g.phase === PHASE.NIGHT && this.homeless(g.day),
     });
 
     // overlays by phase
@@ -4353,12 +4382,12 @@ export class Game {
     for (const e of this.entities.ents.values()) {
       if (e.kind === ENT.PLAYER) {
         if (e.q[5] & PFLAG.DEAD) continue;
-        if (e.q[5] & PFLAG.ZOMBIE) enemies.push({ x: e.rx, z: e.rz, big: false });
+        if (e.q[5] & PFLAG.ZOMBIE) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false });
         else mates.push({ x: e.rx, z: e.rz, name: this.name(e.id), status: e.downed ? 'downed' : 'alive' });
       } else if (e.kind === ENT.ZOMBIE) {
-        if (!e.dead) enemies.push({ x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
+        if (!e.dead) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
       } else if (e.kind === ENT.DEER) {
-        if (!e.dead && e.variant & DEER_UNDEAD) enemies.push({ x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
+        if (!e.dead && e.variant & DEER_UNDEAD) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
       } else if (e.kind === ENT.CRATE && e.q[3] !== 2) crates.push({ x: e.rx, z: e.rz });
     }
     const carried = {};

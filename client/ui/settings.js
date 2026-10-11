@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showFps: true,
   achBanners: true, // a banner when an achievement unlocks (ui/achievements.js)...
   achSound: true, // ...and its chime
+  heardRings: true, // a ring on the minimap, and the dead it woke lit, every time your noise wakes the dead (ui/heard.js); off: once for each kind of noise
   hudScale: 1, // the HUD's size (ui/hud.js, ux-hud.css): a short window at this size gets the compact layout
   // Accessibility
   cameraShake: 1, // x the view's shake (game.js: explosions, a tank's footfalls, hits, crashes); 0 holds it still
@@ -83,7 +84,7 @@ export function sanitizeSettings(s) {
       if (Number.isFinite(v)) out[k] = clamp(v, NUM_RANGES[k][0], NUM_RANGES[k][1]);
     }
     for (const k in ENUMS) if (ENUMS[k].includes(s[k])) out[k] = s[k];
-    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'fullHud', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes']) if (typeof s[k] === 'boolean') out[k] = s[k];
+    for (const k of ['pushToTalk', 'voiceDuck', 'invertY', 'rawMouse', 'fullscreen', 'weaponSway', 'keyHints', 'fullHud', 'holdToDrop', 'showFps', 'ps1', 'achBanners', 'achSound', 'viewBob', 'reduceFlashes', 'heardRings']) if (typeof s[k] === 'boolean') out[k] = s[k];
   }
   return out;
 }
@@ -200,6 +201,7 @@ const TABS = [
       { k: 'fullHud', label: 'Show the whole HUD', type: 'toggle', hint: 'Your first three runs leave out the minimap, the info line and achievement banners. On: show them from the start' },
       { k: 'showFps', label: 'Show FPS counter', type: 'toggle' },
       { k: 'hudScale', label: 'HUD size', type: 'range', min: 0.75, max: 1.5, step: 0.05, fmt: pct, hint: 'Text and blocks on screen while you play. On a small window the HUD folds to a compact layout' },
+      { k: 'heardRings', label: 'Noise rings', type: 'toggle', hint: 'When your noise wakes the dead: a ring on the minimap as far as it carried, and the ones it woke lit up. Off: only the first time for each kind of noise' },
       { head: 'Achievements' },
       { k: 'achBanners', label: 'Unlock banners', type: 'toggle', hint: 'A banner at the top of the screen when you unlock an achievement' },
       { k: 'achSound', label: 'Unlock sound', type: 'toggle', hint: 'A chime when you unlock one' },

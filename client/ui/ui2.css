@@ -557,6 +557,58 @@
   pointer-events: none;
 }
 
+/* "you were heard" (heard.js): a ring out from you as far as your noise carried, as it wakes the dead */
+.stn-ui .mmap-heard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: var(--r, 100%);
+  height: var(--r, 100%);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 196, 120, 0.95);
+  box-shadow: 0 0 6px rgba(255, 140, 60, 0.7), inset 0 0 6px rgba(255, 140, 60, 0.5);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stn-ui .mmap-heard.on {
+  animation: stn-heard 1.1s ease-out;
+}
+
+@keyframes stn-heard {
+  0% {
+    transform: translate(-50%, -50%) scale(0.1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* no growing: the ring at its full size, fading */
+  .stn-ui .mmap-heard.on {
+    animation: stn-heard-still 1.1s ease-out;
+  }
+  @keyframes stn-heard-still {
+    0%,
+    60% {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-50%, -50%);
+      opacity: 0;
+    }
+  }
+}
+
 /* what is in front of you */
 .stn-ui .mmap-fov {
   position: absolute;

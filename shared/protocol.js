@@ -2,7 +2,7 @@
 // Positions are quantized in int16: to 1/64 m on the island (range +-512 m) and to 1/32 m on the mainland, which is
 // 2048 m across (range +-1024 m: its edge). See usePos below.
 
-export const PROTOCOL_VERSION = 45; // 26: the frag grenade and the noisemaker (items 33-34, PROJ 7-8); 28: salvage, ammo reserve, unequip, RPG (PROJ 9); 29: carrying the mounted gun (ACT.GUN_PUT, HOLD.GUN_LIFT, ENT.GUN fields 6-7, s.hmg); 30: the flare gun (items 56, 79; ammo 9; PROJ 10); 31: the walkie-talkie in weapon slot 6 (SLOT_RADIO), PLF.ON_AIR; 32: achievements (EVT.ACHIEVE); 33: XP, levels and perks (S2C.PROGRESS, s.perks in SELF.RIDE, a level in S2C.PLAYERS and S2C.BOARD rows); 34: IN_PING carries u16 last measured RTT (ms) for the player list; 35: the bestiary (EVT.BESTIARY); 36: schematic rumours (a zone per schematic in the global state); 37: car supplies lying loose (item, x, z) in the global state; 38: the leaper shove meter (s.shove in the self state's fifth chunk); 39: a torch's or a campfire's burn-out tick (SF.BURN); 40: the mainland's undead deer (DEER_UNDEAD in a deer's variant, DANIM.ATTACK / CHARGE, SOUND.DEER_SCREAM, killfeed flag 8 and YOU_DIED 254 for a death by one); 41: the stray cat in a survivor's arms (ACT.CAT_PUT, ENT.CAT field HOLDER, CANIM.HELD / PET, s.pet in SELF.RIDE); 42: Dead Hand, the card game (C2S.CARDS, S2C.CARDS, card packs: items 98-99); 43: lobby Dead Hand tables; 44: Dead Hand loadout item wagers; 45: trees shot or blown apart (EVT.TREE_BREAK)
+export const PROTOCOL_VERSION = 46; // 26: the frag grenade and the noisemaker (items 33-34, PROJ 7-8); 28: salvage, ammo reserve, unequip, RPG (PROJ 9); 29: carrying the mounted gun (ACT.GUN_PUT, HOLD.GUN_LIFT, ENT.GUN fields 6-7, s.hmg); 30: the flare gun (items 56, 79; ammo 9; PROJ 10); 31: the walkie-talkie in weapon slot 6 (SLOT_RADIO), PLF.ON_AIR; 32: achievements (EVT.ACHIEVE); 33: XP, levels and perks (S2C.PROGRESS, s.perks in SELF.RIDE, a level in S2C.PLAYERS and S2C.BOARD rows); 34: IN_PING carries u16 last measured RTT (ms) for the player list; 35: the bestiary (EVT.BESTIARY); 36: schematic rumours (a zone per schematic in the global state); 37: car supplies lying loose (item, x, z) in the global state; 38: the leaper shove meter (s.shove in the self state's fifth chunk); 39: a torch's or a campfire's burn-out tick (SF.BURN); 40: the mainland's undead deer (DEER_UNDEAD in a deer's variant, DANIM.ATTACK / CHARGE, SOUND.DEER_SCREAM, killfeed flag 8 and YOU_DIED 254 for a death by one); 41: the stray cat in a survivor's arms (ACT.CAT_PUT, ENT.CAT field HOLDER, CANIM.HELD / PET, s.pet in SELF.RIDE); 42: Dead Hand, the card game (C2S.CARDS, S2C.CARDS, card packs: items 98-99); 43: lobby Dead Hand tables; 44: Dead Hand loadout item wagers; 45: trees shot or blown apart (EVT.TREE_BREAK); 46: your noise woke the dead (EVT.HEARD)
 
 // client -> server
 export const C2S = {
@@ -476,6 +476,12 @@ export function readInput(r) {
 // in no order: the client sorts them. A row names nobody but by the name they play under - the id a player joins
 // with is what proves who they are, and no message carries it back out.
 export const BOARD_STATS = ['kills', 'nights', 'wins', 'revives'];
+// How the leaderboard shows them (issue #302): in a co-op game the board leads with what a team does together -
+// nights seen through, teammates revived, runs escaped - and kills come last. The first is the column it is sorted
+// by until a player picks another. (Display only: the wire keeps BOARD_STATS' order.)
+export const BOARD_ORDER = ['nights', 'revives', 'wins', 'kills'];
+// the column to sort by: the one a player last picked (stored), or BOARD_ORDER's first
+export const boardSort = (stored) => (BOARD_STATS.includes(stored) ? stored : BOARD_ORDER[0]);
 export const BOARDF = { ME: 1, HERE: 2 }; // the recipient's own row; in this game right now
 export const BOARD_TOP = 20;
 
