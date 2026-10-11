@@ -1,4 +1,4 @@
-// What a melee swing can harvest from the world (trees, wrecks) and what a failed build or craft is short of.
+// What a melee swing can harvest from the world (trees, wrecks, rocks) and what a failed build or craft is short of.
 // Pure - no DOM, no three.js - so scripts/sim-smoke.js can hold it against the server.
 import { SLOT_MELEE } from '../../shared/constants.js';
 import { ITEM, ITEM_DEFS, WEAPONS, RECIPES, LOOT_TABLES, CONT_TABLES } from '../../shared/defs.js';
@@ -14,8 +14,9 @@ import { bindTag, onBindsChange } from './binds.js';
 export const HARVEST = [
   { flag: COL.TREE, verb: 'chop', where: 'chop trees', gives: [ITEM.STICK, ITEM.WOOD], spent: 'Stripped bare · nothing left to chop until dawn' },
   { flag: COL.SALVAGE, verb: 'salvage', where: 'salvage wrecks', gives: [ITEM.SCRAP, ITEM.NAILS], spent: 'Picked clean · nothing left to salvage until dawn' },
+  { flag: COL.ROCK, verb: 'mine', where: 'mine boulders (the quarry gives the most)', gives: [ITEM.STONE], spent: 'Mined out · nothing left to break off until dawn' },
 ];
-// The server names a used-up tree or wreck by its collider's quantized x, y0, z (EVT.STRIPPED; y0 tells the wrecks
+// The server names a used-up tree, wreck or rock by its collider's quantized x, y0, z (EVT.STRIPPED; y0 tells the wrecks
 // of a stack apart). The key of one, for a Set of those.
 export const strippedKey = (qx, qy, qz) => (qx + 32768) * 0x100000000 + (qy + 32768) * 0x10000 + (qz + 32768);
 // Combat.melee (server/combat.js) traces the world this far past the weapon's range when the swing hits nobody

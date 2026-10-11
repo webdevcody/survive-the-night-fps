@@ -83,12 +83,12 @@ function revive(v) {
   return out;
 }
 
-// a tree or a wreck of the static world, by where it stands (as EVT.STRIPPED names them): [tree, qx, qy0, qz]
+// a tree, a wreck or a rock of the static world, by where it stands (as EVT.STRIPPED names them): [tree, qx, qy0, qz]
 const colKey = (c) => [c.flags & COL.TREE ? 1 : 0, qpos(c.x), qpos(c.y0), qpos(c.z)];
 const _near = [];
 function colAt(world, [tree, qx, qy, qz]) {
   if (tree) return treeAt(world, qx, qy, qz);
-  for (const c of world.staticGrid.query(dqpos(qx), dqpos(qz), 0.5, _near)) if (c.flags & COL.SALVAGE && qpos(c.x) === qx && qpos(c.y0) === qy && qpos(c.z) === qz) return c;
+  for (const c of world.staticGrid.query(dqpos(qx), dqpos(qz), 0.5, _near)) if (c.flags & (COL.SALVAGE | COL.ROCK) && qpos(c.x) === qx && qpos(c.y0) === qy && qpos(c.z) === qz) return c;
   return null;
 }
 

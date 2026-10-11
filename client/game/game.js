@@ -35,7 +35,7 @@ import {
   STRUCT,
   STRUCT_DEFS,
   STRUCT_ORDER,
-  REPAIR_COST,
+  repairCostOf,
   ZOMBIE_DEFS,
   SCHEM_BIT,
   THROW_ITEMS,
@@ -220,6 +220,11 @@ const mmss = (t) => {
   const n = Math.ceil(t);
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 };
+// '1 Planks, 1 Nails': what a repair takes, for its prompt
+const costText = (cost) =>
+  Object.entries(cost)
+    .map(([id, n]) => `${n} ${ITEM_DEFS[id].name}`)
+    .join(', ');
 const RUN_JOIN_GRACE = 60; // seconds into day one by which a player must have joined for the run to go on their record
 const BOARD_EVERY = 4000; // ms between two requests for the leaderboard while it is open
 // Turning while aimed is slowed by the gun's zoom, tan(aimed fov / 2) / tan(hip fov / 2) (the ratio of the two
@@ -1773,7 +1778,7 @@ export class Game {
         break;
       }
       case NOTIFY.SEARCH_EMPTY:
-        ui.notify(arg === 1 ? 'This tree is stripped bare' : arg === 2 ? 'Nothing left to salvage' : 'Already searched', 'toast', 1.6);
+        ui.notify(arg === 1 ? 'This tree is stripped bare' : arg === 2 ? 'Nothing left to salvage' : arg === 3 ? 'Mined out' : 'Already searched', 'toast', 1.6);
         break;
       case NOTIFY.INVENTORY_FULL: {
         // arg: the item a full backpack left lying where the survivor walked over it (0: a craft, a search, a swap)
@@ -3008,7 +3013,7 @@ export class Game {
     }
     if (t.kind === ENT.PLAYER) return this.cards.chooser(t.id); // a teammate on their feet: a match or a trade (nothing is sent until one is picked)
     if (t.kind === ENT.STRUCTURE && this.power.press(t)) return; // (a generator: a tap pours fuel, held it is the switch)
-    if (t.kind === ENT.STRUCTURE) this.askedCost = REPAIR_COST;
+    if (t.kind === ENT.STRUCTURE) this.askedCost = repairCostOf(t.stype);
     this.conn.action(ACT.INTERACT, t.id);
   }
 
@@ -3888,7 +3893,7 @@ export class Game {
           if (s.slot === SLOT_BUILD) this.prompt += `${lit ? ` · burns ${mmss(this.burnLeft(e))}` : ''} · ${bindTag('demolish')} Remove`;
         } else if (s.slot === SLOT_BUILD) {
           if (e.stype === STRUCT.TORCH) this.prompt = hp < 1 || e.q[4] === 0 ? `${bindTag('interact')} Relight torch (1 Cloth) · ${bindTag('demolish')} Remove` : `Burns ${mmss(this.burnLeft(e))} · ${bindTag('demolish')} Remove torch`;
-          else this.prompt = hp < 0.99 ? `${bindTag('interact')} Repair ${def.name} (1 Planks, 1 Nails) · ${bindTag('demolish')} Demolish` : `${bindTag('demolish')} Demolish ${def.name}`;
+          else this.prompt = hp < 0.99 ? `${bindTag('interact')} Repair ${def.name} (${costText(repairCostOf(e.stype))}) · ${bindTag('demolish')} Demolish` : `${bindTag('demolish')} Demolish ${def.name}`;
         } else if (def.station === 'bench') this.prompt = `Workbench · craft here ${bindTag('inventory')}`;
         this.contextStructure = { name: def.name, hp };
         return;

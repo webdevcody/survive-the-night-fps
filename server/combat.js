@@ -236,7 +236,10 @@ export class Combat {
               // (the round's own damage, not what the shooter's perks add to it: those are for the flesh. The rest of
               // a blast's pellets go on into what stands of it, or over it)
               g.shootTree(wallCol, hy, dx, dz, def.pellets > 1 ? def.damage * pelletFalloff(wallT) : def.damage);
-            } else if (wallCol.flags & COL.STRUCT) kind = STRUCT_DEFS[this.g.ents[wallCol.id]?.stype]?.metal ? IMPACT.METAL : IMPACT.WOOD;
+            } else if (wallCol.flags & COL.STRUCT) {
+              const sd = STRUCT_DEFS[this.g.ents[wallCol.id]?.stype];
+              kind = sd?.metal ? IMPACT.METAL : sd?.stone ? IMPACT.SPARK : IMPACT.WOOD;
+            }
             else kind = IMPACT.SPARK;
             if (wallCol.flags & COL_VEHICLE) g.vehicles.shot(wallCol, def.damage); // a vehicle standing empty takes the round
           }
@@ -485,7 +488,7 @@ export class Combat {
         { to: p.id },
       );
     } else {
-      // hit a structure/world surface? trees give sticks & planks, wrecks give scrap
+      // hit a structure/world surface? trees give sticks & planks, wrecks give scrap, rocks give stone
       raycastWorld(g.world, ox, oy, oz, fx, fy, fz, range + 0.3, _ray);
       if (_ray.t >= 0) {
         const col = wreckUnit(_ray.col); // (whichever box of a wreck was struck, it is the one wreck)
@@ -494,13 +497,14 @@ export class Combat {
         const hz = oz + fz * _ray.t;
         const tree = col && col.flags & COL.TREE;
         const wreck = col && col.flags & COL.SALVAGE;
+        const rock = col && col.flags & COL.ROCK;
         // what a weapon does to what it struck is the clients' to draw, each from its own copy of the world (EVT.STRIKE);
         // a wreck besides keeps a record of the blow (Game.wreckHit). Claws just scuff it
         if (claws) g.impact(tree ? IMPACT.WOOD : wreck ? IMPACT.SPARK : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
         else {
           g.strike(p, ev.weapon, heavy, hx, hy, hz, fx, fy, fz);
           const had = wreck ? (g.gather.get(col)?.left ?? WRECK_SALVAGE) : 0;
-          if (tree || wreck) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
+          if (tree || wreck || rock) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
           if (wreck) g.wreckHit(col, hx, hy, hz, fx, fy, fz, blowOf(ev.weapon), heavy, (g.gather.get(col)?.left ?? had) < had);
         }
       }

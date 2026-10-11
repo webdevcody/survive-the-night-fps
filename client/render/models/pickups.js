@@ -274,6 +274,13 @@ BUILD[ITEM.PLATE] = (b) => {
   });
 };
 
+// three lumps of broken granite, apart so none sinks into another
+BUILD[ITEM.STONE] = (b) => {
+  b.rock('stone', 0.085, { detail: 1, seed: 31, scale: [1.2, 0.8, 1], jag: 0.35, p: [-0.06, 0.03, -0.03] });
+  b.rock('stone', 0.065, { detail: 1, seed: 32, scale: [1, 0.85, 1.25], jag: 0.35, p: [0.1, 0.024, 0.02] });
+  b.rock('stone', 0.05, { detail: 1, seed: 33, scale: [1.1, 0.75, 0.95], jag: 0.35, p: [-0.02, 0.018, 0.12] });
+};
+
 BUILD[ITEM.GUNPARTS] = (b) => {
   b.box('olive', 0.2, 0.06, 0.12, { p: [-0.04, 0.03, 0] });
   labelOn(b, 'gunparts', 0.18, 0.09, [-0.04, 0.061, 0]);

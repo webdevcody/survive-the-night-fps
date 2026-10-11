@@ -86,6 +86,31 @@ function buildStage(type, d) {
       nails([[-1.0, 0.45, 0.0], [0.4, 0.45, 0.0], [-0.6, 2.45, 0.0], [1.0, 2.45, 0.0], [0, 1.5, 0.0]]);
       break;
     }
+    case STRUCT.STONE_WALL: {
+      // a timber sill along the ground, and on it courses of rough blocks, each row set half a block over the one
+      // under it; damage knocks blocks out of the upper courses first, and darkens the rest
+      board(3.0, 0.14, 0.62, [0, 0.07, 0], [0, 0, 0], WOOD, { fragile: 0 });
+      const rows = 6;
+      const rh = (2.4 - 0.14) / rows;
+      for (let row = 0; row < rows; row++) {
+        const y = 0.14 + rh * (row + 0.5);
+        const n = row % 2 ? 4 : 5; // (the odd rows start and end on a half block)
+        const w = 3.0 / (row % 2 ? n - 0.5 : n);
+        for (let k = 0; k < n; k++) {
+          let x0 = -1.5 + k * w - (row % 2 ? w / 2 : 0);
+          let x1 = x0 + w;
+          x0 = Math.max(-1.5, x0);
+          x1 = Math.min(1.5, x1);
+          const roll = dr();
+          const lose = d === 0 ? 0 : (row / rows) * (d === 1 ? 0.25 : 0.6);
+          if (row > 0 && roll < lose) continue;
+          const g = 0.8 + r() * 0.25;
+          const c = tint([0.95 * g, 0.93 * g, 0.88 * g]);
+          b.box('stone', x1 - x0 - 0.03, rh - 0.03, 0.56 + (r() - 0.5) * 0.06, { p: [(x0 + x1) / 2, y, (r() - 0.5) * 0.04], r: [0, (r() - 0.5) * 0.03, (r() - 0.5) * 0.03], c });
+        }
+      }
+      break;
+    }
     case STRUCT.METAL_WALL: {
       for (const x of [-1.42, 1.42]) board(0.16, 2.8, 0.16, [x, 1.4, 0.07], [0, 0, 0], WOOD, { fragile: 0 });
       for (const y of [0.35, 1.4, 2.5]) board(3.0, 0.12, 0.08, [0, y, 0.09], [0, 0, 0], WOOD, { fragile: 0.15 });
