@@ -15,7 +15,7 @@ import { BTN, SERVER_TICK_RATE, CMD_DT, SLOT_PRIMARY, SLOT_PISTOL, WALK_SPEED, W
 import { createPlayerState, copyPlayerState, simulatePlayer } from '../shared/playersim.js';
 import { ITEM, WEAPONS, CANIM, KILLER } from '../shared/defs.js';
 import { ACH_BY_N, ACH_BY_ID } from '../shared/achievements.js';
-import { WORLD, CROSSING } from '../shared/acts.js';
+import { WORLD, CROSSING, STAND_NIGHT } from '../shared/acts.js';
 import { groundAt } from '../shared/collision.js';
 import { swimming } from '../shared/swim.js';
 import { readSnapshot } from '../client/net/decode.js';
@@ -326,7 +326,11 @@ check('a new game has the stray cat near the car, in nobody\'s arms', !!cat() &&
   game.supplies = game.sup.need.slice();
   game.globalDirty = true;
   run(2);
+  // (the island's stand waits for night STAND_NIGHT, scripts/test-standgate.js: the hold is begun as if on a later day)
+  const day = game.day;
+  game.day = STAND_NIGHT + 1;
   B.act(ACT.HOLD_BEGIN, CAR_ID);
+  game.day = day;
   run(secs(ENGINE_START_TIME + 0.3));
   check("the final stand begins with the cat in Ann's arms", game.escape.active && held() && cat().holder === a2.id, JSON.stringify(game.escape));
   game.escape.t = 0.2;
