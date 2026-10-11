@@ -1,8 +1,9 @@
 // The moments a run turns on (issue #223): going down, dying, the dawn after a night, and the end of the run.
 //   Downed    a ring round the crosshair that runs out with the bleed, and one line: who is closest, the radio key
 //   Death     a short card: who got you and what it does, then a bar to the rise (the server's RISE_S), not a 9 s screen
-//   DawnLine  two lines under the clock at dawn: how the night went, and the names of what comes tonight. The dusk
-//             card (hud2.js Tonight) says what to do about them when it matters. The middle stays the Dawn title's
+//   DawnLine  lines under the clock at dawn: how the night went, the fresh-night XP bonus back, and the names of what
+//             comes tonight. The dusk card (hud2.js Tonight) says what to do about them when it matters. The middle
+//             stays the Dawn title's
 //   EndScreen one read order: the outcome, what the run earned (a new best biggest, a level-up with its perk point),
 //             the team, the poll (optional), and a bar at the bottom that never scrolls away: the countdown to the
 //             next run, and what can be done now - spend a perk point, invite, leave.
@@ -12,10 +13,10 @@ import { el, svgEl, fmtTime } from './dom.js';
 import { glyph } from './icons.js';
 import { bindLabel } from '../game/binds.js';
 import { accountState } from '../net/account.js';
-import { voteDifficulty } from '../net/feedback.js';
+import { voteDifficulty, pickMoment, genreAnswer } from '../net/feedback.js';
 import { fetchProgress, lastProgress, onProgress } from '../net/progress.js';
 import { xpBar } from './progress.js';
-import { XP_SRC_NAMES, levelInfo, picksEarned } from '../../shared/progress.js';
+import { XP, XP_SRC_NAMES, levelInfo, picksEarned } from '../../shared/progress.js';
 import { ZOMBIE_DEFS } from '../../shared/defs.js';
 import { BESTIARY } from '../../shared/bestiary.js';
 
@@ -182,6 +183,8 @@ export class DawnLine {
     root.hidden = true;
     this.head = el('div', 'xdawn-head', root, '');
     this.stats = el('div', 'xdawn-stats', root);
+    // the fresh-night bonus starts over with the day (server/game.js phaseXp)
+    el('div', 'xdawn-bonus', root, `Fresh-night bonus: +XP on your next ${XP.killsFull} kills`);
     this.next = el('div', 'xdawn-next', root);
     this.h = -1;
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this._room()).observe(root);
@@ -244,6 +247,18 @@ export class DawnLine {
 // ---------------------------------------------------------------- the end of a run
 // the answers to "how hard was it?", 1..5 as the server counts them (server/feedback.js)
 const DIFFICULTY = ['Too easy', 'Easy', 'Just right', 'Hard', 'Too hard'];
+// a run's best and worst moment: [what the server files, what the button says] (server/feedback.js MOMENTS)
+const MOMENTS = [
+  ['boss', 'Boss'],
+  ['horde', 'Horde'],
+  ['looting', 'Looting'],
+  ['building', 'Building'],
+  ['objectives', 'Objectives'],
+  ['teammates', 'Teammates'],
+  ['ui', 'UI'],
+  ['lag', 'Lag'],
+  ['other', 'Other'],
+];
 
 // whole percents of counts that add up to 100 (the largest remainders get the leftover points)
 function percents(counts) {
@@ -321,6 +336,33 @@ export class EndScreen {
     this.vote = null;
     this.voteSeq = 0;
 
+    // 3b. the run's best and worst moment, one tap each (a second tap takes it back), and once ever whether they play
+    // this kind of game. All optional: nothing here stands between the player and the next run
+    this.moments = el('div', 'xend-moments', page);
+    this.momentRows = ['best', 'worst'].map((which) => {
+      const row = el('div', 'xend-mrow', this.moments);
+      el('b', 'xend-mrow-h', row, which === 'best' ? 'Best moment' : 'Worst moment');
+      const opts = el('div', 'xend-mrow-o', row);
+      const chips = MOMENTS.map(([key, label]) => {
+        const b = el('button', 'xend-chip', opts, label);
+        b.type = 'button';
+        b.addEventListener('click', () => this._pickMoment(which, key));
+        return { key, b };
+      });
+      return { which, chips, picked: null, seq: 0 };
+    });
+    this.genreRow = el('div', 'xend-mrow xend-genre', this.moments);
+    el('b', 'xend-mrow-h', this.genreRow, 'Do you play survival / FPS games?');
+    const gopts = el('div', 'xend-mrow-o', this.genreRow);
+    for (const [plays, label] of [[true, 'Yes'], [false, 'No']]) {
+      const b = el('button', 'xend-chip', gopts, label);
+      b.type = 'button';
+      b.addEventListener('click', () => this._answerGenre(plays));
+    }
+    this.momentsFoot = el('span', 'xend-poll-f', this.moments, '');
+    this.pick = null;
+    this.genre = null;
+
     // 4. what comes next: always on screen, whatever the size of the rest
     const bar = el('footer', 'xend-bar', root);
     const next = (this.next = el('div', 'xend-next', bar));
@@ -384,6 +426,55 @@ export class EndScreen {
     }
     this.pollFoot.className = 'xend-poll-f';
     this.pollFoot.textContent = 'Optional · keys 1-5';
+  }
+
+  // Fresh best / worst picks for this run. pick: (which, moment | null) -> a promise (net/feedback.js pickMoment), or
+  // nothing for none. genre: (plays?) -> a promise of { plays } (genreAnswer): the question shows until it is answered
+  _moments(pick, genre) {
+    this.pick = pick || null;
+    this.genre = genre || null;
+    this.moments.hidden = !this.pick;
+    this.momentsFoot.className = 'xend-poll-f';
+    this.momentsFoot.textContent = '';
+    for (const r of this.momentRows) {
+      r.seq++;
+      r.picked = null;
+      for (const c of r.chips) c.b.classList.remove('mine');
+    }
+    this.genreRow.hidden = true;
+    // (asked once per account or guest: the server says whether it has been)
+    if (!this.genre) return;
+    const g = this.genre;
+    g()
+      .then((res) => {
+        if (this.genre === g && res?.plays !== true && res?.plays !== false) this.genreRow.hidden = false;
+      })
+      .catch(() => {}); // (no answer: not asked this time)
+  }
+
+  async _pickMoment(which, key) {
+    const r = this.momentRows.find((x) => x.which === which);
+    if (!this.pick || !r) return;
+    const moment = r.picked === key ? null : key; // a second tap on the same one takes it back
+    const seq = ++r.seq;
+    r.picked = moment;
+    for (const c of r.chips) c.b.classList.toggle('mine', c.key === moment);
+    try {
+      await this.pick(which, moment);
+      if (seq !== r.seq) return;
+      this.momentsFoot.className = 'xend-poll-f';
+      this.momentsFoot.textContent = 'Thanks · tap again to take it back';
+    } catch (err) {
+      if (seq !== r.seq) return;
+      this.momentsFoot.className = 'xend-poll-f bad';
+      this.momentsFoot.textContent = err?.message || 'Your pick did not get through';
+    }
+  }
+
+  async _answerGenre(plays) {
+    if (!this.genre) return;
+    this.genreRow.hidden = true;
+    await this.genre(plays).catch(() => {}); // (lost: it is asked again next run)
   }
 
   async _vote(rating) {
@@ -550,7 +641,9 @@ export class EndScreen {
     this._record(stats.record);
     this.setXp(stats.progress || null);
     // (no poll on a server that keeps no votes: one without a database has no accounts either)
-    this._poll(stats.vote || (accountState().accounts ? voteDifficulty : null));
+    const kept = accountState().accounts;
+    this._poll(stats.vote || (kept ? voteDifficulty : null));
+    this._moments(stats.moment || (kept ? pickMoment : null), stats.genre || (kept ? genreAnswer : null));
 
     // the run in three figures, top right
     this.nums.textContent = '';

@@ -2877,6 +2877,21 @@ function poseMenace(z, p) {
   R(p, JAW, -0.3 - 0.35 * Math.max(0, Math.sin(t * 6.3 + 0.7 * n1(t, z.seed))) - 0.2 * Math.abs(tw), 0, 0);
 }
 
+/** Shade pinned by light (ZANIM.FROZEN): it shrinks back from it, hunched, head down behind both hands over its eyes. */
+function poseCover(z, p) {
+  const st = z.st;
+  legsStatic(z, p, 0.3, -0.45, -0.12, -0.15, st.legSplay || 0.08);
+  z.standOn = true;
+  R(p, HIPS, 0.05, 0, 0);
+  R(p, SPINE, -0.2, 0.1, 0);
+  R(p, CHEST, -0.22, 0.06, 0);
+  posture(z, p);
+  headLook(p, -0.35, -0.1, z.tilt * 0.15, 0.4);
+  arm(p, 0, 0.75, -0.35, 0.35, 2.4, -0.4);
+  arm(p, 1, 0.7, -0.35, 0.35, 2.45, -0.4);
+  R(p, JAW, -0.55, 0, 0);
+}
+
 /** Hit reaction: torso and head snap back, arms jerk out, then it recovers (additive, upper body only). */
 function poseFlinch(z, p) {
   const t = z.flinchT, s = z.flinchSide;
@@ -2917,6 +2932,7 @@ export function setZombieViewer(x, y, z) {
   viewer.on = true;
 }
 const GAZE_NEAR = 13, GAZE_FAR = 19;
+const COVER_T = 0.14; // s a shade the light catches takes to get its hands up over its eyes (hold)
 /** Updates the instance's smoothed gaze (yaw/pitch relative to its facing, weight). */
 function updateGaze(z, dt) {
   const st = z.state;
@@ -3386,6 +3402,7 @@ function poseHumanoid(z) {
     case ZANIM.DEAD: poseDead(z, p); break;
     case ZANIM.EAT: poseEat(z, p); break;
     case ZANIM.RISE: poseRise(z, p); break;
+    case ZANIM.FROZEN: poseCover(z, p); break;
     default: if (z.sub === 1) poseMenace(z, p); else poseIdle(z, p); break;
   }
   poseExtras(z, p);
@@ -3919,29 +3936,39 @@ class ZombieInstance {
   }
 
   /**
-   * Shade pinned by light (ZANIM.FROZEN): it holds the pose it was caught in, perfectly still, while the light under
-   * its skin flares. Seen for the first time already frozen, it strikes a mid-stride pose to hold.
+   * Shade pinned by light (ZANIM.FROZEN): it throws its hands up over its eyes (poseCover) in COVER_T s and holds
+   * there, perfectly still, while the light under its skin flares. Seen for the first time already frozen, it is
+   * already covering them.
    */
   hold(dt, time) {
     if (this.state !== ZANIM.FROZEN) {
-      if (this.posedAt < 0) {
-        this.state = ZANIM.RUN;
-        this.speed = this.def.speed;
-        this.time = time;
-        this.computePose();
-        this.out.set(this.pose);
-        this.applyPose(this.out);
-      }
+      this.snap.set(this.out);
       this.state = ZANIM.FROZEN;
       this.sub = 0;
       this.stateT = 0;
-      this.fadeT = this.fadeDur; // no crossfade: it stops dead
+      this.fadeDur = COVER_T;
+      this.fadeT = this.posedAt < 0 ? COVER_T : 0;
+      this.gazeW = 0; // (its eyes are behind its hands)
     }
     this.stateT += dt;
     this.flinchT += dt;
     this.voxT += dt;
     this.time = time;
     this.speed = 0;
+    const fading = this.fadeT < this.fadeDur;
+    this.fadeT += dt;
+    if (fading || this.posedAt < 0) {
+      // (once the hands are up the pose never changes: nothing to work out until the light lets it go)
+      this.wx = this.object.position.x;
+      this.wz = this.object.position.z;
+      this.wyaw = this.object.rotation.y;
+      this.posedAt = time;
+      this.computePose();
+      const w = smooth(Math.min(1, this.fadeT / this.fadeDur));
+      const p = this.pose, o = this.out, s = this.snap;
+      for (let i = 0, n = o.length; i < n; i++) o[i] = s[i] + (p[i] - s[i]) * w;
+      this.applyPose(o);
+    }
     if (this.hit > 0) this.hit = Math.max(0, this.hit - dt * 5);
     if (setFx(this.fx, this.hit, 2.2 + 1.2 * Math.exp(-this.stateT * 5))) this.fxDirty = true;
   }

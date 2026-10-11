@@ -19,7 +19,10 @@ pictures; they do not read code. Write for them.
 3. **A Risk section when backend code changes** (step 1 says what counts).
 4. **A Metrics table when tuning** (step 1 says what counts).
 5. **Short.** The written part fits on one screen: about 200 words, not counting images and tables.
-6. **Honest.** Say what nobody has played yet. Never claim a test you did not run.
+6. **Says which pillar it serves.** One line naming the pillar from [docs/design.md](../../../docs/design.md) the
+   change makes stronger, or "none, tooling/infra". A change that serves none and is not tooling goes back to the
+   owner before it is built further.
+7. **Honest.** Say what nobody has played yet. Never claim a test you did not run.
 
 Too technical: "Adds `Combat.skyflare`, PROJ 10; flares bypass AOI in the snapshot; protocol 30."
 Right: "Adds a flare gun. Fire it into the sky and a parachute flare lights the ground round it for a minute, so a
@@ -95,6 +98,8 @@ Write `shots/pr/<slug>/body.md`. Leave out the sections marked "only when"; keep
 ## Overview
 <2-4 sentences, or up to 5 short bullets: what changes for players and why.>
 <"Closes #N" if it closes an issue.>
+
+**Pillar:** <which pillar in docs/design.md this serves, in a few words, or "none, tooling/infra">
 
 ## Screenshots
 **<caption: what to look at>**
@@ -178,6 +183,7 @@ progress. Then read the PR back (`gh pr view <n> --json body -q .body`), make su
 - [ ] Screenshots of the change, looked at, hosted on `pr-images-<slug>`, none committed to the code branch
 - [ ] Before / after for anything that already existed
 - [ ] Overview in plain words, no code names (unless a big technical refactor)
+- [ ] A **Pillar:** line naming the pillar it serves ([docs/design.md](../../../docs/design.md)), or "none, tooling/infra"
 - [ ] Metrics table if tuning; Risk section if backend
 - [ ] The written part fits on one screen
 - [ ] "Tested" says what was run, and whether anybody has played it

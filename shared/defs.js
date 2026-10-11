@@ -553,7 +553,8 @@ export const ZTYPE = {
 // ahead of the body, bodyTop = top of the body cylinder (default headY - headR).
 // shade: only moves in darkness; while any light is on it, it is frozen and takes litResist x damage
 // legs: its legs can be shot (LEG_* in constants.js): a hit trips it, a leg can be blown off, with both gone it crawls
-// minNight: the night it joins the horde. One new kind a night (Game.startNight), each said on the dawn card before it
+// minNight: the night it joins the horde. One new kind a night (Game.startNight), save bats, which join the spitters on
+// night 3 and leave night 7 with none new; each said on the dawn card before it
 // and on the dusk card under the clock with its introBrief (the intro in a few words); by day the further a place is
 // from the car, the more of the specials it holds, whatever the night (ZombieManager.daySpecial). A boss's minNight is
 // the first night it can be drawn (BOSS_POOL)
@@ -576,7 +577,7 @@ export const ZOMBIE_DEFS = {
   // breachWindup s and bursts against it. That piece takes breachDmg on top of the blast (with it, any wood piece
   // goes; a metal wall loses about 40%) - unless the boomer is shot first, which leaves only the blast
   [ZTYPE.BOOMER]: { name: 'Boomer', hp: 70, speed: 1.7, dmg: 0, rate: 1, range: 2.2, radius: 0.6, height: 1.8, headY: 1.62, headR: 0.2, structDmg: 0, loot: 0.6, blastRadius: 5.5, blastDmg: 45, breachHold: 0.8, breachWindup: 1.2, breachRange: 12, breachDmg: 750, minNight: 4, legs: true, intro: 'Boomers join the horde: they burst against your walls. Shoot them far off.', introBrief: 'Burst against your walls. Shoot them far off.' },
-  [ZTYPE.BAT]: { name: 'Bat', hp: 28, speed: 7.5, dmg: 5, rate: 0.9, range: 1.3, radius: 0.3, height: 0.4, headY: 0.2, headR: 0.2, structDmg: 0, loot: 0.08, flying: true, common: true, minNight: 7, intro: 'Bats join the horde: they fly over every wall. Shotguns and melee.', introBrief: 'Fly over every wall. Shotguns and melee.' },
+  [ZTYPE.BAT]: { name: 'Bat', hp: 28, speed: 7.5, dmg: 5, rate: 0.9, range: 1.3, radius: 0.3, height: 0.4, headY: 0.2, headR: 0.2, structDmg: 0, loot: 0.08, flying: true, common: true, minNight: 3, intro: 'Bats join the horde: they fly over every wall. Shotguns and melee.', introBrief: 'Fly over every wall. Shotguns and melee.' },
   // night bosses: hp is what one survivor faces (+ BOSS_HP_PER_PLAYER of it per extra survivor, Game.spawnBosses),
   // sized so that the rounds a survivor has left once the horde has had its share can bring one down before sunrise
   [ZTYPE.BOSS_ABOMINATION]: { name: 'The Abomination', hp: 4000, speed: 3.0, dmg: 55, rate: 1.8, range: 3.4, radius: 1.5, height: 4.2, headY: 3.7, headR: 0.5, structDmg: 600, loot: 1, knock: 16, boss: true, minNight: 4, tip: 'It slams the ground and throws boulders. Spread out and keep moving.', tipBrief: 'Slams and throws boulders. Spread out, keep moving.' },
@@ -586,7 +587,7 @@ export const ZOMBIE_DEFS = {
   // ramDmg to the piece (a metal one takes less, and gives ramRecoil back), then it reels, taking stunHurt x damage.
   // ramWindup: s it snarls before the ram (DOG_RAM_WINDUP when unset) (DOG_* in server/zombies.js)
   [ZTYPE.DOG]: { name: 'Zombie Dog', hp: 60, speed: 6.2, dmg: 7, rate: 0.7, range: 1.3, radius: 0.36, height: 0.85, headY: 0.58, headR: 0.14, headFwd: 0.5, bodyTop: 0.66, structDmg: 5, loot: 0.15, leather: 0.3, lungeRange: 6, sense: 1.5, pack: true, common: true, minNight: 2, hitRun: true, ramDmg: 180, ramRecoil: 15, stunHurt: 1.5, intro: 'Zombie dogs join the horde: they bite and run. They cannot jump a barricade, but they ram one down. Shoot them as they come in.', introBrief: 'Ram barricades down. Shoot them as they come in.' },
-  [ZTYPE.SHADE]: { name: 'Shade', hp: 240, speed: 6.6, dmg: 34, rate: 0.9, range: 1.7, radius: 0.36, height: 2.0, headY: 1.82, headR: 0.17, structDmg: 30, loot: 0.8, shade: true, litResist: 0.25, minNight: 6, legs: true, intro: 'Shades join the horde: they only move in the dark. Torches, a campfire, flashlights on them.', introBrief: 'Move only in the dark. Keep a light on them.' },
+  [ZTYPE.SHADE]: { name: 'Shade', hp: 240, speed: 8.6, dmg: 55, rate: 0.9, range: 1.7, radius: 0.36, height: 2.0, headY: 1.82, headR: 0.17, structDmg: 30, loot: 0.8, shade: true, litResist: 0.25, minNight: 6, legs: true, intro: 'Shades join the horde: faster than you can run, and they hit hard, but only in the dark. Light your base, and keep a flashlight on them.', introBrief: 'Move only in the dark. Keep a light on them.' },
   // night 1's boss: a hulking walker and nothing more, until it is badly hurt - below enrage of its health it roars and
   // comes on at enrageSpeed x its pace. Its body fits a doorway (moveR / moveH, as the Tank's)
   [ZTYPE.BOSS_BRUTE]: { name: 'The Brute', hp: 750, speed: 1.7, dmg: 24, rate: 1.5, range: 2.3, radius: 0.75, height: 2.55, headY: 2.22, headR: 0.25, moveR: 0.5, moveH: 1.9, structDmg: 240, loot: 1, bossLoot: 4, knock: 7, boss: true, minNight: 1, enrage: 0.5, enrageSpeed: 2.1, tip: 'Slow, until it is badly hurt: then it roars and comes at a run. Keep your distance.', tipBrief: 'Runs once badly hurt. Keep your distance.' },
@@ -815,7 +816,17 @@ export const EVT = {
   // u8 how far up its foot it broke (0.1 m), u8 pieces (1: a shot, snapped there; 2-3: a blast; 0: none - only how
   // much of it stands, to whoever joins). What stands below stands until dawn, and can be shot again
   TREE_BREAK: 38,
+  // (private) your noise woke the dead: u8 what made it (HEARD), u8 how many it woke (to 255), u8 how far it
+  // carried (m, to 255), u8 n, n x u16 the entity ids of the ones it woke (the nearest HEARD_IDS). Sent to whoever
+  // made it, each time it wakes HEARD_MIN or more
+  HEARD: 39,
 };
+
+// EVT.HEARD: what made the noise, so the client can name it the first time ("Gunshot: heard 70 m")
+export const HEARD = { GUNSHOT: 1, BLAST: 2, MOLOTOV: 3, BUILD: 4, CHOP: 5, SALVAGE: 6, PRY: 7, HORN: 8, CAR_ALARM: 9 };
+export const HEARD_MIN = 1; // a noise has to wake this many of the dead to be told: one is the lesson
+export const HEARD_IDS = 32; // the most of the ones it woke named in it (the nearest: the minimap shows 70 m)
+export const HEARD_GAP = 1; // s: no more than one ring this often (the woken dead are lit every time) (client)
 
 export const IMPACT = { BLOOD: 1, DIRT: 2, WOOD: 3, METAL: 4, ACID: 5, GREEN_BLOOD: 6, SPARK: 7 };
 
@@ -889,6 +900,7 @@ export const NOTIFY = {
   SIPHONED: 74, // (to whoever drew it) arg = the Fuel that came out of the wreck's tank; 0: it was dry
   VEH_NEED: 75, // (to whoever tried) arg = VEH_NO: why nothing could be done to it
   VEH_OFF: 76, // (to the rider) arg = VEH_OFF: what took them off it
+  SUPPLY_HINT: 77, // a team that has found no supply yet is told on the radio where one is. arg = the hint (shared/supplyhelp.js)
 };
 
 // NOTIFY.VEH_NEED / VEH_OFF: why

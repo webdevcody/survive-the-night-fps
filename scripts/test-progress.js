@@ -209,7 +209,10 @@ const sharedGame = new Game({ seed: 4242, godMode: true, dayLength: 3600, stats:
   kill(Ann, ZTYPE.WALKER, true);
   kill(Ann, ZTYPE.TANK);
   const want = XP.kill * 2 + 30;
-  check('kills earn XP by kind, a headshot on top, on the run and on the record', A.xpRun[XPS.kills] === want && A.xpRun[XPS.headshots] === XP.headshot && store.recs.get(sha(uid(1))).xp === want + XP.headshot, `${A.xpRun} / ${store.recs.get(sha(uid(1))).xp}`);
+  const half = (n) => Math.ceil(n / 2);
+  const kept = half(XP.kill) * 2 + half(30);
+  check('kills earn XP by kind, a headshot on top, on the run and on the record', A.xpRun[XPS.kills] + A.xpRun[XPS.headshots] + A.xpRun[XPS.fresh] === want + XP.headshot && store.recs.get(sha(uid(1))).xp === want + XP.headshot, `${A.xpRun} / ${store.recs.get(sha(uid(1))).xp}`);
+  check('...half of it as the kill, the rest as the fresh-night bonus', A.xpRun[XPS.kills] === kept && A.xpRun[XPS.headshots] === half(XP.headshot) && A.xpRun[XPS.fresh] === want - kept + XP.headshot - half(XP.headshot), `${A.xpRun}`);
   const z = game.zm.spawn(ZTYPE.WALKER, A.x + 3, A.z + 3);
   z.wedgeT = 60;
   const before = game.xpOf(A);
@@ -222,8 +225,9 @@ const sharedGame = new Game({ seed: 4242, godMode: true, dayLength: 3600, stats:
 
   A.nightKills = XP.killsFull;
   const at = A.xpRun[XPS.kills];
+  const freshAt = A.xpRun[XPS.fresh];
   kill(Ann);
-  check('past the night\'s full kills, a kill is worth half', A.xpRun[XPS.kills] - at === Math.ceil(XP.kill / 2));
+  check('past the night\'s first kills, the fresh-night bonus is spent: a kill earns its own half', A.xpRun[XPS.kills] - at === Math.ceil(XP.kill / 2) && A.xpRun[XPS.fresh] === freshAt);
   game.startNight();
   check('...and a new night starts the count over', A.nightKills === 0);
 

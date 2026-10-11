@@ -476,7 +476,7 @@ does (`perkMods(mask)`: one frozen object per mask; no ordinary stat past `PERK_
   whether a set could be had (order not looked at). An `id` is a bit of the mask: never reuse or renumber one, none past 30.
 - **XP is stored, the level is worked out** (`levelOf`), so the curve can be retuned without touching a record. It is
   awarded on the server only, where the board's stats are bumped (`Game.award`, times Quick Study's `xp`): kills by kind
-  (`killXp`: half past `XP.killsFull` in one night or day, nothing for one of the dead that has been after a survivor
+  (`killXp`: half as the kill, the other half as the fresh-night bonus (`XPS.fresh`) on the first `XP.killsFull` in one night or day, nothing for one of the dead that has been after a survivor
   for `WEDGED_FOR` without getting anywhere or striking anything, `z.wedgeT`; nothing for a turned player), bosses,
   revives (`XP.revivesFull` a night), being alive at dawn, a dawn past the furthest day on the record (`p.best`), and the
   escape (more in the car than left behind). Dying keeps what was earned. `/xp <n>` (admin) adds to the record outside

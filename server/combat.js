@@ -1,7 +1,7 @@
 // Combat: lag-compensated hitscan, melee, thrown/lobbed projectiles, explosions, damage areas.
 import { SERVER_TICK_RATE, MAX_REWIND, HISTORY_TICKS, PLAYER_RADIUS, PLAYER_HEIGHT, PLAYER_CROUCH_HEIGHT, EYE_HEIGHT, PHASE, NOISE } from '../shared/constants.js';
 import { LEG_ZONE, LEG_BODY_DAMAGE, STUMBLE_TIME, INTERP_DELAY } from '../shared/constants.js';
-import { SOUND as _SOUND } from '../shared/defs.js';
+import { SOUND as _SOUND, HEARD } from '../shared/defs.js';
 import {
   ITEM,
   WEAPONS,
@@ -136,7 +136,7 @@ export class Combat {
       { except: p.id, x: ox, z: oz, r: 320 },
     );
     // the dead come to the noise
-    g.zm.noise(ox, oz, def.noise || NOISE.GUNSHOT, p.state.y);
+    g.zm.noise(ox, oz, def.noise || NOISE.GUNSHOT, p.state.y, p, HEARD.GUNSHOT);
     if (def.flame) return this.flame(p, ev, def);
     if (def.rocket) return this.launch(p, ev, def);
     if (def.skyflare) return this.skyflare(p, ev);
@@ -721,7 +721,7 @@ export class Combat {
       }
     }
     // the loudest thing in the valley: whatever it did not kill comes running
-    g.zm.noise(x, z, opts.noise || NOISE.EXPLOSION, y);
+    g.zm.noise(x, z, opts.noise || NOISE.EXPLOSION, y, opts.owner, HEARD.BLAST);
   }
 
   // ---------------------------------------------------------------- the flare gun
@@ -936,7 +936,7 @@ export class Combat {
             this.spawnArea(AREA.FIRE, px, py, pz, THROWABLES[ITEM.MOLOTOV].radius, THROWABLES[ITEM.MOLOTOV].burnTime, e.ownerRef, THROWABLES[ITEM.MOLOTOV].dps);
             g.sound(SOUND.GLASS_BREAK, px, py, pz, 60);
             g.sound(SOUND.FIRE_WHOOSH, px, py, pz, 80);
-            g.zm.noise(px, pz, NOISE.MOLOTOV, py);
+            g.zm.noise(px, pz, NOISE.MOLOTOV, py, e.ownerRef, HEARD.MOLOTOV);
             done = true;
           }
           break;
