@@ -24,6 +24,12 @@ export const CAMPFIRE_HEAL_RADIUS = 7; // built campfires heal survivors resting
 export const CRAFT_STATION_RADIUS = 5.5; // stand this close to a lit campfire / workbench to use it
 export const MAX_STRUCTURES = 320;
 
+// ---- FROZEN CORE FEEL (issue #277) -------------------------------------------------------------------------------
+// Walk, sprint and crouch speed, the turned survivor's speed and the stamina numbers below, and each zombie kind's
+// `speed` in shared/defs.js ZOMBIE_DEFS, are the game's core feel: almost every system and test is built on them.
+// They are frozen. Do not retune them to fix a balance problem; retune through the multipliers in
+// shared/difficulty.js (or the thing being balanced) instead. Changing one is a design decision for the owner, made on
+// purpose after playtests, never a side effect: scripts/test-frozen.js fails until it is updated with them.
 // Player physics
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_HEIGHT = 1.8;
@@ -48,6 +54,7 @@ export const STAMINA_REGEN = 19;
 export const STAMINA_REGEN_DELAY = 0.9;
 export const STAMINA_JUMP_COST = 9;
 export const STAMINA_UNLOCK = 30; // exhausted until this much regained
+// ---- end of the frozen core feel ------------------------------------------------------------------------------------
 
 // Pinned by a leaper: both hands on it, shoving it off. The meter (s.shove, 0-1) fills by each press of jump and,
 // slower, while it is held, and sinks back while it is not; full, the server throws the leaper off (Zombies.throwOff).

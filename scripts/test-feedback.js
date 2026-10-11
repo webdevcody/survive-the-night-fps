@@ -1,4 +1,5 @@
-// The end screen's "how hard was it?" vote (server/feedback.js, migrations/004). In-process, on a PGlite database:
+// The end screen's "how hard was it?" vote (server/feedback.js, migrations/004), and its best / worst moment picks and
+// the once-asked "do you play survival / FPS games?" (migrations/020). In-process, on a PGlite database:
 // a vote filed against the run the voter just finished, found by their account or their browser's guest key; the
 // answer is everyone's votes; voting again changes the vote rather than adding one; what is kept of the match and the
 // voter with it; no vote for a run that was abandoned, ended long ago or was left before its end, nor for nobody, nor
@@ -15,7 +16,7 @@ import { C2S, S2C, PROTOCOL_VERSION, Writer, Reader } from '../shared/protocol.j
 import { openDb } from '../server/db/index.js';
 import { migrate } from '../server/db/migrate.js';
 import { MatchStore } from '../server/matchstore.js';
-import { Feedback } from '../server/feedback.js';
+import { Feedback, MOMENTS } from '../server/feedback.js';
 import { idKey } from '../server/stats.js';
 
 let failed = 0;
@@ -94,6 +95,45 @@ const procs = [];
   const all = report.find((r) => r.bucket === 'all');
   const wins = report.find((r) => r.bucket === 'run: victory');
   check('the analytics function: everyone, and split by the run and the voter', all?.votes === 3 && all.avg === 2.67 && all.too_easy === 33.3 && all.too_hard === 33.3 && wins?.votes === 1 && report.some((r) => r.bucket === 'team: solo') && report.some((r) => r.bucket === 'played: first match') && report.some((r) => r.bucket === 'me: dead or turned'), JSON.stringify(report));
+
+  // the run's best and worst moment (migrations/020), filed on the same row as the difficulty vote
+  const solo = idKey(randomUUID());
+  const run3 = match({ outcome: 'victory', players: [{ guestKey: solo, outcome: 'escaped' }, { guestKey: guest }], nights: 4, peak: 4 });
+  check('a best moment can come with no difficulty vote', (await fb.pickMoment({ guestKey: solo }, 'best', 'boss')).moment === 'boss');
+  await fb.pickMoment({ guestKey: solo }, 'worst', 'lag');
+  await fb.pickMoment({ guestKey: solo }, 'worst', 'looting');
+  let row = (await db.query('SELECT * FROM difficulty_votes WHERE voter = $1', [`g:${solo}`])).rows;
+  check('...filed against the run, a second pick changing the first, and no rating', row.length === 1 && row[0].match_id === run3 && row[0].best === 'boss' && row[0].worst === 'looting' && row[0].rating === null && row[0].outcome === 'victory', JSON.stringify(row));
+  check('the difficulty bars do not count a row with no rating', (await fb.difficultyResults()).total === 3);
+  await fb.voteDifficulty({ guestKey: solo }, 3);
+  await fb.pickMoment({ guestKey: solo }, 'worst', null);
+  row = (await db.query('SELECT best, worst, rating FROM difficulty_votes WHERE voter = $1', [`g:${solo}`])).rows[0];
+  check('a vote after the picks keeps them, and a pick can be taken back', row.best === 'boss' && row.worst === null && row.rating === 3, JSON.stringify(row));
+  await fb.pickMoment({ guestKey: guest }, 'best', 'teammates');
+  await fb.pickMoment({ guestKey: guest }, 'worst', 'horde');
+  const badPick = await Promise.all([['best', 'zombies'], ['middle', 'boss'], ['worst', 3]].map(([w, m]) => statusOf(fb.pickMoment({ guestKey: solo }, w, m))));
+  check('a moment that is not one, or neither best nor worst, is a 400', badPick.every((x) => x === 400), JSON.stringify(badPick));
+  check('...a pick from nobody too, and one with no run that just ended a 404', (await statusOf(fb.pickMoment({}, 'best', 'boss'))) === 400 && (await statusOf(fb.pickMoment({ guestKey: leaver }, 'best', 'boss'))) === 404);
+  check('every moment the client offers, the database takes', MOMENTS.length === 9 && MOMENTS.includes('objectives'));
+  const bogus = await statusOf(db.query(`UPDATE difficulty_votes SET best = 'zombies' WHERE voter = $1`, [`g:${solo}`]));
+  check('...and the database turns away one it does not know', bogus !== 'none', String(bogus));
+
+  // asked once per player: do they play survival / FPS games
+  check('nobody has said whether they play the genre yet', (await fb.genre({ guestKey: solo })).plays === null);
+  check('an answer is kept', (await fb.genre({ guestKey: solo }, true)).plays === true && (await fb.genre({ guestKey: guest }, false)).plays === false);
+  check('...once: a second answer does not change it', (await fb.genre({ guestKey: solo }, false)).plays === true);
+  check('an answer that is not yes or no is a 400, and so is nobody', (await statusOf(fb.genre({ guestKey: solo }, 'yes'))) === 400 && (await statusOf(fb.genre({}, true))) === 400);
+
+  const moments = (await db.query('SELECT * FROM analytics_moments()')).rows.map((r) => ({ ...r, best: Number(r.best), worst: Number(r.worst), answered: Number(r.answered) }));
+  const pickOf = (bucket, moment) => moments.find((r) => r.bucket === bucket && r.moment === moment);
+  check(
+    'the report: best and worst picks, crossed with the run, the difficulty vote, the team and the genre',
+    pickOf('all', 'boss')?.best === 1 && pickOf('all', 'horde')?.worst === 1 && pickOf('all', 'boss').answered === 2 && pickOf('run: victory', 'teammates')?.best === 1 && pickOf('difficulty: just right', 'boss')?.best === 1 && pickOf('difficulty: no vote', 'teammates')?.best === 1 && pickOf('team: 4+', 'boss')?.best === 1 && pickOf('genre: plays it', 'boss')?.best === 1 && pickOf('genre: does not', 'horde')?.worst === 1 && pickOf('nights survived: 4', 'boss')?.best === 1,
+    JSON.stringify(moments)
+  );
+  const diff = (await db.query('SELECT * FROM analytics_difficulty()')).rows;
+  const genreRows = diff.filter((r) => r.bucket.startsWith('genre:'));
+  check('the difficulty report leaves out rows with no rating, and splits by the genre', Number(diff.find((r) => r.bucket === 'all')?.votes) === 4 && genreRows.some((r) => r.bucket === 'genre: plays it') && genreRows.some((r) => r.bucket === 'genre: does not') && genreRows.some((r) => r.bucket === 'genre: not asked'), JSON.stringify(diff));
   await matches.close();
   await db.close();
 }
@@ -202,6 +242,14 @@ try {
   check('a signed-in player votes by their cookie', v2.status === 200 && v2.body.total === 2 && v2.body.counts.join() === '0,0,1,1,0', JSON.stringify(v2));
   const v3 = await gus.vote(5);
   check('...and a second click changes the vote', v3.status === 200 && v3.body.total === 2 && v3.body.counts.join() === '0,0,1,0,1', JSON.stringify(v3));
+  const m1 = await gus.post('/api/feedback/moment', { which: 'best', moment: 'horde', guestId: gus.guestId });
+  check('a best moment over HTTP', m1.status === 200 && m1.body.moment === 'horde', JSON.stringify(m1));
+  const m2 = await ann.post('/api/feedback/moment', { which: 'worst', moment: 'nope' });
+  check('...and a moment that is not one is a 400', m2.status === 400, JSON.stringify(m2));
+  const q1 = await ann.post('/api/feedback/genre', {});
+  const q2 = await ann.post('/api/feedback/genre', { plays: true });
+  const q3 = await ann.post('/api/feedback/genre', { plays: false });
+  check('the genre question over HTTP: unasked, answered, and kept the first time', q1.body?.plays === null && q2.body?.plays === true && q3.body?.plays === true, JSON.stringify([q1, q2, q3]));
   const s1 = await stranger.vote(1);
   check('someone who was not in the run is a 404', s1.status === 404 && /no run/i.test(s1.body?.error), JSON.stringify(s1));
   const x = await gus.vote(2, { Origin: 'https://evil.example' });

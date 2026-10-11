@@ -810,6 +810,32 @@ route(
   { body: true }
 );
 
+// The run that just ended's best or worst moment, from its end screen: { which: 'best' | 'worst', moment: one of
+// feedback.js MOMENTS or null to take it back, guestId? } -> { which, moment }. Filed as the difficulty vote is.
+route(
+  'post',
+  '/api/feedback/moment',
+  async (ctx, b) => {
+    if (!feedback) throw new HttpError(503, 'Votes are not kept on this server.');
+    const user = await auth.userForToken(ctx.cookies[COOKIE]);
+    return { body: await feedback.pickMoment(user ? { userId: user.id } : { guestKey: idKey(b.guestId) }, b.which, b.moment) };
+  },
+  { body: true }
+);
+
+// "Do you play survival / FPS games?", asked once per account or guest: { plays?: true | false, guestId? } ->
+// { plays: true | false | null }. Without plays it only says what the answer is (null: never asked); the first answer stays.
+route(
+  'post',
+  '/api/feedback/genre',
+  async (ctx, b) => {
+    if (!feedback) throw new HttpError(503, 'Votes are not kept on this server.');
+    const user = await auth.userForToken(ctx.cookies[COOKIE]);
+    return { body: await feedback.genre(user ? { userId: user.id } : { guestKey: idKey(b.guestId) }, b.plays) };
+  },
+  { body: true }
+);
+
 // Your level and perks (server/progress.js). Signed in, they are the account's; else guestId, the browser's leaderboard
 // id, says whose (posted, never in a URL: it is what proves who a guest is).
 // { guestId? } -> { xp, level, into, need, frac, perks, picks, points, pending, nextPick, respecs }
