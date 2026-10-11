@@ -33,6 +33,7 @@ const QUESTIONS = [
   ['supply_pacing', 'Pacing: minutes into a match each car supply is first found / installed'],
   ['retention', 'Do players come back (by matches played)'],
   ['difficulty', 'How hard players say it is (end screen votes: avg 1 too easy .. 5 too hard, the rest % of votes)'],
+  ['skulls', 'Zombie Skulls week by week: earned by play, spent in the Skull shop and on auction fees, net change held'],
   ['server_health', 'Server health'],
 ];
 

@@ -381,7 +381,7 @@ export function createAppearance(fields = FIELDS, palettes = PALETTES, retiredWi
         if (o && o.prefer && o.prefer[f.key]) prefer.push(...o.prefer[f.key]);
       }
       if (f.prefer) prefer.push(...f.prefer);
-      const colours = ok.filter((o) => o.hex !== undefined).length;
+      const colours = ok.filter((o) => o.hex !== undefined && o.weight !== 0).length; // (not the Skull shop's: never rolled)
       const w = ok.map((o) => {
         let x = o.weight ?? 1;
         // (a colour or none - glasses, gloves, a belt: none is noneOdds times likelier than all the colours together)

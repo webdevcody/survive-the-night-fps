@@ -49,6 +49,7 @@ import { REJECT_REASON, PROTOCOL_VERSION } from '../shared/protocol.js';
 import { DEFAULT_PORT, MAX_PLAYERS } from '../shared/constants.js';
 import { LOADOUT_CATALOG, LOADOUT_SLOTS, cleanLoadoutSlots } from '../shared/loadout.js';
 import { AUCTION, SKULLS, SKULL_EARN } from '../shared/economy.js';
+import { COSMETICS } from '../shared/skullshop.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PORT = +(process.env.PORT || DEFAULT_PORT);
@@ -712,6 +713,29 @@ route(
       return { body: { listing: await loadouts.cancelListing(owner, b.listingId), ...(await loadouts.auction(owner)) } };
     } catch (err) {
       marketError(err);
+    }
+  },
+  { body: true, max: 2048 }
+);
+
+// The Skull shop (shared/skullshop.js): what is in it, what you have and your Zombie Skulls; buying one. Guests too:
+// what a guest buys goes with them when they sign in (mergeGuest).
+route('get', '/api/loadout/shop', async (ctx) => {
+  const owner = await loadoutOwner(ctx);
+  return { body: { currency: SKULLS, shop: COSMETICS, owned: await loadouts.cosmetics(owner), balance: await loadouts.balance(owner) } };
+});
+route(
+  'post',
+  '/api/loadout/shop/buy',
+  async (ctx, b) => {
+    try {
+      const owner = await loadoutOwner(ctx, b);
+      const result = await loadouts.buyCosmetic(owner, b.cosmetic);
+      return { body: { result, currency: SKULLS, shop: COSMETICS, owned: await loadouts.cosmetics(owner), balance: result.balance } };
+    } catch (err) {
+      if (err?.code === 'bad_cosmetic') throw new HttpError(400, err.message);
+      if (err?.code === 'owned' || err?.code === 'insufficient_skulls') throw new HttpError(409, err.message);
+      throw err;
     }
   },
   { body: true, max: 2048 }
