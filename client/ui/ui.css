@@ -5242,6 +5242,32 @@ body {
   pointer-events: none;
 }
 
+/* the line of the scene playing behind (Splash.setReel), over the middle of the open part beside the menu */
+.stn-ui .sp-reel {
+  position: absolute;
+  top: 17%;
+  left: calc(var(--sp-edge, 50vw) + (100vw - var(--sp-edge, 50vw)) / 2);
+  transform: translateX(-50%);
+  font: max(22px, calc(44 * var(--u))) / 1 var(--f-head);
+  letter-spacing: 0.12em;
+  color: var(--bone);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.stn-ui .sp-reel.on {
+  opacity: 0.92;
+  transition-duration: 0.9s;
+}
+/* (no room beside the menu: the scene is behind it, and so would the line be) */
+@media (max-width: 760px) {
+  .stn-ui .sp-reel {
+    display: none;
+  }
+}
+
 /* the menu's side of the screen, darkened; the scene shows in the open part beside it */
 .stn-ui .sp-shade {
   position: absolute;

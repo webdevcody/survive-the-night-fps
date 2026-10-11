@@ -3217,6 +3217,12 @@ export class Game {
       this.endCine();
       return this.updateMenu(dt);
     }
+    if (this.tour?.reel) {
+      // (out of the splash: the reel's survivors, the dead and the line go with it; the walk starts again next time)
+      this.tour.dispose();
+      this.tour = null;
+      this.ui.splash.setReel('');
+    }
     const cine = this.updateCine();
     const s = this.prediction.state;
     const self = this.self;
@@ -3698,12 +3704,28 @@ export class Game {
     this.cine = null;
   }
 
-  // Behind the splash: a walk around the valley at eye level (menutour.js), or, in one with no road to walk, a slow
-  // turn around the car
+  // The reel's code is a chunk of its own, fetched once the shader warm-up behind the splash is done (everything it
+  // shows is built by then), so none of it is in the page's first load or in the way of its first picture
+  loadReel() {
+    if (this.reelLoad || this.warm || !this.warmKey || this.halfBuilt) return;
+    this.reelLoad = import('./menureel.js').then(
+      (m) => (this.MenuReel = m.MenuReel),
+      () => {}, // (offline, or a deploy took the chunk away: the walk goes on)
+    );
+  }
+
+  // Behind the splash: the reel (menureel.js: a run in five scenes, played out on a stretch of road), or until it is
+  // ready and wherever it cannot be put together, a walk around the valley at eye level (menutour.js), or, in one with
+  // no road to walk, a slow turn around the car
   updateMenu(dt) {
     if (!this.world) return;
     const cam = this.camera;
-    if (this.tour?.world !== this.world) this.tour = new MenuTour(this.world, !this.tour);
+    if (this.tour?.world !== this.world) {
+      this.tour?.dispose?.();
+      this.tour = new MenuTour(this.world, !this.tour);
+      this.reelWorld = null;
+    }
+    this.loadReel();
     let cut = 0;
     if (this.tour.ready) cut = this.tour.update(dt, cam);
     else {
@@ -3713,15 +3735,35 @@ export class Game {
       cam.position.set(car.x + Math.sin(this.menuAngle) * 15, gy + 3.4, car.z + Math.cos(this.menuAngle) * 15);
       cam.lookAt(car.x, gy + 1.2, car.z);
     }
+    // the reel takes over from the walk once it is here: the walk fades to black, and the reel comes up out of it
+    if (this.MenuReel && !this.tour.reel && this.reelWorld !== this.world) {
+      this.reelIn = Math.min(1, (this.reelIn || 0) + dt / 0.8);
+      cut = Math.max(cut, this.reelIn);
+      if (cut > 0.98 || !this.tour.ready) {
+        this.reelWorld = this.world; // (tried once a valley: one it cannot be put together in keeps the walk)
+        const reel = new this.MenuReel(this);
+        if (reel.ready) {
+          this.tour = reel;
+          this.reelIn = 0;
+          cut = reel.update(0, cam);
+        } else reel.dispose();
+      }
+    } else if (this.reelIn > 0 && !this.tour.reel) {
+      // (it could not be put together here: back from black to the walk)
+      this.reelIn = Math.max(0, this.reelIn - dt / 0.8);
+      cut = Math.max(cut, this.reelIn);
+    }
+    const reel = this.tour.reel ? this.tour : null;
+    this.ui.splash.setReel(reel && cut < 0.5 ? reel.line : '');
     this.ui.splash.setCut(cut);
     this.highlight.reset(); // (no outline left over from the game just left)
     const weather = this.weather.update(dt, null, this.time, cam.position);
-    this.env.update(dt, 0.49, cam.position, this.time, weather);
+    this.env.update(dt, reel ? reel.cycle : 0.49, cam.position, this.time, weather, reel ? { fogMul: reel.fogMul } : undefined);
     this.staticWorld.update(cam.position, this.env.fogVisibility + 40);
     this.terrain?.userData.update?.(cam.position, this.env.fogVisibility + 40);
     this.bridge?.update(cam.position, this.env.fogVisibility + 40);
     this.foliage.update(cam.position, this.env.fogVisibility, this.time, weather, cam);
-    this.lights.update(dt, this.time, cam.position, false, this.staticFires, [], this.env.night);
+    this.lights.update(dt, this.time, cam.position, false, reel ? reel.fires : this.staticFires, reel ? reel.flashes : [], this.env.night);
     this.power.update(dt, this.time, cam.position, this.env.night); // (no floodlight is left lit from the game before)
     this.entities.structs.update();
     this.effects.update(dt, cam, this.renderer.renderer.domElement.height);
