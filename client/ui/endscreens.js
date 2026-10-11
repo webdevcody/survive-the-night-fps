@@ -189,18 +189,19 @@ export class DawnLine {
 
   // s: the night's tally (S2C summary); rows: what tonight brings (hud2.js tonightBrief): its theme, its new kinds, its boss
   show(s, rows = []) {
-    this.head.textContent = `Night ${s.night} survived`;
+    this.head.textContent = `Night ${s.night} held`;
     this.stats.textContent = '';
     const stat = (v, label, cls = '') => {
       const d = el('span', 'xdawn-stat ' + (v ? cls : ''), this.stats);
       el('b', '', d, String(v | 0));
       el('span', '', d, label);
     };
-    stat(s.kills, 'kills');
+    // the team's night first - what it held, who it got back up - and the kills last (issue #302)
     stat(s.structLost, 'walls lost', 'warn');
-    stat(s.downs, 'down', 'warn');
     stat(s.revives, 'revived', 'good');
+    stat(s.downs, 'down', 'warn');
     stat(s.deaths, 'lost', 'bad');
+    stat(s.kills, 'kills');
     // names only, the boss first: the dusk card has the advice
     this.next.textContent = '';
     const order = { boss: 0, new: 1, theme: 2 };

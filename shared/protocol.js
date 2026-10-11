@@ -476,6 +476,12 @@ export function readInput(r) {
 // in no order: the client sorts them. A row names nobody but by the name they play under - the id a player joins
 // with is what proves who they are, and no message carries it back out.
 export const BOARD_STATS = ['kills', 'nights', 'wins', 'revives'];
+// How the leaderboard shows them (issue #302): in a co-op game the board leads with what a team does together -
+// nights seen through, teammates revived, runs escaped - and kills come last. The first is the column it is sorted
+// by until a player picks another. (Display only: the wire keeps BOARD_STATS' order.)
+export const BOARD_ORDER = ['nights', 'revives', 'wins', 'kills'];
+// the column to sort by: the one a player last picked (stored), or BOARD_ORDER's first
+export const boardSort = (stored) => (BOARD_STATS.includes(stored) ? stored : BOARD_ORDER[0]);
 export const BOARDF = { ME: 1, HERE: 2 }; // the recipient's own row; in this game right now
 export const BOARD_TOP = 20;
 
