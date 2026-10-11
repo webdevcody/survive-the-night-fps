@@ -3,11 +3,12 @@
 import { Game } from '../server/game.js';
 import { FIRST_DAY_LENGTH, NIGHT_LENGTH, dayLength } from '../shared/constants.js';
 import { ITEM, ZTYPE, ZOMBIE_DEFS, KILLER, AMMO } from '../shared/defs.js';
-import { chosenDifficulty } from '../shared/difficulty.js';
+import { DIFFICULTIES, chosenDifficulty, xpBonus } from '../shared/difficulty.js';
 import { zombieHitbox } from '../shared/hitbox.js';
 import { C2S, S2C, PROTOCOL_VERSION, Writer, Reader } from '../shared/protocol.js';
 import { countItem } from '../server/inventory.js';
-import { XPS } from '../shared/progress.js';
+import { XP, XPS, perkMask } from '../shared/progress.js';
+import { playerMods } from '../server/loadouts.js';
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -92,7 +93,48 @@ const nightXp = (g, p) => {
   g.award(p, XPS.nights, 100);
   return p.xpRun[XPS.nights] - was;
 };
-check('Ember earns half the XP, Nightfall all of it, Blackout half again', nightXp(ember, en.p) === 50 && nightXp(night, nt.p) === 100 && nightXp(black, bl.p) === 150, `${nightXp(ember, en.p)} ${nightXp(night, nt.p)} ${nightXp(black, bl.p)}`);
+check('Ember earns 1x, Nightfall 2x and Blackout 3x the XP', nightXp(ember, en.p) === 50 && nightXp(night, nt.p) === 100 && nightXp(black, bl.p) === 150, `${nightXp(ember, en.p)} ${nightXp(night, nt.p)} ${nightXp(black, bl.p)}`);
+
+// Issue #273: XP told as bonuses, not cuts. Ember is the 1x the others are counted from, and a fresh night's first
+// kills carry a bonus instead of the rest being halved. The XP a run earns is what it was.
+check('the difficulty picker counts XP up from Ember: 1x, 2x, 3x', DIFFICULTIES.map(xpBonus).join() === '1,2,3', DIFFICULTIES.map(xpBonus).join());
+check('...and the harder blurbs say so', DIFFICULTIES.slice(1).every((d) => d.blurb.includes(`${xpBonus(d)}x the XP of Ember`)), DIFFICULTIES.map((d) => d.blurb).join(' | '));
+check('no blurb tells a reward as a cut', DIFFICULTIES.every((d) => !/\b(half|penalty|reduced|cap)\b/i.test(d.blurb)), DIFFICULTIES.map((d) => d.blurb).join(' | '));
+
+// a long night's kills, mixed kinds and headshots, the way the XP was counted before the bonus framing
+const KINDS = [ZTYPE.WALKER, ZTYPE.RUNNER, ZTYPE.SPITTER, ZTYPE.BOOMER, ZTYPE.LEAPER, ZTYPE.SHADE, ZTYPE.TANK, ZTYPE.WALKER];
+const oldKillXp = (g, p, i, ztype, head) => {
+  const scale = (n) => Math.round(n * playerMods(p).xp * g.diff.xp);
+  const half = i > XP.killsFull;
+  const base = XP.kinds[ztype] ?? XP.kill;
+  const n = scale(half ? Math.ceil(base / 2) : base);
+  return Math.max(0, n) + (head ? Math.max(0, scale(half ? Math.ceil(XP.headshot / 2) : XP.headshot)) : 0);
+};
+for (const [g, c] of [[ember, en], [night, nt], [black, bl]]) {
+  for (const perks of [[], [24]]) {
+    const p = c.p;
+    p.perks = perkMask(perks);
+    p.nightKills = 0;
+    const was = g.xpOf(p);
+    const freshWas = p.xpRun[XPS.fresh] | 0;
+    let want = 0;
+    for (let i = 1; i <= 150; i++) {
+      const ztype = KINDS[i % KINDS.length];
+      const head = i % 3 === 0;
+      want += oldKillXp(g, p, i, ztype, head);
+      g.killXp(p, { ztype, wedgeT: 0, boss: false }, head);
+    }
+    const got = g.xpOf(p) - was;
+    const fresh = (p.xpRun[XPS.fresh] | 0) - freshWas;
+    check(`${g.diff.name}${perks.length ? ' with Quick Study' : ''}: 150 kills earn the XP they always did, the fresh-night bonus part of it`, got === want && fresh > 0, `${got} vs ${want}, bonus ${fresh}`);
+    p.perks = 0;
+  }
+}
+const p = nt.p;
+p.nightKills = XP.killsFull;
+const freshAt = p.xpRun[XPS.fresh];
+night.killXp(p, { ztype: ZTYPE.WALKER, wedgeT: 0, boss: false }, true);
+check('past the night\'s first kills there is no bonus left to earn', p.xpRun[XPS.fresh] === freshAt);
 
 if (failed) {
   console.log(`${failed} failed`);

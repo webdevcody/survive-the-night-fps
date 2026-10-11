@@ -22,7 +22,7 @@ export const DIFFICULTIES = [
     name: 'Ember',
     rank: 'Easy',
     // The line under the choice on the new-game card.
-    blurb: 'Fewer dead, and they hit softer and move slower. Days and nights run long, near shots count, and you start with more rounds and bandages. Earns half the XP.',
+    blurb: 'Fewer dead, and they hit softer and move slower. Days and nights run long, near shots count, and you start with more rounds and bandages.',
     day: 1.5, // day 1 is 9 min, was 6. The last days floor at 4½ min, was 3. The minute of horn stays a minute.
     night: 1.4, // 3½ min, was 2½. The three waves spread out with the night, so there is time to reload between them.
     zombies: 0.55, // night 1 alone is 9 of them, was 17. The day's wanderers, the road herd and a car alarm shrink the same way.
@@ -40,13 +40,13 @@ export const DIFFICULTIES = [
     melee: 1.25, // the knife and the hammer reach a step further. Claws do not: dying is not easier on your friends.
     loot: 1.35, // ground piles are almost always there, and a container gives one extra find.
     light: 0.6, // the flashlight lasts. New players leave it on.
-    xp: 0.5, // every XP award, on top of the perks'.
+    xp: 0.5, // every XP award, on top of the perks'. The blurbs count XP from Ember up (xpBonus).
   },
   {
     id: 'nightfall',
     name: 'Nightfall',
     rank: 'Standard',
-    blurb: 'The valley as it plays today. Days shrink, the nights fill up, and a shot that misses is a miss.',
+    blurb: 'The valley as it plays today. Days shrink, the nights fill up, and a shot that misses is a miss. Earns 2x the XP of Ember.',
     day: 1,
     night: 1,
     zombies: 1,
@@ -71,7 +71,7 @@ export const DIFFICULTIES = [
     name: 'Blackout',
     rank: 'Hard',
     // A person who already headshots and kites. Body shots and standing still stop being enough.
-    blurb: 'More of them, harder hits, less time before dark, and less in your pockets. For people who already play shooters. Earns 1.5x the XP.',
+    blurb: 'More of them, harder hits, less time before dark, and less in your pockets. For people who already play shooters. Earns 3x the XP of Ember.',
     day: 0.8, // day 1 is just under 5 min, was 6. Still the long first day, but you have to know where you are going.
     night: 0.85, // a little over 2 min. The waves sit closer together.
     zombies: 1.4, // night 1 alone is 24, was 17. The daytime cap rises with them, still under the night's own limit.
@@ -114,4 +114,10 @@ export function chosenDifficulty(value) {
 export function difficultyLabel(id) {
   const d = difficultyOf(id);
   return `${d.name} (${d.rank.toLowerCase()})`;
+}
+
+// A difficulty's XP counted from Ember, the easiest: 1 for Ember, 2 for Nightfall, 3 for Blackout. The blurbs say it
+// this way round so the harder valleys read as a bonus, not the easy one as a cut.
+export function xpBonus(d) {
+  return d.xp / DIFFICULTIES[0].xp;
 }

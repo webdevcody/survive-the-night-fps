@@ -22,15 +22,17 @@ export const XP = {
   escape: 500, // in the car as it leaves
   team: 250, // the run won without them in the car (turned, left behind)
   best: 50, // a dawn past the furthest day they have ever seen
-  killsFull: 60, // kills a night (or a day) at full XP: each past that is worth half
+  killsFull: 60, // kills a night (or a day) that carry the fresh-night bonus: the kill's other half, on top
   revivesFull: 6, // revives a night that earn anything
 };
 // the sources of a run's XP, in the order S2C.PROGRESS sends them and the end screen lists them
-export const XP_SRC = ['kills', 'headshots', 'bosses', 'revives', 'nights', 'escape', 'best'];
-export const XP_SRC_NAMES = ['Kills', 'Headshots', 'Bosses', 'Revives', 'Nights survived', 'Escape', 'Personal best'];
+// (fresh: the fresh-night bonus, the half of a kill or a headshot that only the night's first XP.killsFull earn. The
+// same XP that used to be "half past the first 60", told as a bonus up front: losing half feels worse than a bonus)
+export const XP_SRC = ['kills', 'headshots', 'bosses', 'revives', 'nights', 'escape', 'best', 'fresh'];
+export const XP_SRC_NAMES = ['Kills', 'Headshots', 'Bosses', 'Revives', 'Nights survived', 'Escape', 'Personal best', 'Fresh-night bonus'];
 export const XPS = Object.fromEntries(XP_SRC.map((k, i) => [k, i]));
 
-// what killing one of the dead is worth (before the night's diminishing returns): the kind, a boss, a headshot
+// what killing one of the dead is worth (with the fresh-night bonus): the kind, a boss, a headshot
 export function killXp(ztype, boss, headshot) {
   if (boss) return XP.boss;
   return (XP.kinds[ztype] ?? XP.kill) + (headshot ? XP.headshot : 0);

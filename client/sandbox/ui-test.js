@@ -793,7 +793,7 @@ switch (screen) {
           : { run: { secs: 2710, nights: 5, kills: 31 }, news: q.get('record') === 'plain' ? [] : [{ k: 'kills', label: 'New best', text: '31 kills', was: '24' }], record: { best: { secs: 0, nights: 5, kills: q.get('record') === 'plain' ? 40 : 31 }, total: { runs: 9, escapes: 0, streak: 0 }, runs: [2, 1, 3, 2, 4, 3, 5, 4, 5].map((nights) => ({ nights, result: 'wiped' })) } }
         : undefined,
       // &xp=1: the experience panel too, a run that levelled the player up
-      progress: q.get('xp') ? { xp: 329, run: [70, 24, 150, 0, 100, 0, 0], loaded: true, kept: true } : null,
+      progress: q.get('xp') ? { xp: 329, run: [35, 12, 150, 0, 100, 0, 0, 47], loaded: true, kept: true } : null,
       // the difficulty poll, against made-up votes: &vote=1..5 casts one as the screen comes up
       vote: (rating) =>
         new Promise((done) => {

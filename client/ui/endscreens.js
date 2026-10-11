@@ -1,8 +1,9 @@
 // The moments a run turns on (issue #223): going down, dying, the dawn after a night, and the end of the run.
 //   Downed    a ring round the crosshair that runs out with the bleed, and one line: who is closest, the radio key
 //   Death     a short card: who got you and what it does, then a bar to the rise (the server's RISE_S), not a 9 s screen
-//   DawnLine  two lines under the clock at dawn: how the night went, and the names of what comes tonight. The dusk
-//             card (hud2.js Tonight) says what to do about them when it matters. The middle stays the Dawn title's
+//   DawnLine  lines under the clock at dawn: how the night went, the fresh-night XP bonus back, and the names of what
+//             comes tonight. The dusk card (hud2.js Tonight) says what to do about them when it matters. The middle
+//             stays the Dawn title's
 //   EndScreen one read order: the outcome, what the run earned (a new best biggest, a level-up with its perk point),
 //             the team, the poll (optional), and a bar at the bottom that never scrolls away: the countdown to the
 //             next run, and what can be done now - spend a perk point, invite, leave.
@@ -15,7 +16,7 @@ import { accountState } from '../net/account.js';
 import { voteDifficulty } from '../net/feedback.js';
 import { fetchProgress, lastProgress, onProgress } from '../net/progress.js';
 import { xpBar } from './progress.js';
-import { XP_SRC_NAMES, levelInfo, picksEarned } from '../../shared/progress.js';
+import { XP, XP_SRC_NAMES, levelInfo, picksEarned } from '../../shared/progress.js';
 import { ZOMBIE_DEFS } from '../../shared/defs.js';
 import { BESTIARY } from '../../shared/bestiary.js';
 
@@ -182,6 +183,8 @@ export class DawnLine {
     root.hidden = true;
     this.head = el('div', 'xdawn-head', root, '');
     this.stats = el('div', 'xdawn-stats', root);
+    // the fresh-night bonus starts over with the day (server/game.js phaseXp)
+    el('div', 'xdawn-bonus', root, `Fresh-night bonus: +XP on your next ${XP.killsFull} kills`);
     this.next = el('div', 'xdawn-next', root);
     this.h = -1;
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this._room()).observe(root);
