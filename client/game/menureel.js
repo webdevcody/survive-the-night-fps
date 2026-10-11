@@ -161,7 +161,7 @@ function findCamp(world, rnd) {
   const cands = [];
   const p = { x: 0, z: 0, yaw: 0 };
   const car = world.car;
-  for (const road of world.roads) {
+  for (const road of world.roads || []) {
     if (road.length < CAMP_BEFORE + CAMP_AFTER + 20) continue;
     const path = roadPath(road);
     for (let s = CAMP_BEFORE + 4; s < path.len - CAMP_AFTER - 4; s += 7) {
@@ -208,7 +208,7 @@ function findCamp(world, rnd) {
 // clear of the camp and the broken-down car. { path, s, dir } or null
 function findDrive(world, camp, rnd) {
   const p = { x: 0, z: 0, yaw: 0 };
-  const roads = world.roads.filter((r) => r.length > DRIVE_LEN + 30).sort((a, b) => (b === world.highway) - (a === world.highway) || b.length - a.length);
+  const roads = (world.roads || []).filter((r) => r.length > DRIVE_LEN + 30).sort((a, b) => (b === world.highway) - (a === world.highway) || b.length - a.length);
   const keepOff = [];
   if (camp) keepOff.push(onPath(camp.path, camp.s, 0, { x: 0, z: 0, yaw: 0 }));
   if (world.car) keepOff.push(world.car);
@@ -289,16 +289,16 @@ export class MenuReel {
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 4294967296;
     };
-    this.camp = findCamp(this.world, this.rnd);
-    this.drive = this.camp && findDrive(this.world, this.camp, this.rnd);
     this.fov0 = game.camera.fov;
-    if (!this.camp || !this.drive) return;
-    this.build();
-    game.scene.add(this.root);
+    this.camp = null;
+    this.drive = null;
   }
 
-  // could it be put together in this valley? (if not, the walk goes on)
-  get ready() {
+  // Where in this valley it is played: the camp's stretch of road and the drive's. false if it fits nowhere (the walk
+  // goes on)
+  plan() {
+    this.camp = findCamp(this.world, this.rnd);
+    this.drive = this.camp && findDrive(this.world, this.camp, this.rnd);
     return !!(this.camp && this.drive);
   }
 
@@ -394,7 +394,7 @@ export class MenuReel {
       g.scene.add(view.object); // (the crowd takes it from there into its holder: drawn with all the rest of the dead)
       if (view.member) g.crowd.add(view.member);
       const def = ZOMBIE_DEFS[type];
-      return { view, type, def, k, u: 0, v: 0, yaw: 0, anim: ZANIM.WALK, speed: def.speed, alive: true, hits: 0, deadT: 0, wobble: this.rnd() * 6.28 };
+      return { view, type, def, k, u: 0, v: 0, yaw: 0, anim: ZANIM.WALK, speed: def.speed, alive: true, hits: 0, wobble: this.rnd() * 6.28 };
     });
     // the car, and its headlamp's light
     this.car = new VehicleModel(VEH.CAR, 2);
@@ -407,6 +407,7 @@ export class MenuReel {
     this.cone = new THREE.Mesh(g.entities.coneGeo, g.entities.coneMat);
     root.add(this.cone);
     this.torch = { pos: new THREE.Vector3(), dir: new THREE.Vector3() };
+    g.scene.add(root);
     this.start(0);
   }
 
@@ -431,7 +432,6 @@ export class MenuReel {
       pc.done = built;
     }
     this.gun.visible = night || sc.name === 'fortify';
-    this.gunUp = night;
     this.lightTorches(night);
     this.fire.obj.visible = night || sc.name === 'fortify';
     for (const l of this.loot) {
@@ -448,6 +448,7 @@ export class MenuReel {
       s.sv.object.quaternion.identity();
       s.sv.object.rotation.set(0, 0, 0);
       if (s.sv._inst) s.sv._inst.sitW = 0;
+      s.st = { speed: 0, sprint: false, crouch: false, pitch: 0, onGround: true, time: 0 }; // (nothing left of the last scene's pose: a seat, the grips)
       if (s.sv.object.parent !== this.root) this.root.add(s.sv.object);
     }
     this[`${sc.name}Start`]?.();
@@ -968,17 +969,16 @@ export class MenuReel {
 
   dispose() {
     const g = this.g;
-    if (this.camp && this.drive) {
-      this.lightTorches(false);
-      g.lights.setSky(0, 0, 0, 0, 0, 0);
-      for (const z of this.horde) {
-        if (z.view.member) g.crowd.remove(z.view.member);
-        g.scene.remove(z.view.object);
-        z.view.dispose();
-      }
-      for (const s of this.sv) s.sv.dispose();
-      g.scene.remove(this.root);
+    // (also after a build that stopped part way: whatever of it there is goes)
+    if (this.torches && this.fire) this.lightTorches(false);
+    g.lights.setSky(0, 0, 0, 0, 0, 0);
+    for (const z of this.horde || []) {
+      if (z.view.member) g.crowd.remove(z.view.member);
+      g.scene.remove(z.view.object);
+      z.view.dispose();
     }
+    for (const s of this.sv || []) s.sv.dispose();
+    g.scene.remove(this.root);
     if (g.camera.fov !== this.fov0) {
       g.camera.fov = this.fov0;
       g.camera.updateProjectionMatrix();

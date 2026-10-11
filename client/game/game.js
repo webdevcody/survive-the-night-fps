@@ -3727,7 +3727,17 @@ export class Game {
     }
     this.loadReel();
     let cut = 0;
-    if (this.tour.ready) cut = this.tour.update(dt, cam);
+    if (this.tour.reel) {
+      try {
+        cut = this.tour.update(dt, cam);
+      } catch (err) {
+        // (whatever went wrong with it, the splash keeps a backdrop: the walk, from black)
+        console.error('menu reel', err);
+        this.tour.dispose();
+        this.tour = new MenuTour(this.world);
+        cut = 1;
+      }
+    } else if (this.tour.ready) cut = this.tour.update(dt, cam);
     else {
       this.menuAngle += dt * 0.04;
       const car = this.world.car;
@@ -3742,11 +3752,17 @@ export class Game {
       if (cut > 0.98 || !this.tour.ready) {
         this.reelWorld = this.world; // (tried once a valley: one it cannot be put together in keeps the walk)
         const reel = new this.MenuReel(this);
-        if (reel.ready) {
-          this.tour = reel;
-          this.reelIn = 0;
-          cut = reel.update(0, cam);
-        } else reel.dispose();
+        try {
+          if (reel.plan()) {
+            reel.build();
+            cut = reel.update(0, cam);
+            this.tour = reel;
+            this.reelIn = 0;
+          }
+        } catch (err) {
+          console.error('menu reel', err);
+        }
+        if (this.tour !== reel) reel.dispose(); // (no stretch of road it fits on, or it failed: whatever it built goes)
       }
     } else if (this.reelIn > 0 && !this.tour.reel) {
       // (it could not be put together here: back from black to the walk)
