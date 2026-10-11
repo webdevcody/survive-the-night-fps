@@ -1237,6 +1237,7 @@ const standOff = (c, e, d) => {
   const cols = game.world.staticGrid.query(game.world.car.x, game.world.car.z, 400, []);
   const treeCol = cols.find((c) => c.flags & COL.TREE && Math.hypot(c.x - tx, c.z - tz) < 0.01);
   const wreckCol = cols.find((c) => c.flags & COL.SALVAGE);
+  const rockCol = cols.find((c) => c.flags & COL.ROCK && !(c.flags & COL.QUARRY));
   const keep = { x: s.x, y: s.y, z: s.z, yaw: s.yaw, pitch: s.pitch, slot: s.slot, melee: s.weapons[SLOT_MELEE] };
   const real = { gatherHit: game.gatherHit, giveOrDrop: game.giveOrDrop, rng: game.rng, forTargets: game.combat.forTargets, noise: game.zm.noise };
   const events = game.events.length;
@@ -1308,8 +1309,8 @@ const standOff = (c, e, d) => {
     else game.gather.delete(col);
     return [...got];
   };
-  const sure = [treeCol, wreckCol].map((c) => gives(c, 0.999));
-  const lucky = [treeCol, wreckCol].map((c) => gives(c, 0));
+  const sure = [treeCol, wreckCol, rockCol].map((c) => gives(c, 0.999));
+  const lucky = [treeCol, wreckCol, rockCol].map((c) => gives(c, 0));
   check(
     'harvest prompt promises what a hit gives',
     HARVEST.every((h, i) => sure[i].length === 1 && sure[i][0] === h.gives[0] && h.gives.every((it) => lucky[i].includes(it))),
