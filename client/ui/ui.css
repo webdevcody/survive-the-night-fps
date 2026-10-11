@@ -7729,3 +7729,18 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* a loadout item not found yet (issue #286): its silhouette, greyed */
+.stn-ui .lo-card.lo-ghost {
+  border-style: dashed;
+  background: rgba(18, 14, 12, 0.55);
+  color: #8d8270;
+}
+.stn-ui .lo-card.lo-ghost .lo-card-ico,
+.stn-ui .lo-card.lo-ghost .lo-card-r {
+  color: #6f6656;
+  filter: grayscale(1);
+}
+.stn-ui .lo-card.lo-ghost small {
+  text-transform: none;
+}
