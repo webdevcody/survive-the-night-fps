@@ -1,6 +1,6 @@
 // UI sandbox: drives the UI with fake data. ?screen=splash|hud|hud-night|hud-horde|hud-zombie|hud-downed|hud-dawn|
 // hud-finale|hud-live|inventory|players|board|build|death|gameover|victory|pause|settings|achievements|bestiary|
-// cards|hud-cards|chat|icons|picker|creator|auction
+// cards|hud-cards|chat|icons|picker|creator|auction|loadout
 // &bg=night|day|fire
 // &status=ok|full|offline   hud: &weapon=<item id>&mag=&reserve=&reload=&heals=&drinks=
 import { UI } from '../ui/ui.js';
@@ -447,6 +447,13 @@ switch (screen) {
     buildScene(bg || 'fire');
     ui.showSplash();
     setTimeout(() => ui.auction.show(), 100);
+    break;
+  }
+  // the loadout: the demo collection, and the catalog's other items as silhouettes after it
+  case 'loadout': {
+    buildScene(bg || 'fire');
+    ui.showSplash();
+    setTimeout(() => ui.loadout.show(), 100);
     break;
   }
   // who to play as: the picker (&customs=N, &choice=...), and the character creator (&section=body|face|hair|clothes|

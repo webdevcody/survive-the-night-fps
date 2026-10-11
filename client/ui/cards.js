@@ -30,6 +30,7 @@ import { GuideView, guideOffered } from './cardguide.js';
 import { bindLabel, liveText, actionsOf } from '../game/binds.js';
 import { ACTION } from '../../shared/binds.js';
 import { accountState } from '../net/account.js';
+import { cardTally, tallyText } from '../../shared/collections.js';
 
 const TABS = [
   ['table', 'Table'],
@@ -309,7 +310,7 @@ export class CardsScreen {
     const found = Object.values(s.found).reduce((a, n) => a + n, 0);
     const all = Object.values(STARTER).reduce((a, n) => a + n, 0) + found;
     const keep = !s.loaded ? '' : !s.kept ? ' · not kept: sign in to keep them' : guestKeeps(s) ? ' · in this browser only: sign in to keep them' : ' · kept';
-    this.count.textContent = `${all} cards · ${found} found${keep}`;
+    this.count.textContent = `${tallyText(cardTally(s.found))} kinds · ${all} cards · ${found} found${keep}`;
     this.views[this.view].render(what);
     this.renderKeys();
   }
