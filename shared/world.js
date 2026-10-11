@@ -1976,13 +1976,14 @@ export function createWorld(seed) {
   }
 
   const rocks = [];
-  const pushRock = (x, z, v, scale, r) => {
+  // (a boulder is mined for stone: COL.ROCK; the quarry's own give more: COL.QUARRY)
+  const pushRock = (x, z, v, scale, r, more = 0) => {
     const y = heightAt(x, z) - 0.25 * scale;
     const rot = rng.range(0, PI * 2);
     occupy(x, z, r);
     if (onRoadway(x, z, r * 0.85) || partBlocked(x, z, r * 0.85)) return; // (left out the way a tree is, above)
     rocks.push(x, y, z, scale, rot, v);
-    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC));
+    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC | COL.ROCK | more));
   };
   for (let a = 0; a < 900 && rocks.length < 380 * 6; a++) {
     const x = rng.range(-LIM, LIM);
@@ -2006,7 +2007,7 @@ export function createWorld(seed) {
       if (occupied(x, z, 1.2) || roadClear(x, z, 0)) continue;
       const v = rng.int(0, ROCK_TYPES.length - 1);
       const scale = rng.range(1.2, 2.4);
-      pushRock(x, z, v, scale, ROCK_TYPES[v].r * scale);
+      pushRock(x, z, v, scale, ROCK_TYPES[v].r * scale, id === ZONE.QUARRY ? COL.QUARRY : 0);
     }
   }
 

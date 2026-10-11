@@ -164,6 +164,7 @@ export const NOISE = {
   MOLOTOV: 45, // the bottle shattering
   SALVAGE: 35, // prying a wreck apart
   CHOP: 30,
+  MINE: 32, // breaking stone off a boulder
   BUILD: 30, // hammering a structure together
   BELL: 220, // each toll of the chapel bell
   RADIO: 90, // the Relay Station's radio calling for a supply drop

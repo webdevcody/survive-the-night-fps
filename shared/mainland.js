@@ -5078,7 +5078,8 @@ export function createMainland(seed) {
           let ledge = -Infinity; // (the ledge's highest along the face's length, just outside it)
           for (const t of [-0.5, 0, 0.5]) for (const o of [out, out + 0.7]) ledge = Math.max(ledge, heightAt(PIT.x + Math.sin(a + (t * len) / rad) * o, PIT.z + Math.cos(a + (t * len) / rad) * o));
           const top = ledge - fy + 0.45;
-          b.box(lx * (1 + inset / rad), y0, lz * (1 + inset / rad), len, Math.max(0.5, top - y0), 2.0, 'stone_rough', { ry: a - toYard + (r3 - 0.5) * 0.18 });
+          // (mined for stone, as a boulder is, and richer: COL.QUARRY)
+          b.box(lx * (1 + inset / rad), y0, lz * (1 + inset / rad), len, Math.max(0.5, top - y0), 2.0, 'stone_rough', { ry: a - toYard + (r3 - 0.5) * 0.18, flags: COL.STATIC | COL.ROCK | COL.QUARRY });
         }
       }
     }
@@ -5492,7 +5493,7 @@ export function createMainland(seed) {
     const y = heightAt(x, z) - 0.25 * scale;
     occupy(x, z, r);
     rocks.push(x, y, z, scale, die(a, 0, 16) * PI * 2, v);
-    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC));
+    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC | COL.ROCK));
   }
   // the boulders that came down off the faces: a field of them along every mountain's foot, on its verge of scree
   for (let a = 0, n = 0; a < 14000 && n < 2200; a++) {
@@ -5508,7 +5509,7 @@ export function createMainland(seed) {
     const y = heightAt(x, z) - 0.3 * scale;
     occupy(x, z, r);
     rocks.push(x, y, z, scale, die(a, 2, 35) * PI * 2, v);
-    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC));
+    staticGrid.add(makeCyl(x, z, y - 1, y + r * 0.9, r * 0.85, COL.STATIC | COL.ROCK));
     n++;
   }
   // WHAT LIES IN THE WOODS: outcrops of rock, a few boulders shouldered together; deadfall - a trunk come down in
@@ -5529,7 +5530,7 @@ export function createMainland(seed) {
         if (q && (occupied(rx, rz, rr * 0.5) || onRoad(rx, rz, rr + 1))) continue;
         const ry0 = heightAt(rx, rz) - 0.3 * scale;
         rocks.push(rx, ry0, rz, scale, die(a, q, 118) * PI * 2, v);
-        staticGrid.add(makeCyl(rx, rz, ry0 - 1, ry0 + rr * 0.9, rr * 0.85, COL.STATIC));
+        staticGrid.add(makeCyl(rx, rz, ry0 - 1, ry0 + rr * 0.9, rr * 0.85, COL.STATIC | COL.ROCK));
       }
       occupy(x, z, 3.5);
       n++;
