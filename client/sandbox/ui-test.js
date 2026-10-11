@@ -801,11 +801,17 @@ switch (screen) {
           counts[rating - 1]++;
           setTimeout(() => done({ mine: rating, counts, total: counts.reduce((a, b) => a + b, 0) }), 300);
         }),
+      // best / worst moment, and &genre=1 for a player never asked whether they play survival / FPS games
+      moment: (which, moment) => new Promise((done) => setTimeout(() => done({ which, moment }), 200)),
+      genre: (plays) => Promise.resolve({ plays: plays ?? (q.get('genre') ? null : true) }),
     };
     ui.setRoom({ code: 'J68QMM', name: "Webdevcody's game", inviteOnly: false }, `${location.origin}/?game=J68QMM`); // (Invite on the end screen)
     if (screen === 'gameover') ui.showGameOver(stats);
     else ui.showVictory(stats);
     if (+q.get('vote')) ui.end._vote(+q.get('vote'));
+    // &best=boss&worst=lag: those picked as the screen comes up
+    if (q.get('best')) ui.end._pickMoment('best', q.get('best'));
+    if (q.get('worst')) ui.end._pickMoment('worst', q.get('worst'));
     // &perk=N: N perk points not spent yet (the server's count, as net/progress.js would have it)
     if (+q.get('perk')) setTimeout(() => ui.end.setPending(+q.get('perk')), 400);
     break;
