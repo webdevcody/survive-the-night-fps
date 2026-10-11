@@ -889,6 +889,7 @@ export const NOTIFY = {
   SIPHONED: 74, // (to whoever drew it) arg = the Fuel that came out of the wreck's tank; 0: it was dry
   VEH_NEED: 75, // (to whoever tried) arg = VEH_NO: why nothing could be done to it
   VEH_OFF: 76, // (to the rider) arg = VEH_OFF: what took them off it
+  SUPPLY_HINT: 77, // a team that has found no supply yet is told on the radio where one is. arg = the hint (shared/supplyhelp.js)
 };
 
 // NOTIFY.VEH_NEED / VEH_OFF: why

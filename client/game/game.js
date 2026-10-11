@@ -63,6 +63,9 @@ import { worldFor } from '../../shared/worlds.js';
 import { WORLD, CROSSING, TAKEOFF_TIME, PLANE_REACH, RUNWAY } from '../../shared/acts.js';
 import { SUPPLIES, SUPPLY_NEED, W, setAct, wordsOf } from './act.js'; // (this act's supplies, and the words for what they go into)
 import { usePos } from '../../shared/protocol.js';
+import { SUPPLY_HELP, narrowedAt } from '../../shared/supplyhelp.js';
+import { gridRef } from '../ui/mapmarks.js';
+import { Crows } from '../render/crows.js';
 import { characterFor, defaultCharacter, CHARACTER_COUNT } from '../../shared/characters.js';
 import { chosenCharacter } from '../ui/picker.js';
 import { decode, lookKey } from '../../shared/appearance.js';
@@ -262,7 +265,7 @@ export class Game {
     this.perksUp = false; // the Perks panel opened with [P] mid-run (togglePerks)
     this.achUp = false; // the Achievements panel opened with [U] mid-run (toggleAchievements)
     this.admin = false; // the server lets us run the admin commands (WELCOMEF.ADMIN): the spawn menu [`] is ours
-    this.global = { phase: PHASE.WAITING, day: 0, timeLeft: 0, hordeLeft: -1, bossId: 0, supplies: [0, 0, 0, 0, 0], hints: [255, 255, 255, 255, 255, 255, 255], found: 0, unlocked: 0, schemHints: [255, 255, 255, 255, 255], wave: 0, waves: 3, escapeT: 0, flags: 0, finale: false, suppliesDone: false, escapeReady: false, humansAlive: 0, playersTotal: 0, restartT: 0, benches: [], parts: [] };
+    this.global = { phase: PHASE.WAITING, day: 0, timeLeft: 0, hordeLeft: -1, bossId: 0, supplies: [0, 0, 0, 0, 0], hints: [255, 255, 255, 255, 255, 255, 255], found: 0, spots: [0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], help: 0, unlocked: 0, schemHints: [255, 255, 255, 255, 255], wave: 0, waves: 3, escapeT: 0, flags: 0, finale: false, suppliesDone: false, escapeReady: false, humansAlive: 0, playersTotal: 0, restartT: 0, benches: [], parts: [] };
     this.self = { alive: 1, hp: 100, maxHp: 100, armor: 0, armorMax: 0, battery: 100, weapons: [0, 0, 0, 0, 0], mags: [0, 0], ammo: AMMO_ITEMS.map(() => 0) };
     this.inventory = { slots: new Array(INVENTORY_MAX).fill(null), armor: null, backpack: 0 };
     this.craftQueue = []; // recipe ids of bulk crafts waiting to be sent (sendCrafts)
@@ -678,6 +681,7 @@ export class Game {
     if (!this.impacts) this.impacts = new Impacts(this);
     else this.impacts.setWorld();
     if (!this.flyover) this.flyover = new Flyover(this.scene, this.effects.atlas);
+    (this.crows ||= new Crows(this.scene)).setWorld(this.world); // over every hiding place still holding a car supply
     (this.graves ||= new Graves(this)).setWorld(this.world); // the earth of St. Agnes Cemetery, when it breaks open
     if (!this.atmosphere) this.atmosphere = new Atmosphere(this.scene);
     this.weather.setWorld(this.world);
@@ -751,6 +755,7 @@ export class Game {
     this.vehicles.setWorld(null);
     for (const em of this.staticEmitters) this.effects.removeEmitter(em);
     this.flyover?.clear();
+    this.crows?.setWorld(null);
     this.highlight.reset();
     this.world = null;
   }
@@ -1641,6 +1646,15 @@ export class Game {
         ui.notify('A supply plane is inbound - follow its smoke trail to the drop.', 'toast', 6);
         a.stinger?.('supply');
         break;
+      case NOTIFY.SUPPLY_HINT: {
+        // (to a team that has found nothing yet) a voice on the walkie-talkie
+        const zid = this.global.hints[arg];
+        const sp = this.world.partSpots[this.global.spots[arg]];
+        const item = ITEM_DEFS[SUPPLIES[Math.min(arg, 4)]];
+        ui.notify(`RADIO: "...${item?.name || 'a supply'}, ${ZONE_NAMES[zid] || 'out there'}${sp ? ', grid ' + gridRef(this.world, sp.x, sp.z) : ''}. Look for the crows."`, 'toast', 9);
+        a.playLocal('notify');
+        break;
+      }
       case NOTIFY.SUPPLY_FOUND:
         ui.notify(`${ITEM_DEFS[arg]?.name || 'A supply'} found! Bring it to the ${W.thing}.`, 'good', 5);
         a.stinger?.('car_part');
@@ -3552,6 +3566,7 @@ export class Game {
     this.effects.update(dt, cam, this.renderer.renderer.domElement.height);
     this.impacts.update(dt);
     this.flyover.update(dt, time, cam, this.env, weather);
+    this.crows.update(time, this.crowSpots());
     this.graves.update(dt);
     const flashOn = this.localFlash && self.alive && !s.zombie;
     // (no rain or blown leaves once the eye is well down a drift: what falls in the mouth is kept out by its roof)
@@ -4197,6 +4212,27 @@ export class Game {
     return best;
   }
 
+  // the partSpots indices the crows circle over: every hint whose supply is still in its hiding place and still needed
+  crowSpots() {
+    const g = this.global;
+    const out = (this._crowSpots ||= []);
+    out.length = 0;
+    g.spots.forEach((si, k) => {
+      const i = Math.min(k, 4);
+      if (si !== 0xffff && !(g.found & (1 << k)) && g.supplies[i] < SUPPLY_NEED[i] && !out.includes(si)) out.push(si);
+    });
+    return out;
+  }
+
+  // Where the help points for hint k (global.help: shared/supplyhelp.js): near the spot once the rumour is narrowed,
+  // on it from the compass ping on. null: no help yet, or nothing hidden there any more (the rumour's place will do)
+  supplyHintAt(k) {
+    const g = this.global;
+    const sp = this.world.partSpots[g.spots[k]];
+    if (!sp || g.help < SUPPLY_HELP.NARROW || g.found & (1 << k)) return null;
+    return g.help >= SUPPLY_HELP.PING ? sp : narrowedAt(sp, k);
+  }
+
   buildMarkers(h, rp) {
     const g = this.global;
     const cm = h.compassMarks || (h.compassMarks = []);
@@ -4215,13 +4251,18 @@ export class Game {
       const si = Math.min(i, 4);
       if (zid === 255 || done(si) || g.found & (1 << i)) return;
       const z = this.world.zoneById[zid];
-      if (!z || hintSeen.has(zid + ':' + si)) return;
+      if (!z) return;
+      // a team that has found nothing yet is helped (shared/supplyhelp.js): the marker closes in on the spot, then sits
+      // on it, pinned to the tape's edge
+      const at = this.supplyHintAt(i) || z;
+      if (at === z && hintSeen.has(zid + ':' + si)) return;
       hintSeen.add(zid + ':' + si);
-      const d = dist(z.x, z.z);
+      const d = dist(at.x, at.z);
       if (d < 25) return;
       hintSeen.add(zid);
+      const ping = g.help >= SUPPLY_HELP.PING;
       // (the compass spells a marker's name out while you face it; a rumour keeps its question mark, as on the map)
-      cm.push({ kind: 'hint', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: itemIcon(SUPPLIES[si]), label: `${Math.round(d)}m`, name: ZONE_NAMES[zid] + '?', d });
+      cm.push({ kind: 'hint', bearing: bearing(at.x - rp.x, at.z - rp.z), icon: itemIcon(SUPPLIES[si]), label: `${Math.round(d)}m`, name: ZONE_NAMES[zid] + (ping ? '' : '?'), d, pinEdge: ping, cls: ping ? 'urgent' : '' });
     });
     // discovered places nearby (a place that already has a supply icon or a waypoint on it needs no flag too)
     const wp = this.waypoint;
@@ -4351,6 +4392,8 @@ export class Game {
       discovered: this.discovered,
       hints: g.hints,
       found: g.found,
+      // the help a team that has found nothing gets (shared/supplyhelp.js): where each still hidden one is, near enough
+      helped: g.hints.map((zid, k) => ({ k, at: this.supplyHintAt(k) })).filter((h) => h.at && g.supplies[Math.min(h.k, 4)] < SUPPLY_NEED[Math.min(h.k, 4)]).map(({ k, at }) => ({ item: SUPPLIES[Math.min(k, 4)], x: at.x, z: at.z, exact: g.help >= SUPPLY_HELP.PING })),
       schemHints: g.schemHints,
       unlocked: g.unlocked | 0,
       supplies: g.supplies,
