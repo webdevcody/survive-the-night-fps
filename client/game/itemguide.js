@@ -47,9 +47,9 @@ export function usedIn(item, unlocked = 0, max = 3) {
 export const GATHER = [
   { name: 'chop trees', hits: 6, gives: [[ITEM.STICK, 1], [ITEM.WOOD, 0.22], [ITEM.HERB, 0.07]] },
   { name: 'salvage wrecks', hits: 5, gives: [[ITEM.SCRAP, 1], [ITEM.NAILS, 0.9], [ITEM.TAPE, 0.08], [ITEM.WIRE, 0.05], [ITEM.BATTERY, 0.04]] },
-  { name: 'mine boulders', hits: 4, gives: [[ITEM.STONE, 1]] },
+  { name: 'mine boulders', hits: 3, gives: [[ITEM.STONE, 2]] },
   // (a boulder of the quarry's, or a length of its pit's face: COL.QUARRY)
-  { name: 'mine the quarry', hits: 8, gives: [[ITEM.STONE, 2]] },
+  { name: 'mine the quarry', hits: 5, gives: [[ITEM.STONE, 3]] },
 ];
 
 // expected count of each item from one roll of a loot table ([item, weight, min, max] rows)

@@ -53,11 +53,12 @@ const count = (cols, flags) => cols.filter((c) => (c.flags & flags) === flags).l
     for (let k = 0; k < blows; k++) game.gatherHit(p, col, 0, 0, 0, weapon);
     return got[ITEM.STONE] || 0;
   };
-  check('a boulder gives 1 stone a blow for 4 blows, then nothing', mine(COL.ROCK, ITEM.KNIFE, 4) === 4 && mine(COL.ROCK, ITEM.KNIFE, 12) === 4 && Object.keys(got).length === 1);
-  check("a quarry's gives 2 a blow for 8 blows", mine(COL.ROCK | COL.QUARRY, ITEM.KNIFE, 20) === 16);
+  check('a boulder gives 2 stone a blow for 3 blows, then nothing', mine(COL.ROCK, ITEM.KNIFE, 3) === 6 && mine(COL.ROCK, ITEM.KNIFE, 12) === 6 && Object.keys(got).length === 1);
+  check("a quarry's gives 3 a blow for 5 blows", mine(COL.ROCK | COL.QUARRY, ITEM.KNIFE, 20) === 15);
+  check('one boulder is a Stone Wall\'s worth', mine(COL.ROCK, ITEM.KNIFE, 3) >= STRUCT_DEFS[STRUCT.STONE_WALL].cost[ITEM.STONE]);
   let blunt = 0;
-  for (let n = 0; n < 2000; n++) blunt += mine(COL.ROCK, ITEM.HAMMER, 4);
-  check('a hammer breaks off half again as much', Math.abs(blunt / 8000 - 1.5) < 0.05, `${(blunt / 8000).toFixed(2)} a blow`);
+  for (let n = 0; n < 2000; n++) blunt += mine(COL.ROCK, ITEM.HAMMER, 3);
+  check('a hammer breaks off half a stone more a blow', Math.abs(blunt / 6000 - 2.5) < 0.05, `${(blunt / 6000).toFixed(2)} a blow`);
   notes.length = 0;
   for (let n = 0; n < 200; n++) mine(COL.ROCK, ITEM.KNIFE, 6);
   check('a mined-out rock says so (as a rock, not a tree or a wreck)', notes.length > 0 && notes.every((a) => a === 3));

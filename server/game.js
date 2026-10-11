@@ -178,8 +178,9 @@ const CMDS_PER_TICK = CMD_RATE / SERVER_TICK_RATE; // commands a client issues p
 const CMD_QUEUE_MAX = 24; // commands a client can have waiting (0.4 s of them); older ones are dropped
 const CMD_CATCH_UP = 1.05; // a client's command allowance refills this much faster than it issues them (processInputs)
 const TREE_CHOPS = 6; // blows of an axe (or a knife...) a tree gives wood for: the last brings it down
-const ROCK_HITS = 4; // blows a boulder gives stone for before it is mined out until dawn
-const QUARRY_HITS = 8; // ...one of the quarry's (COL.QUARRY), which gives two stone a blow besides
+// (quick on purpose: a boulder is a wall's worth in a few swings, so building never holds the run up)
+const ROCK_HITS = 3; // blows a boulder gives stone for (2 a blow) before it is mined out until dawn
+const QUARRY_HITS = 5; // ...one of the quarry's (COL.QUARRY), which gives 3 a blow
 // what breaks the most stone off: a blunt, heavy head gives one more, every other blow
 const ROCK_BLUNT = new Set([ITEM.HAMMER, ITEM.BAT, ITEM.SPIKED_BAT]);
 const CAR_ALARM_CHANCE = 0.1;
@@ -3168,7 +3169,7 @@ export class Game {
     const more = playerMods(p).gather;
     if (more && r() < more) this.giveOrDrop(p, tree ? ITEM.STICK : rock ? ITEM.STONE : ITEM.SCRAP, 1);
     if (rock) {
-      this.giveOrDrop(p, ITEM.STONE, (quarry ? 2 : 1) + (ROCK_BLUNT.has(weapon) && r() < 0.5 ? 1 : 0));
+      this.giveOrDrop(p, ITEM.STONE, (quarry ? 3 : 2) + (ROCK_BLUNT.has(weapon) && r() < 0.5 ? 1 : 0));
       this.zm.noise(x, z, NOISE.MINE);
     } else if (tree) {
       const dead = col.tv === 3 || col.tv === 4 || col.tv === 6;
