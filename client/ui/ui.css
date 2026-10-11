@@ -7382,6 +7382,8 @@ body {
 
 .stn-ui .cr-shop {
   display: flex;
+  flex: none;
+  margin-bottom: calc(8 * var(--u));
   flex-direction: column;
   gap: calc(6 * var(--u));
   padding: calc(8 * var(--u));
@@ -7402,6 +7404,7 @@ body {
 
 .stn-ui .cr-shop-row {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: calc(6 * var(--u));
 }

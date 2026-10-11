@@ -10,7 +10,7 @@
 // as the look changes; on the Face and Hair tabs the camera comes in to the head, and dragging it turns them.
 //
 // The Skull shop's dyes (shared/skullshop.js) are among the colours, marked with their price until bought: anyone may
-// try one on, and a look wearing one not yet theirs offers it for Zombie Skulls under the turntable. Until it is
+// try one on, and a look wearing one not yet theirs offers it for Zombie Skulls above the fields. Until it is
 // bought, everyone else in the game sees that field's default colour instead.
 import { APPEARANCE, normalize, relevant, optionsFor, randomLook, rerollSection, defaults } from '../../shared/appearance.js';
 import { SECTIONS } from '../../shared/wardrobe.js';
@@ -69,9 +69,6 @@ export class CreatorPanel extends Panel {
     });
     this.note = el('p', 'cr-note', left, '');
     this.note.hidden = true;
-    this.shopBar = el('div', 'cr-shop', left);
-    this.shopBar.hidden = true;
-    this.shop = { owned: new Set(), balance: 0, ready: false, busy: false, err: '' };
     // ---- the right: a tab per section, its dice, its fields
     const right = el('div', 'cr-right', wrap);
     const bar = el('div', 'cr-bar', right);
@@ -89,6 +86,10 @@ export class CreatorPanel extends Panel {
     this.roll.type = 'button';
     this.rollTxt = el('span', '', this.roll, '');
     this.roll.addEventListener('click', () => this.set(rerollSection(this.values, this.section)));
+    // (the Skull shop's offer for what is being tried on: above the fields, where it stays in sight)
+    this.shopBar = el('div', 'cr-shop', right);
+    this.shopBar.hidden = true;
+    this.shop = { owned: new Set(), balance: 0, ready: false, busy: false, err: '' };
     this.fields = el('div', 'cr-fields', right);
     this.fields.setAttribute('role', 'tabpanel');
     // ---- the foot: delete (one of theirs), cancel, save
