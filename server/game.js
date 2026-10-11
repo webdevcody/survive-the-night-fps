@@ -946,7 +946,7 @@ export class Game {
       best: 0, // the furthest day they have ever seen dawn on (from the record)
       perks: 0, // the perks in force (a bitmask of ids; s.perks carries it into the simulation)
       perksNext: -1, // picked during a night: in force from dawn (-1: nothing waiting)
-      nightKills: 0, // kills this night (or day): past XP.killsFull they earn half
+      nightKills: 0, // kills this night (or day): the first XP.killsFull carry the fresh-night bonus
       nightRevives: 0,
       lastChance: false, // Second Chance spent this night
       progDirty: true, // S2C.PROGRESS is out of date (sendProgress)
@@ -1070,16 +1070,23 @@ export class Game {
   // leaderboard's stats
   award(p, src, n) {
     if (!p) return;
-    n = Math.round(n * playerMods(p).xp * this.diff.xp);
+    this.creditXp(p, src, this.xpScaled(p, n));
+  }
+  xpScaled(p, n) {
+    return Math.round(n * playerMods(p).xp * this.diff.xp);
+  }
+  // n XP already scaled, for `src`
+  creditXp(p, src, n) {
     if (n <= 0) return;
     const was = this.levelOf(p);
-    p.xpRun[src] += n;
+    p.xpRun[src] = (p.xpRun[src] | 0) + n; // (| 0: a run brought over from a build that had fewer sources)
     this.records.bump(p.rec, 'xp', n);
     p.progDirty = true;
     if (this.levelOf(p) !== was) this.playersDirty = true;
   }
-  // one of the dead put down by a survivor: what it was worth, less past the night's first XP.killsFull, and nothing
-  // for one that had been stuck for a while (z.wedgeT) - the dead piled up at a wall they will never get round
+  // one of the dead put down by a survivor: half what it was worth, the other half as the fresh-night bonus on the
+  // night's first XP.killsFull, and nothing for one that had been stuck for a while (z.wedgeT) - the dead piled up at
+  // a wall they will never get round
   killXp(p, z, headshot) {
     if (p.zombie) return;
     const pm = playerMods(p);
@@ -1088,12 +1095,18 @@ export class Game {
     this.loadouts.onKill(p);
     if (z.wedgeT > WEDGED_FOR) return;
     if (z.boss) return this.award(p, XPS.bosses, XP.boss);
-    const half = ++p.nightKills > XP.killsFull;
-    const base = XP.kinds[z.ztype] ?? XP.kill;
-    this.award(p, XPS.kills, half ? Math.ceil(base / 2) : base);
-    if (headshot) this.award(p, XPS.headshots, half ? Math.ceil(XP.headshot / 2) : XP.headshot);
+    const fresh = ++p.nightKills <= XP.killsFull;
+    this.killPart(p, XPS.kills, XP.kinds[z.ztype] ?? XP.kill, fresh);
+    if (headshot) this.killPart(p, XPS.headshots, XP.headshot, fresh);
   }
-  // A new night or a new day: the diminishing returns start over. dawn: also what is earned for seeing it, and the
+  // the half a kill always earns, and with a fresh night the rest as the bonus: scaled whole, so the two add up to
+  // what the full amount scales to
+  killPart(p, src, full, fresh) {
+    const half = this.xpScaled(p, Math.ceil(full / 2));
+    this.creditXp(p, src, half);
+    if (fresh) this.creditXp(p, XPS.fresh, this.xpScaled(p, full) - half);
+  }
+  // A new night or a new day: the fresh-night bonus comes back. dawn: also what is earned for seeing it, and the
   // perks picked during the night come into force
   phaseXp(dawn, night = 0) {
     for (const p of this.players.values()) {
@@ -1127,7 +1140,7 @@ export class Game {
     w.u8(S2C.PROGRESS);
     w.varu(this.xpOf(p));
     w.u8((p.xpLoaded ? PROGF.LOADED : 0) | (p.rec ? PROGF.KEPT : 0));
-    for (const v of p.xpRun) w.varu(v);
+    for (let i = 0; i < XP_SRC.length; i++) w.varu(p.xpRun[i] | 0);
     p.session.conn.send(w.bytes());
     this.stats.bytesOut += w.o;
     this.stats.msgsOut++;

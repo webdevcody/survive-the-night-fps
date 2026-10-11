@@ -336,6 +336,14 @@
   color: var(--blood-lite);
 }
 
+.stn-ui .xdawn-bonus {
+  margin-top: 4px;
+  font: max(12px, calc(12 * var(--u))) / 1.2 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sun);
+}
+
 .stn-ui .xdawn-next {
   display: flex;
   flex-wrap: wrap;
