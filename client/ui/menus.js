@@ -12,8 +12,6 @@ import { fetchProgress, lastProgress, onProgress } from '../net/progress.js';
 import { CharacterCard, releaseStage, storedChoice, RANDOM } from './picker.js';
 import { bestiaryView, onBestiary } from '../net/bestiary.js';
 import { BESTIARY, seenCount } from '../../shared/bestiary.js';
-import { bindLabel } from '../game/binds.js';
-import { touchMode } from '../game/touchmode.js';
 import './ux-pause.css'; // the Esc menu (Pause)
 
 // the count on a button (unread messages): '' hides it
@@ -179,9 +177,6 @@ export class Splash {
     const st = (this.status = el('div', 'sp-status', main));
     this.dot = el('i', 'dot', st);
     this.statusTxt = el('span', '', st, 'Contacting server…');
-    // a first visit: the keys the first minute needs, where a returning player's record would be
-    this.keys = el('div', 'sp-keys', page); // (beside the menu on a short screen: ux-splash.css)
-    this.keys.hidden = true;
 
     const groups = el('div', 'sp-groups', page);
     const group = (label) => {
@@ -434,7 +429,6 @@ export class Splash {
     const { total: t, best: b } = loadRecord();
     this.record.textContent = '';
     this.record.hidden = !t.runs;
-    this._syncKeys(!t.runs);
     if (!t.runs) return;
     this.record.title = 'Your record, kept in this browser';
     const stat = (value, label) => {
@@ -446,29 +440,6 @@ export class Splash {
     stat(t.escapes, 'escaped');
     stat(b.nights, b.nights === 1 ? 'best night' : 'best nights');
     if (t.escapes) stat(fmtTime(b.secs), 'fastest');
-  }
-
-  // "First night?": the keys the first minute needs, as they are bound now; shown until a first run is on the record
-  _syncKeys(first) {
-    this.keys.hidden = !first;
-    this.keys.textContent = '';
-    if (!first) return;
-    el('h2', 'sp-keys-l', this.keys, 'First night?');
-    const row = el('div', 'sp-keys-row', this.keys);
-    const key = (caps, what) => {
-      const k = el('span', 'sp-key', row);
-      for (const c of caps) el('span', 'kbd', k, c);
-      el('span', 'sp-key-w', k, what);
-    };
-    const cap = (action) => {
-      const k = bindLabel(action);
-      return k === 'unbound' ? '–' : k;
-    };
-    key([...new Set(['forward', 'left', 'back', 'right'].map(cap))], 'move'); // (one cap where they share one: a phone's STICK)
-    key([cap('interact')], 'pick up');
-    key([cap('flashlight')], 'flashlight');
-    key([cap('inventory')], 'inventory');
-    key([touchMode() ? 'MENU' : 'Esc'], 'menu');
   }
 
   // How far across the screen the middle of the open part beside the menu is (where Renderer.setCenter puts the
