@@ -1,0 +1,567 @@
+<title>Splash Screen Prototypes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;500;600&family=Share+Tech+Mono&family=Special+Elite&family=Caveat:wght@600&display=swap">
+<style>
+/* Layout: a switcher bar, then one 1440x900 splash frame scaled to the page width, then the notes for that variation.
+   Single deliberate dark look, taken from the game's own tokens (client/ui/ui.css). */
+:root {
+  color-scheme: dark;
+  --bone: #e6dfcf;
+  --bone-dim: rgba(230, 223, 207, 0.62);
+  --bone-faint: rgba(230, 223, 207, 0.14);
+  --bone-line: rgba(230, 223, 207, 0.22);
+  --ink: #0b0908;
+  --ink-2: #14100e;
+  --ink-3: #1c1714;
+  --blood: #9d1117;
+  --blood-hi: #d42a2a;
+  --blood-lite: #ff5446;
+  --amber: #e8a33d;
+  --sick: #a3d64e;
+  --paper: #d9cfb8;
+  --paper-ink: #2a221b;
+  --f-head: 'Bebas Neue', 'Oswald', Impact, 'Arial Narrow', sans-serif;
+  --f-num: 'Oswald', 'Bebas Neue', 'Arial Narrow', Impact, sans-serif;
+  --f-type: 'Special Elite', 'American Typewriter', 'Courier New', monospace;
+  --f-mono: 'Share Tech Mono', ui-monospace, Consolas, monospace;
+  --f-hand: 'Caveat', 'Bradley Hand', cursive;
+}
+html, body { background: var(--ink); color: var(--bone); }
+body { font-family: var(--f-type); padding-inline: 16px; padding-block: 0 48px; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ---------- page chrome ---------- */
+.bar { max-width: 1440px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 18px 14px; }
+.bar h1 { font-family: var(--f-head); font-weight: 400; letter-spacing: .06em; font-size: 26px; margin: 0; flex: 1 1 260px; }
+.bar h1 small { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .25em; color: var(--bone-dim); text-transform: uppercase; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font-family: var(--f-num); font-size: 14px; letter-spacing: .04em; padding: 7px 12px; border: 1px solid var(--bone-line); color: var(--bone-dim); }
+.tabs button[aria-pressed="true"] { color: var(--bone); border-color: var(--blood-hi); background: rgba(157, 17, 23, .25); }
+.tabs button b { font-family: var(--f-mono); font-weight: 400; color: var(--blood-lite); margin-right: 6px; }
+.tabs .rec::after { content: '★'; color: var(--amber); margin-left: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--bone-line); }
+.seg button { font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; padding: 7px 12px; color: var(--bone-dim); }
+.seg button[aria-pressed="true"] { background: var(--bone); color: var(--ink); }
+
+.stage-wrap { max-width: 1440px; margin: 0 auto; }
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 10; max-width: 100%; overflow: hidden; border: 1px solid var(--bone-faint); }
+.frame { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; }
+
+.notes { max-width: 1440px; margin: 22px auto 0; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 860px) { .notes { grid-template-columns: minmax(0, 1fr); } }
+.notes h2 { font-family: var(--f-head); font-weight: 400; font-size: 30px; letter-spacing: .04em; margin: 0 0 4px; text-wrap: balance; }
+.notes .kick { font-family: var(--f-mono); font-size: 11px; letter-spacing: .25em; text-transform: uppercase; color: var(--blood-lite); }
+.notes p, .notes li { font-size: 15px; line-height: 1.6; max-width: 64ch; color: var(--bone); }
+.notes ul { padding-left: 18px; margin: 8px 0; }
+.notes h3 { font-family: var(--f-mono); font-weight: 400; font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--bone-dim); margin: 18px 0 6px; }
+.map { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.map td { padding: 6px 8px; border-bottom: 1px solid var(--bone-faint); vertical-align: top; }
+.map td:first-child { font-family: var(--f-num); white-space: nowrap; color: var(--bone); width: 38%; }
+.map td:last-child { color: var(--bone-dim); }
+.map tr.p1 td:first-child { color: var(--blood-lite); }
+.map tr.p2 td:first-child { color: var(--amber); }
+.tbl { overflow-x: auto; }
+.legend { font-family: var(--f-mono); font-size: 11px; color: var(--bone-dim); letter-spacing: .08em; margin-top: 6px; }
+.legend i { font-style: normal; color: var(--blood-lite); } .legend em { font-style: normal; color: var(--amber); }
+
+/* ================= inside the 1440x900 frame ================= */
+.f { position: absolute; inset: 0; overflow: hidden; background: #070505; font-family: var(--f-type); color: var(--bone); }
+.f .bg { position: absolute; inset: 0; background: url(bg.jpg) right center / auto 104% no-repeat; filter: saturate(.7); }
+.f .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,5,5,.97) 0%, rgba(7,5,5,.9) 30%, rgba(7,5,5,.45) 58%, rgba(7,5,5,.2) 100%), radial-gradient(ellipse at 70% 120%, rgba(90,10,12,.35), transparent 60%); }
+.f .shade.center { background: radial-gradient(ellipse at 50% 55%, rgba(7,5,5,.35), rgba(7,5,5,.92) 75%), linear-gradient(0deg, rgba(7,5,5,.9), transparent 45%); }
+.f .shade.dark { background: linear-gradient(90deg, rgba(7,5,5,.96) 0%, rgba(7,5,5,.82) 45%, rgba(7,5,5,.5) 100%); }
+.f .vig { position: absolute; inset: 0; box-shadow: inset 0 0 220px 60px rgba(0,0,0,.85); pointer-events: none; }
+.f .layer { position: absolute; inset: 0; }
+
+.logo { margin: 0; font-weight: 400; line-height: .86; }
+.logo .l1 { display: block; font-family: var(--f-head); color: var(--bone); font-size: 132px; letter-spacing: .02em; text-shadow: 0 3px 0 #000, 0 0 30px rgba(0,0,0,.8); }
+.logo .l2 { display: block; font-family: var(--f-head); color: var(--blood-hi); font-size: 46px; letter-spacing: .48em; margin-top: 10px; text-shadow: 0 0 18px rgba(212, 42, 42, .35); }
+.logo.sm .l1 { font-size: 64px; } .logo.sm .l2 { font-size: 22px; margin-top: 4px; letter-spacing: .5em; }
+.logo.md .l1 { font-size: 104px; } .logo.md .l2 { font-size: 36px; }
+.kicker { font-family: var(--f-mono); font-size: 13px; letter-spacing: .32em; text-transform: uppercase; color: var(--bone-dim); }
+.goal { font-size: 19px; line-height: 1.5; margin: 0; max-width: 34ch; color: var(--bone); }
+.tag { font-size: 15px; color: var(--bone-dim); margin: 0; }
+.status { font-family: var(--f-mono); font-size: 12.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--bone-dim); display: flex; align-items: center; gap: 10px; }
+.status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--sick); box-shadow: 0 0 8px var(--sick); }
+
+.ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* the big way in */
+.cta { position: relative; display: flex; align-items: center; gap: 22px; text-align: left; background: linear-gradient(180deg, #b0141b, #7d0d12); border: 1px solid #e0393a; box-shadow: 0 10px 40px rgba(157, 17, 23, .45), inset 0 1px 0 rgba(255,255,255,.15); padding: 20px 28px; color: #fff4ec; }
+.cta:hover { background: linear-gradient(180deg, #c21820, #8c0f15); }
+.cta .t { font-family: var(--f-head); font-size: 54px; letter-spacing: .1em; line-height: .95; display: block; }
+.cta .s { display: block; font-family: var(--f-mono); font-size: 13px; letter-spacing: .12em; color: rgba(255, 236, 225, .82); margin-top: 6px; }
+.cta .ico { width: 34px; height: 34px; margin-left: auto; stroke-width: 2.2; }
+
+.ghost { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--bone-line); background: rgba(10,8,7,.72); color: var(--bone); font-family: var(--f-num); font-size: 17px; letter-spacing: .1em; text-transform: uppercase; padding: 13px 18px; }
+.ghost:hover { border-color: var(--bone-dim); background: rgba(30,24,20,.85); }
+.ghost .n { font-family: var(--f-mono); font-size: 12px; color: var(--bone-dim); letter-spacing: 0; }
+.chip { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-num); font-size: 15px; letter-spacing: .06em; color: var(--bone); padding: 9px 14px; border: 1px solid var(--bone-line); background: rgba(10,8,7,.6); }
+.chip:hover { border-color: var(--bone-dim); }
+.iconbtn { width: 46px; height: 46px; display: inline-grid; place-items: center; border: 1px solid var(--bone-line); background: rgba(10,8,7,.6); color: var(--bone); position: relative; }
+.iconbtn .ico { width: 21px; height: 21px; }
+.badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--amber); color: #1b1206; font-family: var(--f-num); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.iconbtn .badge { position: absolute; top: -8px; right: -8px; }
+.badge.red { background: var(--blood-hi); color: #fff; }
+.link { font-family: var(--f-type); color: var(--bone); text-decoration: underline; text-decoration-color: var(--blood-hi); text-underline-offset: 4px; }
+.link.dim { color: var(--bone-dim); text-decoration-color: var(--bone-line); }
+.as { font-size: 15px; color: var(--bone-dim); margin: 0; }
+.as .link { font-family: var(--f-num); font-size: 16px; letter-spacing: .03em; text-decoration-style: dotted; text-decoration-color: var(--bone-dim); }
+.lbl { font-family: var(--f-mono); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--bone-dim); }
+.avatar { width: 52px; height: 52px; flex: none; display: grid; place-items: center; background: linear-gradient(160deg, #2a201b, #0d0a09); border: 1px solid var(--bone-line); font-family: var(--f-head); font-size: 30px; color: var(--bone-dim); }
+.avatar.lg { width: 72px; height: 72px; font-size: 40px; }
+.xp { height: 5px; background: var(--bone-faint); position: relative; overflow: hidden; }
+.xp i { position: absolute; inset: 0 auto 0 0; width: 62%; background: var(--amber); }
+.toast { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); background: rgba(14,11,9,.95); border: 1px solid var(--bone-line); padding: 12px 20px; font-family: var(--f-mono); font-size: 14px; letter-spacing: .1em; color: var(--bone); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+.toast.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* ---------- A: One door ---------- */
+.A .col { position: absolute; left: 96px; top: 70px; bottom: 56px; width: 560px; display: flex; flex-direction: column; gap: 22px; }
+.A .col .logo { margin-top: 70px; }
+.A .ways { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.A .who { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid var(--bone-faint); background: rgba(12,9,8,.66); }
+.A .who .txt { flex: 1; min-width: 0; }
+.A .who .nm { font-family: var(--f-num); font-size: 21px; letter-spacing: .03em; }
+.A .who .sub { font-size: 14px; color: var(--bone-dim); margin-top: 2px; }
+.A .who .btn-sign { font-family: var(--f-num); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; padding: 10px 16px; border: 1px solid var(--bone); color: var(--bone); white-space: nowrap; }
+.A .mine { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.A .mine .ghost { font-size: 15px; padding: 12px 10px; }
+.A .mine .ghost.lit { border-color: var(--amber); color: var(--amber); }
+.A .top { position: absolute; right: 64px; top: 56px; display: flex; gap: 10px; align-items: center; }
+.A .foot { position: absolute; right: 64px; bottom: 50px; display: flex; gap: 26px; align-items: center; font-size: 15px; }
+.A .foot .lbl { margin-right: -8px; }
+.A .col .status { margin-top: auto; }
+
+/* ---------- B: Top tabs ---------- */
+.B .nav { position: absolute; left: 0; right: 0; top: 0; height: 88px; display: flex; align-items: center; gap: 34px; padding: 0 56px; background: linear-gradient(180deg, rgba(5,4,4,.92), rgba(5,4,4,.55)); border-bottom: 1px solid var(--bone-faint); }
+.B .nav .logo { margin-right: 18px; }
+.B .nav .tab { font-family: var(--f-head); font-size: 30px; letter-spacing: .12em; color: var(--bone-dim); height: 88px; display: flex; align-items: center; gap: 8px; border-bottom: 3px solid transparent; }
+.B .nav .tab.on { color: var(--bone); border-bottom-color: var(--blood-hi); }
+.B .nav .tab .ico { width: 16px; height: 16px; }
+.B .nav .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.B .pane { position: absolute; left: 56px; right: 56px; top: 130px; bottom: 56px; }
+.B .modes { position: absolute; left: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 220px); gap: 14px; }
+.B .mode { text-align: left; height: 150px; padding: 18px; border: 1px solid var(--bone-line); background: rgba(10,8,7,.78); display: flex; flex-direction: column; gap: 6px; }
+.B .mode .mt { font-family: var(--f-head); font-size: 30px; letter-spacing: .08em; }
+.B .mode .ms { font-size: 13.5px; color: var(--bone-dim); line-height: 1.45; }
+.B .mode .ico { width: 24px; height: 24px; color: var(--bone-dim); }
+.B .mode.sel { border-color: var(--blood-hi); background: linear-gradient(180deg, rgba(157,17,23,.35), rgba(10,8,7,.85)); }
+.B .mode.sel .ico { color: var(--blood-lite); }
+.B .go { position: absolute; right: 0; bottom: 0; width: 380px; }
+.B .go .cta { width: 100%; }
+.B .go .as { margin-top: 12px; text-align: right; }
+.B .hero { position: absolute; left: 0; top: 30px; }
+.B .hero .goal { margin-top: 18px; }
+.B .tiles { display: grid; grid-template-columns: repeat(3, 300px); gap: 16px; margin-top: 22px; }
+.B .tile { text-align: left; padding: 22px; border: 1px solid var(--bone-line); background: rgba(10,8,7,.82); min-height: 180px; display: flex; flex-direction: column; gap: 10px; }
+.B .tile .tt { font-family: var(--f-head); font-size: 34px; letter-spacing: .06em; display: flex; align-items: center; gap: 10px; }
+.B .tile .td { font-size: 14px; color: var(--bone-dim); line-height: 1.5; }
+.B .tile .big { font-family: var(--f-num); font-size: 40px; font-weight: 300; margin-top: auto; }
+.B .tile .big small { font-size: 16px; color: var(--bone-dim); }
+.B .locked { margin-top: 26px; padding: 26px; border: 1px dashed var(--bone-line); max-width: 640px; background: rgba(10,8,7,.75); }
+.B .locked p { margin: 6px 0 16px; color: var(--bone-dim); font-size: 15px; line-height: 1.55; }
+.B .h { font-family: var(--f-head); font-size: 64px; letter-spacing: .06em; margin: 0; }
+
+/* ---------- C: Plain list ---------- */
+.C .col { position: absolute; left: 110px; top: 96px; bottom: 60px; width: 600px; display: flex; flex-direction: column; }
+.C .menu { list-style: none; margin: 46px 0 0; padding: 0; display: flex; flex-direction: column; }
+.C .menu li.gap { height: 22px; }
+.C .item { display: flex; align-items: baseline; gap: 16px; width: 100%; text-align: left; padding: 4px 0; font-family: var(--f-head); font-size: 40px; letter-spacing: .1em; color: var(--bone-dim); line-height: 1.05; }
+.C .item .mark { width: 22px; color: var(--blood-hi); font-size: 30px; opacity: 0; }
+.C .item.sel { color: var(--bone); }
+.C .item.sel .mark { opacity: 1; }
+.C .item.first { font-size: 58px; color: var(--bone); }
+.C .item.first.sel { color: var(--blood-lite); }
+.C .item .n { font-family: var(--f-mono); font-size: 14px; letter-spacing: .1em; color: var(--bone-dim); }
+.C .item .badge { align-self: center; }
+.C .item.lock { color: rgba(230,223,207,.32); }
+.C .item.lock .ico { width: 18px; height: 18px; align-self: center; }
+.C .side { position: absolute; left: 760px; top: 330px; width: 520px; border-left: 2px solid var(--blood-hi); padding: 6px 0 6px 30px; }
+.C .side .h { font-family: var(--f-head); font-size: 44px; letter-spacing: .08em; margin: 0; }
+.C .side p { color: var(--bone-dim); font-size: 16px; line-height: 1.6; margin: 8px 0 18px; max-width: 40ch; }
+.C .side .subs { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.C .side .subs .ghost { min-width: 280px; justify-content: flex-start; }
+.C .hint { font-family: var(--f-mono); font-size: 12px; letter-spacing: .2em; color: var(--bone-dim); text-transform: uppercase; position: absolute; left: 110px; bottom: 50px; display: flex; gap: 26px; }
+.C .hint b { color: var(--bone); font-weight: 400; border: 1px solid var(--bone-line); padding: 1px 6px; margin-right: 6px; }
+.C .who { position: absolute; right: 64px; top: 56px; display: flex; gap: 12px; align-items: center; }
+
+/* ---------- D: Who's out tonight ---------- */
+.D .head { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 18px; padding: 40px 60px; }
+.D .head .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.D .center { position: absolute; left: 60px; top: 300px; width: 640px; display: flex; flex-direction: column; gap: 18px; }
+.D .center .h { font-family: var(--f-head); font-size: 88px; letter-spacing: .04em; margin: 0; line-height: .9; }
+.D .center .h em { font-style: normal; color: var(--blood-hi); }
+.D .ways { display: flex; gap: 12px; }
+.D .rail { position: absolute; right: 60px; top: 130px; bottom: 60px; width: 470px; display: flex; flex-direction: column; gap: 14px; }
+.D .card { border: 1px solid var(--bone-faint); background: rgba(10,8,7,.84); padding: 20px 22px; }
+.D .card .lbl { display: flex; justify-content: space-between; }
+.D .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--bone-faint); }
+.D .row:last-child { border-bottom: 0; }
+.D .row .avatar { width: 42px; height: 42px; font-size: 22px; }
+.D .row .nm { font-family: var(--f-num); font-size: 18px; letter-spacing: .03em; }
+.D .row .st { font-size: 13px; color: var(--bone-dim); }
+.D .row .txt { flex: 1; min-width: 0; }
+.D .row .on { color: var(--sick); }
+.D .row .ghost { padding: 8px 14px; font-size: 14px; }
+.D .row .ghost.red { border-color: var(--blood-hi); color: var(--blood-lite); }
+.D .me { display: flex; gap: 16px; align-items: center; }
+.D .me .txt { flex: 1; }
+.D .me .nm { font-family: var(--f-num); font-size: 22px; }
+.D .mine { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.D .mine .ghost { font-size: 14px; padding: 10px 6px; }
+.D .mine .ghost.lit { border-color: var(--amber); color: var(--amber); }
+.D .more { display: flex; gap: 22px; font-size: 14.5px; padding: 4px 2px; margin-top: auto; }
+.D .teaser p { margin: 8px 0 14px; color: var(--bone-dim); font-size: 14.5px; line-height: 1.55; }
+
+/* ---------- E: Survivor's notebook ---------- */
+.E .note { position: absolute; background: var(--paper); color: var(--paper-ink); box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 2px 0 rgba(0,0,0,.4); }
+.E .note::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(180deg, transparent 0 37px, rgba(60,80,120,.22) 37px 38px); pointer-events: none; }
+.E .note::after { content: ''; position: absolute; left: 50%; top: -14px; width: 120px; height: 30px; transform: translateX(-50%) rotate(-2deg); background: rgba(220, 205, 160, .55); border: 1px solid rgba(0,0,0,.08); }
+.E .n1 { left: 120px; top: 300px; width: 560px; padding: 44px 44px 36px; transform: rotate(-1.2deg); }
+.E .n2 { left: 740px; top: 250px; width: 470px; padding: 40px 40px 30px; transform: rotate(1.6deg); background: #cfc4aa; }
+.E .note h3 { font-family: var(--f-type); font-weight: 400; font-size: 15px; letter-spacing: .3em; text-transform: uppercase; margin: 0 0 12px; color: #6a1a14; }
+.E .note .line { display: flex; align-items: baseline; gap: 14px; width: 100%; text-align: left; font-family: var(--f-hand); font-size: 34px; color: #1f2a44; line-height: 38px; padding: 0; position: relative; z-index: 1; }
+.E .note .line:hover { color: #6a1a14; }
+.E .note .line .box { font-family: var(--f-type); font-size: 22px; color: var(--paper-ink); width: 22px; }
+.E .note .line .aside { font-family: var(--f-type); font-size: 13px; color: rgba(42,34,27,.7); margin-left: auto; }
+.E .note .line.big { font-size: 50px; line-height: 76px; color: #8a1410; }
+.E .note .line.big .box { font-size: 30px; color: #8a1410; }
+.E .note .line.x { color: rgba(31,42,68,.45); }
+.E .note .stamp { position: absolute; right: 24px; bottom: 18px; font-family: var(--f-head); font-size: 22px; letter-spacing: .14em; color: rgba(150, 20, 16, .75); border: 2px solid rgba(150,20,16,.6); padding: 2px 10px; transform: rotate(-8deg); z-index: 1; }
+.E .note .who { position: relative; z-index: 1; font-family: var(--f-type); font-size: 14px; line-height: 38px; color: var(--paper-ink); }
+.E .note .who b { font-family: var(--f-hand); font-size: 30px; font-weight: 600; color: #1f2a44; }
+.E .title { position: absolute; left: 120px; top: 70px; }
+.E .topr { position: absolute; right: 60px; top: 56px; display: flex; gap: 10px; }
+.E .bottom { position: absolute; left: 120px; right: 60px; bottom: 46px; display: flex; gap: 26px; align-items: center; font-size: 15px; }
+.E .bottom .status { margin-left: auto; }
+</style>
+
+<header class="bar">
+  <h1><small>Survive the Night · main menu</small>Splash screen prototypes</h1>
+  <div class="tabs" id="tabs" role="group" aria-label="Variation"></div>
+  <div class="seg" role="group" aria-label="Account state">
+    <button type="button" id="st-guest" aria-pressed="true">Guest</button>
+    <button type="button" id="st-in" aria-pressed="false">Signed in</button>
+  </div>
+</header>
+<div class="stage-wrap"><div class="stage" id="stage"><div class="frame" id="frame"></div></div></div>
+<section class="notes" id="notes"></section>
+
+<script>
+const ICONS = {
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  arrow: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  keys: '<rect x="2.5" y="6" width="19" height="12" rx="1.5"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/>',
+  star: '<path d="M12 3.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6-4.5-4.1 6-.7z"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H4.5a3 3 0 0 0 3.5 4M16 6h3.5a3 3 0 0 1-3.5 4M12 13v4M8.5 20h7M10 17h4"/>',
+  people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><path d="M15.5 5.5a3 3 0 0 1 0 6M17.5 14.6c1.8.7 3 2.4 3.4 4.9"/>',
+  skull: '<path d="M5 11a7 7 0 0 1 14 0v3l-2 1.5V19h-3v-2h-4v2H7v-3.5L5 14z"/><circle cx="9.3" cy="11.5" r="1.5"/><circle cx="14.7" cy="11.5" r="1.5"/>',
+  signal: '<path d="M5 19v-3M9.7 19v-6M14.3 19V9M19 19V5"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  cards: '<rect x="3.5" y="6" width="10.5" height="14" rx="1.2" transform="rotate(-8 8.75 13)"/><rect x="10" y="4" width="10.5" height="14" rx="1.2" transform="rotate(8 15.25 11)"/>',
+  gavel: '<path d="M13 4l7 7M10.5 6.5l7 7M12 8.5l-8 8 3.5 3.5 8-8M15.5 3l5.5 5.5"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4.3 4-7 8-7s7.2 2.7 8 7"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="1.4"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  bolt: '<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z"/>',
+  chevron: '<path d="M9 5l7 7-7 7"/>',
+  board: '<path d="M4 20V10M10 20V4M16 20v-7M2.5 20h19"/>',
+};
+const ic = (n) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+
+const S = { v: 'a', signed: false, tabB: 'play', modeB: 'quick', selC: 'quick' };
+const ME = { guest: 'Survivor720', acct: 'nightowl', level: 2, perks: 1, ach: '8/70', runs: 2, escaped: 0, best: 0 };
+const ONLINE = '1 game running · 4 survivors online';
+const BROWSE_N = 1;
+
+// what each control opens in the live game (shown as a toast in the prototype)
+const OPENS = {
+  quick: 'Quick join: the busiest game with a free seat, or a new one', browse: 'Opens Browse games', create: 'Opens Create game',
+  dead: 'Opens Dead Hand', signin: 'Opens Sign in', account: 'Opens Your account', loadout: 'Opens Loadout', perks: 'Opens Level & perks',
+  auction: 'Opens Auction', ach: 'Opens Achievements', friends: 'Opens Friends', board: 'Opens Leaderboard', stats: 'Opens Server stats in a new tab',
+  settings: 'Opens Settings', keys: 'Opens Settings › Keys & controls', name: 'Edits your name', survivor: 'Opens the survivor picker',
+  lockdead: 'Sign in to play Dead Hand', lockmine: 'Sign in to keep your level, perks, loadout and achievements',
+};
+
+const logo = (cls = '') => `<h1 class="logo ${cls}" aria-label="Survive the Night"><span class="l1">SURVIVE</span><span class="l2">THE NIGHT</span></h1>`;
+const cta = (title = 'Quick join', sub = 'Busiest game with a free seat, or a new one') =>
+  `<button class="cta" data-a="quick"><span><span class="t">${title}</span><span class="s">${sub}</span></span>${ic('arrow')}</button>`;
+const ghost = (a, icon, text, extra = '', cls = '') => `<button class="ghost ${cls}" data-a="${a}">${ic(icon)}${text}${extra}</button>`;
+const asLine = () => S.signed
+  ? `<p class="as">as <button class="link" data-a="account">${ME.acct}</button> playing <button class="link" data-a="survivor">a random survivor</button></p>`
+  : `<p class="as">as <button class="link" data-a="name">${ME.guest}</button> playing <button class="link" data-a="survivor">a random survivor</button></p>`;
+const gear = () => `<button class="iconbtn" data-a="settings" title="Settings (Keys & controls inside)" aria-label="Settings">${ic('gear')}</button>`;
+const friendsBtn = () => `<button class="iconbtn" data-a="friends" title="Friends" aria-label="Friends">${ic('people')}<span class="badge red">2</span></button>`;
+const profileChip = () => S.signed
+  ? `<button class="chip" data-a="account"><span class="avatar" style="width:28px;height:28px;font-size:16px">N</span>${ME.acct} <span class="lbl" style="letter-spacing:.1em">Lv ${ME.level}</span><span class="badge">${ME.perks}</span></button>`
+  : `<button class="chip" data-a="signin">${ic('person')}Sign in</button>`;
+
+// ------------------------------------------------ A: One door
+function A() {
+  const who = S.signed
+    ? `<div class="who"><span class="avatar">N</span><div class="txt"><div class="nm">${ME.acct}</div><div class="sub">Level ${ME.level} · ${ME.runs} runs · ${ME.escaped} escaped</div><div class="xp" style="margin-top:8px"><i></i></div></div></div>
+       <div class="mine">${ghost('perks', 'up', 'Perks', ` <span class="badge">${ME.perks}</span>`, 'lit')}${ghost('loadout', 'star', 'Loadout')}${ghost('ach', 'trophy', 'Achievements', ` <span class="n">${ME.ach}</span>`)}</div>`
+    : `<div class="who"><span class="avatar">?</span><div class="txt"><div class="nm">Playing as a guest</div><div class="sub">Sign in to keep your level, perks, loadout, achievements and friends.</div></div><button class="btn-sign" data-a="signin">Sign in</button></div>`;
+  const foot = S.signed
+    ? `<span class="lbl">More</span><button class="link dim" data-a="dead">Dead Hand</button><button class="link dim" data-a="auction">Auction</button><button class="link dim" data-a="board">Leaderboard</button><button class="link dim" data-a="stats">Server stats ↗</button>`
+    : `<span class="lbl">More</span><button class="link dim" data-a="dead">Dead Hand</button><button class="link dim" data-a="board">Leaderboard</button><button class="link dim" data-a="stats">Server stats ↗</button>`;
+  return `<div class="f A"><div class="bg"></div><div class="shade"></div><div class="vig"></div>
+    <div class="layer">
+      <div class="col">
+        <div class="kicker">Co-op survival horror · 1–16 players</div>
+        ${logo()}
+        <p class="goal">Scavenge by day. Board up by night. Fix the car. Get out.</p>
+        <div>${cta()}<div style="height:12px"></div>${asLine()}</div>
+        <div class="ways">${ghost('browse', 'search', 'Browse games', ` <span class="n">${BROWSE_N}</span>`)}${ghost('create', 'plus', 'Create game')}</div>
+        ${who}
+        <div class="status">${ONLINE}</div>
+      </div>
+      <div class="top">${S.signed ? friendsBtn() : ''}${gear()}</div>
+      <div class="foot">${foot}</div>
+    </div></div>`;
+}
+
+// ------------------------------------------------ B: Top tabs
+function B() {
+  const tabs = [['play', 'Play'], ['survivor', 'Survivor'], ['record', 'Record']];
+  const nav = tabs.map(([k, t]) => `<button class="tab ${S.tabB === k ? 'on' : ''}" data-tab="${k}">${!S.signed && k !== 'play' ? ic('lock') : ''}${t}</button>`).join('');
+  let pane = '';
+  if (S.tabB === 'play') {
+    const modes = [
+      ['quick', 'bolt', 'Quick join', 'Busiest game with a free seat, or a new one'],
+      ['browse', 'search', 'Browse games', `${BROWSE_N} public game open now`],
+      ['create', 'plus', 'Create game', 'Your own game: public, or invite-only with a link'],
+      ['dead', 'cards', 'Dead Hand', 'The card game, between runs'],
+    ];
+    const go = { quick: ['Quick join', 'Busiest game with a free seat'], browse: ['Browse', 'Pick a game from the list'], create: ['Create', 'Set up a game of your own'], dead: ['Deal in', 'Open a Dead Hand table'] }[S.modeB];
+    pane = `<div class="hero"><div class="kicker">Co-op survival horror · 1–16 players</div><p class="goal" style="font-size:22px">Scavenge by day. Board up by night. Fix the car. Get out.</p><div class="status" style="margin-top:22px">${ONLINE}</div></div>
+      <div class="modes">${modes.map(([k, i, t, s]) => `<button class="mode ${S.modeB === k ? 'sel' : ''}" data-mode="${k}">${ic(i)}<span class="mt">${t}</span><span class="ms">${s}</span></button>`).join('')}</div>
+      <div class="go"><button class="cta" data-a="${S.modeB}" style="width:100%"><span><span class="t">${go[0]}</span><span class="s">${go[1]}</span></span>${ic('arrow')}</button>${asLine()}</div>`;
+  } else if (!S.signed) {
+    const what = S.tabB === 'survivor' ? 'Your level, the perks you pick, your loadout and the auction' : 'Your achievements, your runs and where you stand on the leaderboard';
+    pane = `<h2 class="h">${S.tabB === 'survivor' ? 'Survivor' : 'Record'}</h2><div class="locked"><div class="lbl">${ic('lock')} Needs an account</div><p>${what} are kept on your account. Sign in and they follow you to any computer.</p><button class="ghost" data-a="signin">${ic('person')}Sign in</button>${S.tabB === 'record' ? ` <button class="ghost" data-a="board">${ic('board')}Leaderboard</button> <button class="ghost" data-a="stats">${ic('signal')}Server stats ↗</button>` : ''}</div>`;
+  } else if (S.tabB === 'survivor') {
+    pane = `<h2 class="h">Survivor</h2><div class="tiles">
+      <button class="tile" data-a="perks" style="border-color:var(--amber)"><span class="tt" style="color:var(--amber)">${ic('up')}Level & perks <span class="badge">${ME.perks}</span></span><span class="td">One perk is waiting to be picked.</span><span class="big">${ME.level} <small>level</small></span><span class="xp"><i></i></span></button>
+      <button class="tile" data-a="loadout"><span class="tt">${ic('star')}Loadout</span><span class="td">What you carry in at dusk.</span><span class="big" style="font-size:20px">Pistol · Hammer · Bandage</span></button>
+      <button class="tile" data-a="auction"><span class="tt">${ic('gavel')}Auction</span><span class="td">Trade gear with other survivors.</span><span class="big">3 <small>bids open</small></span></button></div>`;
+  } else {
+    pane = `<h2 class="h">Record</h2><div class="tiles">
+      <button class="tile" data-a="ach"><span class="tt">${ic('trophy')}Achievements</span><span class="td">Unlocked across every run.</span><span class="big">8 <small>of 70</small></span></button>
+      <button class="tile" data-a="board"><span class="tt">${ic('board')}Leaderboard</span><span class="td">The groups that got furthest.</span><span class="big">#212 <small>you</small></span></button>
+      <button class="tile" data-a="stats"><span class="tt">${ic('signal')}Server stats ↗</span><span class="td">Every game on this server.</span><span class="big">${ME.runs} <small>runs · ${ME.escaped} escaped</small></span></button></div>`;
+  }
+  return `<div class="f B"><div class="bg"></div><div class="shade dark"></div><div class="vig"></div>
+    <div class="layer">
+      <nav class="nav">${logo('sm')}${nav}<div class="right">${S.signed ? friendsBtn() : ''}${profileChip()}${gear()}</div></nav>
+      <div class="pane">${pane}</div>
+    </div></div>`;
+}
+
+// ------------------------------------------------ C: Plain list
+function C() {
+  const items = [
+    ['quick', 'Quick join', 'first'],
+    ['browse', 'Browse games', '', `<span class="n">${BROWSE_N} open</span>`],
+    ['create', 'Create game'],
+    'gap',
+    S.signed ? ['survivor', 'Survivor', '', `<span class="badge">${ME.perks}</span>`] : ['signin', 'Sign in'],
+    S.signed ? ['ach', 'Achievements', '', `<span class="n">${ME.ach}</span>`] : ['survivor', 'Survivor', 'lock'],
+    S.signed ? ['friends', 'Friends', '', `<span class="badge red">2</span>`] : null,
+    'gap',
+    ['extras', 'Extras'],
+    ['settings', 'Settings'],
+  ].filter(Boolean);
+  const list = items.map((it) => it === 'gap' ? '<li class="gap"></li>' :
+    `<li><button class="item ${it[2] || ''} ${S.selC === it[0] ? 'sel' : ''}" data-sel="${it[0]}"><span class="mark">▸</span>${it[2] === 'lock' ? ic('lock') : ''}${it[1]}${it[3] || ''}</button></li>`).join('');
+  const side = {
+    quick: ['Quick join', 'Straight into the busiest game with a free seat, or a new one if none has room.', `<button class="cta" data-a="quick" style="padding:14px 22px"><span><span class="t" style="font-size:38px">Go</span></span>${ic('arrow')}</button>${asLine()}`],
+    browse: ['Browse games', 'Every public game, how many are in it and what night they have reached.', ghost('browse', 'search', 'Open the list')],
+    create: ['Create game', 'Start your own game, public or invite-only, and send friends the link.', ghost('create', 'plus', 'Set it up')],
+    signin: ['Sign in', 'Keep your name, level, perks, loadout and achievements, and add friends.', ghost('signin', 'person', 'Sign in or make an account')],
+    survivor: S.signed
+      ? ['Survivor', `Level ${ME.level}. One perk is waiting to be picked.`, ghost('perks', 'up', 'Level & perks', ` <span class="badge">${ME.perks}</span>`) + ghost('loadout', 'star', 'Loadout') + ghost('auction', 'gavel', 'Auction')]
+      : ['Survivor', 'Level, perks, loadout and the auction live on your account.', ghost('signin', 'lock', 'Sign in to unlock')],
+    ach: ['Achievements', `${ME.ach} unlocked. ${ME.runs} runs, ${ME.escaped} escaped.`, ghost('ach', 'trophy', 'See them all') + ghost('board', 'board', 'Leaderboard')],
+    friends: ['Friends', 'mara_k is in Night 3. deadbolt is online.', ghost('friends', 'people', 'Open friends')],
+    extras: ['Extras', 'The rest of the house.', ghost('dead', 'cards', 'Dead Hand') + ghost('board', 'board', 'Leaderboard') + ghost('stats', 'signal', 'Server stats ↗')],
+    settings: ['Settings', 'Sound, graphics, mouse, and the keys.', ghost('settings', 'gear', 'Settings') + ghost('keys', 'keys', 'Keys & controls')],
+  }[S.selC] || ['', '', ''];
+  return `<div class="f C"><div class="bg"></div><div class="shade"></div><div class="vig"></div>
+    <div class="layer">
+      <div class="col">${logo('md')}<ul class="menu">${list}</ul></div>
+      <div class="side"><h2 class="h">${side[0]}</h2><p>${side[1]}</p><div class="subs">${side[2]}</div></div>
+      <div class="who">${S.signed ? `<span class="lbl">Signed in as</span><button class="chip" data-a="account">${ME.acct} · Lv ${ME.level}</button>` : `<span class="lbl">Guest</span><button class="chip" data-a="name">${ME.guest}</button>`}</div>
+      <div class="hint"><span><b>↑↓</b>Choose</span><span><b>Enter</b>Open</span><span class="status" style="letter-spacing:.2em">${ONLINE}</span></div>
+    </div></div>`;
+}
+
+// ------------------------------------------------ D: Who's out tonight
+function D() {
+  const people = S.signed
+    ? `<div class="card"><div class="lbl"><span>Friends</span><span style="color:var(--sick)">2 online</span></div>
+        <div class="row"><span class="avatar">M</span><div class="txt"><div class="nm">mara_k</div><div class="st on">In a game · Night 3 · 3 of 6</div></div><button class="ghost red" data-a="quick">Join</button></div>
+        <div class="row"><span class="avatar">D</span><div class="txt"><div class="nm">deadbolt</div><div class="st on">Online · on the menu</div></div><button class="ghost" data-a="create">Invite</button></div>
+        <div class="row"><span class="avatar">R</span><div class="txt"><div class="nm">rust_bucket</div><div class="st">Last played yesterday</div></div></div>
+        <div style="margin-top:8px"><button class="link dim" data-a="friends">All friends and messages</button></div></div>
+       <div class="card"><div class="me"><span class="avatar lg">N</span><div class="txt"><div class="nm">${ME.acct}</div><div class="lbl" style="letter-spacing:.14em">Level ${ME.level} · ${ME.runs} runs · ${ME.escaped} escaped</div><div class="xp" style="margin-top:10px"><i></i></div></div></div>
+        <div class="mine">${ghost('perks', 'up', 'Perks', ` <span class="badge">${ME.perks}</span>`, 'lit')}${ghost('loadout', 'star', 'Loadout')}${ghost('ach', 'trophy', 'Achievements')}</div></div>`
+    : `<div class="card"><div class="lbl"><span>Open games</span><span style="color:var(--sick)">${BROWSE_N} with seats</span></div>
+        <div class="row"><span class="avatar">3</span><div class="txt"><div class="nm">Cabin at Miller's Pond</div><div class="st on">Night 3 · 3 of 6 seats</div></div><button class="ghost red" data-a="quick">Join</button></div>
+        <div style="margin-top:8px"><button class="link dim" data-a="browse">See every game</button></div></div>
+       <div class="card teaser"><div class="lbl"><span>Your survivor</span><span>${ic('lock')}</span></div><p>Sign in to keep your level, perks, loadout and achievements, and to see when friends are playing.</p><button class="ghost" data-a="signin">${ic('person')}Sign in</button></div>`;
+  return `<div class="f D"><div class="bg"></div><div class="shade"></div><div class="vig"></div>
+    <div class="layer">
+      <div class="head">${logo('sm')}<div class="right">${profileChip()}${gear()}</div></div>
+      <div class="center">
+        <div class="kicker">Co-op survival horror · 1–16 players</div>
+        <h2 class="h">Nobody gets out <em>alone.</em></h2>
+        <p class="goal">Scavenge by day. Board up by night. Fix the car. Get out.</p>
+        ${cta()}
+        ${asLine()}
+        <div class="ways">${ghost('browse', 'search', 'Browse games', ` <span class="n">${BROWSE_N}</span>`)}${ghost('create', 'plus', 'Create & invite')}</div>
+        <div class="status" style="margin-top:8px">${ONLINE}</div>
+      </div>
+      <div class="rail">${people}
+        <div class="more"><button class="link dim" data-a="dead">Dead Hand</button>${S.signed ? '<button class="link dim" data-a="auction">Auction</button>' : ''}<button class="link dim" data-a="board">Leaderboard</button><button class="link dim" data-a="stats">Server stats ↗</button></div>
+      </div>
+    </div></div>`;
+}
+
+// ------------------------------------------------ E: Survivor's notebook
+function E() {
+  const n2 = S.signed
+    ? `<h3>Me</h3>
+       <div class="who">Name: <b>${ME.acct}</b> &nbsp; Level <b>${ME.level}</b></div>
+       <button class="line" data-a="perks"><span class="box">☐</span>Pick a perk <span class="aside">1 waiting</span></button>
+       <button class="line" data-a="loadout"><span class="box">☐</span>Pack the loadout</button>
+       <button class="line" data-a="ach"><span class="box">☑</span>Achievements <span class="aside">${ME.ach}</span></button>
+       <button class="line" data-a="friends"><span class="box">☐</span>Call mara_k <span class="aside">in Night 3</span></button>
+       <button class="line" data-a="auction"><span class="box">☐</span>Auction</button>`
+    : `<h3>Me</h3>
+       <div class="who">Name: <b>${ME.guest}</b> <button class="link" data-a="name" style="font-size:13px">change</button></div>
+       <div class="who">Survivor: <b>random</b> <button class="link" data-a="survivor" style="font-size:13px">choose</button></div>
+       <button class="line" data-a="signin"><span class="box">☐</span>Sign in, so it all sticks</button>
+       <button class="line x" data-a="lockmine"><span class="box">☐</span>Perks · loadout · trophies</button>`;
+  return `<div class="f E"><div class="bg"></div><div class="shade dark"></div><div class="vig"></div>
+    <div class="layer">
+      <div class="title">${logo('md')}</div>
+      <div class="topr">${S.signed ? friendsBtn() : ''}${gear()}</div>
+      <div class="note n1"><h3>Tonight</h3>
+        <button class="line big" data-a="quick"><span class="box">☐</span>Find a group <span class="aside" style="font-size:14px">quick join →</span></button>
+        <button class="line" data-a="browse"><span class="box">☐</span>Look at who's out there <span class="aside">${BROWSE_N} game</span></button>
+        <button class="line" data-a="create"><span class="box">☐</span>Start our own, send the link</button>
+        <div class="who" style="margin-top:6px">${ONLINE.toLowerCase()}</div>
+        <span class="stamp">Day 1</span></div>
+      <div class="note n2">${n2}</div>
+      <div class="bottom"><span class="lbl">Also</span><button class="link dim" data-a="dead">Dead Hand</button><button class="link dim" data-a="board">Leaderboard</button><button class="link dim" data-a="stats">Server stats ↗</button><button class="link dim" data-a="keys">Keys & controls</button></div>
+    </div></div>`;
+}
+
+const V = {
+  a: { name: 'One door', fn: A, rec: true },
+  b: { name: 'Top tabs', fn: B },
+  c: { name: 'Plain list', fn: C },
+  d: { name: "Who's out tonight", fn: D },
+  e: { name: "Survivor's notebook", fn: E },
+};
+
+const NOTES = {
+  a: {
+    kick: 'Recommended',
+    idea: 'One dominant red button, two ways to pick a game under it, then who you are. Everything you own sits right under your name once you sign in. The rest goes in one quiet text row in the corner.',
+    why: ['Five things on screen for a guest where today there are fifteen: Quick join, Browse, Create, Sign in, Settings.', 'Matches the order you asked for: play, then sign in and your stuff, then the rest.', 'Closest to today\'s layout, so it is the cheapest to build and keeps the backdrop reel visible on the right.'],
+    cost: 'Dead Hand and Auction become text links, so they get found less. That fits the "no side games" line in docs/design.md.',
+  },
+  b: {
+    kick: 'Shooter-lobby style',
+    idea: 'A top bar with three tabs: Play, Survivor, Record. Play picks a mode with cards and launches from a big button in the bottom-right corner, the way Valorant, Apex and Fortnite do.',
+    why: ['Grows cleanly as more account features arrive.', 'Guests still see the Survivor and Record tabs with a lock and a one-line reason to sign in.'],
+    cost: 'One extra click to reach Loadout or Achievements. Tabs read as "a big game", which is heavier than a browser game needs.',
+  },
+  c: {
+    kick: 'Classic horror menu',
+    idea: 'A plain text list in big type, like Resident Evil or Silent Hill. Choosing an item shows what it does, and its sub-actions, on the right. Works with arrow keys and Enter.',
+    why: ['The calmest screen of the five, and it suits the tone best.', 'Secondary actions are grouped under Survivor, Extras and Settings, so the list stays at seven or eight lines.'],
+    cost: 'Two steps to reach most things, and nothing shows your level or perk badge until you go looking.',
+  },
+  d: {
+    kick: 'Together first',
+    idea: 'Built around the first pillar, "together or not at all". A right-hand rail shows friends who are playing, with Join and Invite. A guest sees open games there instead, plus one locked card asking them to sign in.',
+    why: ['The only variation that makes joining friends one click.', 'The headline sells the co-op promise.'],
+    cost: 'Needs friend presence and per-friend join wiring on the splash, which is new work. A guest\'s rail is thin when only one game is open.',
+  },
+  e: {
+    kick: 'Diegetic',
+    idea: 'The menu is two notes taped up in the safehouse: a "Tonight" list for getting into a game, and a "Me" list for your survivor. Handwritten lines are the buttons.',
+    why: ['The most memorable look, and it is all in the game\'s world.', 'The checklist shape tells a new player what to do first.'],
+    cost: 'Hardest to scan quickly, hardest to localise, and handwriting is less legible. Better as a later art pass on top of A than as the structure.',
+  },
+};
+
+// where every one of today's actions lives, per variation (Guest / Signed in)
+const MAP = {
+  a: [['Quick join', 'The big red button'], ['Browse games · Create game', 'Two buttons right under it'], ['Sign in', 'Button in the "who you are" card'], ['Level & perks · Loadout · Achievements', 'Under your name once signed in; the guest card explains them'], ['Friends', 'Top-right icon with the online count (signed in)'], ['Dead Hand · Auction · Leaderboard · Server stats', '"More" text row, bottom-right (Auction when signed in)'], ['Settings · Keys & controls', 'Gear, top-right; Keys is a tab inside Settings']],
+  b: [['Quick join · Browse · Create · Dead Hand', 'Mode cards on the Play tab, launched by the big button'], ['Sign in', 'Chip in the top bar, and on each locked tab'], ['Level & perks · Loadout · Auction', 'Survivor tab'], ['Achievements · Leaderboard · Server stats', 'Record tab'], ['Friends', 'Top-bar icon (signed in)'], ['Settings · Keys & controls', 'Gear in the top bar']],
+  c: [['Quick join', 'First, biggest line'], ['Browse games · Create game', 'Next two lines'], ['Sign in', 'Its own line for a guest; a name chip top-right after'], ['Level & perks · Loadout · Auction', 'Under Survivor'], ['Achievements · Friends', 'Their own lines (signed in)'], ['Dead Hand · Leaderboard · Server stats', 'Under Extras'], ['Settings · Keys & controls', 'Under Settings']],
+  d: [['Quick join', 'The big red button'], ['Browse games · Create game', 'Under it ("Create & invite")'], ['Sign in', 'Top-right chip, and the locked card on the rail'], ['Friends', 'The rail: who is playing, Join and Invite'], ['Level & perks · Loadout · Achievements', 'Your card on the rail (signed in)'], ['Dead Hand · Auction · Leaderboard · Server stats', 'Text row at the foot of the rail'], ['Settings · Keys & controls', 'Gear, top-right']],
+  e: [['Quick join', '"Find a group", the big red line'], ['Browse games · Create game', 'The next two lines on "Tonight"'], ['Sign in', 'A line on the "Me" note'], ['Level & perks · Loadout · Achievements · Friends · Auction', 'Lines on the "Me" note (signed in)'], ['Dead Hand · Leaderboard · Server stats · Keys', '"Also" row at the bottom'], ['Settings', 'Gear, top-right']],
+};
+
+const frame = document.getElementById('frame');
+const stage = document.getElementById('stage');
+let toastT = 0;
+function render() {
+  frame.innerHTML = V[S.v].fn() + '<div class="toast" id="toast"></div>';
+  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === S.v));
+  document.getElementById('st-guest').setAttribute('aria-pressed', !S.signed);
+  document.getElementById('st-in').setAttribute('aria-pressed', S.signed);
+  const n = NOTES[S.v];
+  const rows = MAP[S.v].map(([a, w], i) => `<tr class="${i === 0 ? 'p1' : i < 3 ? 'p2' : ''}"><td>${a}</td><td>${w}</td></tr>`).join('');
+  document.getElementById('notes').innerHTML = `<div><div class="kick">${n.kick}</div><h2>${S.v.toUpperCase()}. ${V[S.v].name}</h2><p>${n.idea}</p><h3>Why it works</h3><ul>${n.why.map((w) => `<li>${w}</li>`).join('')}</ul><h3>What it costs</h3><p>${n.cost}</p></div>
+    <div><h3 style="margin-top:0">Where every action lives</h3><div class="tbl"><table class="map">${rows}</table></div><div class="legend"><i>■</i> find or create a game · <em>■</em> sign in and your stuff · rest in priority order</div><p style="font-size:13px;color:var(--bone-dim);margin-top:14px">Click anything in the mock-up: it says what it would open. Toggle Guest / Signed in above.</p></div>`;
+  fit();
+}
+function fit() { frame.style.transform = `scale(${stage.clientWidth / 1440})`; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800);
+}
+document.getElementById('tabs').innerHTML = Object.entries(V).map(([k, v]) => `<button type="button" data-v="${k}" class="${v.rec ? 'rec' : ''}"><b>${k.toUpperCase()}</b>${v.name}</button>`).join('');
+document.getElementById('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.v = b.dataset.v; setHash(); render(); });
+document.getElementById('st-guest').addEventListener('click', () => { S.signed = false; setHash(); render(); });
+document.getElementById('st-in').addEventListener('click', () => { S.signed = true; setHash(); render(); });
+frame.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-a],[data-tab],[data-mode],[data-sel]');
+  if (!b) return;
+  if (b.dataset.tab) { S.tabB = b.dataset.tab; return render(); }
+  if (b.dataset.mode) { S.modeB = b.dataset.mode; return render(); }
+  if (b.dataset.sel) { S.selC = b.dataset.sel; render(); return; }
+  const a = b.dataset.a;
+  if (a === 'signin' && !S.signed) { S.signed = true; setHash(); render(); return toast('Signed in (prototype)'); }
+  toast(OPENS[a] || a);
+});
+frame.addEventListener('keydown', (e) => {
+  if (S.v !== 'c' || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  const its = [...frame.querySelectorAll('[data-sel]')];
+  const i = its.findIndex((x) => x.dataset.sel === S.selC);
+  const nx = its[Math.max(0, Math.min(its.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+  S.selC = nx.dataset.sel; render(); frame.querySelector(`[data-sel="${S.selC}"]`).focus(); e.preventDefault();
+});
+function setHash() { try { history.replaceState(null, '', '#' + S.v + (S.signed ? '-in' : '')); } catch {} }
+function readHash() {
+  const h = (location.hash || '').slice(1).match(/^([a-e])(-in)?(?:-(\w+))?$/);
+  if (h) { S.v = h[1]; S.signed = !!h[2]; if (h[3]) { if (S.v === 'b') S.tabB = h[3]; if (S.v === 'c') S.selC = h[3]; } }
+}
+readHash();
+window.addEventListener('hashchange', () => { readHash(); render(); });
+window.addEventListener('resize', fit);
+render();
+</script>
