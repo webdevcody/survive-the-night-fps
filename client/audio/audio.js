@@ -376,6 +376,7 @@ const LOCAL = {
   zombie_player_growl: { bank: 'zp_growl', vol: 0.65, jit: 0.07, rec: R_ZP_GROWL },
   death: { bank: 'death_local', vol: 0.9, bus: 'ui', send: 0 },
   notify: { bank: 'notify', vol: 0.3, bus: 'ui', jit: 0.02, send: 0 },
+  mate_down: { bank: 'mate_down', vol: 0.35, bus: 'ui', jit: 0, send: 0 }, // a teammate is down (game/matedown.js)
   achieve: { bank: 'achieve', vol: 0.4, bus: 'ui', jit: 0, send: 0 },
   achieve_rare: { bank: 'achieve_rare', vol: 0.45, bus: 'ui', jit: 0, send: 0 },
   chat: { bank: 'chat', vol: 0.25, bus: 'ui', jit: 0.02, send: 0 },
@@ -1532,6 +1533,21 @@ export class AudioEngine {
     const rate = (o.rate ?? 1) * this._rateMul;
     if (o.x === undefined || o.x === null) this._play2D(buf, vol, rate, this._sfxIn, 0.06, 0);
     else this._playPos(buf, o.cat || 'fx', +o.x, +(o.y ?? this._ly), +(o.z ?? 0), vol, rate);
+  }
+
+  /**
+   * A recording by its key (samples.js REC), whole and not placed: a voice everyone hears the same. -> true once it
+   * has started; false while it is still being fetched or decoded (asked for now: try again shortly), or if there is
+   * none to play.
+   */
+  playRecording(key, volume = 1) {
+    const rec = this._rec;
+    if (!this._ready || !rec) return false;
+    const buf = rec.get(key);
+    if (!buf) return false;
+    this._resume();
+    this._play2D(buf, volume, 1, this._sfxIn, 0.06, 0);
+    return true;
   }
 
   playLocal(name, opts = EMPTY) {

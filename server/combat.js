@@ -1,7 +1,7 @@
 // Combat: lag-compensated hitscan, melee, thrown/lobbed projectiles, explosions, damage areas.
 import { SERVER_TICK_RATE, MAX_REWIND, HISTORY_TICKS, PLAYER_RADIUS, PLAYER_HEIGHT, PLAYER_CROUCH_HEIGHT, EYE_HEIGHT, PHASE, NOISE } from '../shared/constants.js';
 import { LEG_ZONE, LEG_BODY_DAMAGE, STUMBLE_TIME, INTERP_DELAY } from '../shared/constants.js';
-import { SOUND as _SOUND } from '../shared/defs.js';
+import { SOUND as _SOUND, HEARD } from '../shared/defs.js';
 import {
   ITEM,
   WEAPONS,
@@ -136,7 +136,7 @@ export class Combat {
       { except: p.id, x: ox, z: oz, r: 320 },
     );
     // the dead come to the noise
-    g.zm.noise(ox, oz, def.noise || NOISE.GUNSHOT, p.state.y);
+    g.zm.noise(ox, oz, def.noise || NOISE.GUNSHOT, p.state.y, p, HEARD.GUNSHOT);
     if (def.flame) return this.flame(p, ev, def);
     if (def.rocket) return this.launch(p, ev, def);
     if (def.skyflare) return this.skyflare(p, ev);
@@ -236,7 +236,10 @@ export class Combat {
               // (the round's own damage, not what the shooter's perks add to it: those are for the flesh. The rest of
               // a blast's pellets go on into what stands of it, or over it)
               g.shootTree(wallCol, hy, dx, dz, def.pellets > 1 ? def.damage * pelletFalloff(wallT) : def.damage);
-            } else if (wallCol.flags & COL.STRUCT) kind = STRUCT_DEFS[this.g.ents[wallCol.id]?.stype]?.metal ? IMPACT.METAL : IMPACT.WOOD;
+            } else if (wallCol.flags & COL.STRUCT) {
+              const sd = STRUCT_DEFS[this.g.ents[wallCol.id]?.stype];
+              kind = sd?.metal ? IMPACT.METAL : sd?.stone ? IMPACT.SPARK : IMPACT.WOOD;
+            }
             else kind = IMPACT.SPARK;
             if (wallCol.flags & COL_VEHICLE) g.vehicles.shot(wallCol, def.damage); // a vehicle standing empty takes the round
           }
@@ -485,7 +488,7 @@ export class Combat {
         { to: p.id },
       );
     } else {
-      // hit a structure/world surface? trees give sticks & planks, wrecks give scrap
+      // hit a structure/world surface? trees give sticks & planks, wrecks give scrap, rocks give stone
       raycastWorld(g.world, ox, oy, oz, fx, fy, fz, range + 0.3, _ray);
       if (_ray.t >= 0) {
         const col = wreckUnit(_ray.col); // (whichever box of a wreck was struck, it is the one wreck)
@@ -494,13 +497,14 @@ export class Combat {
         const hz = oz + fz * _ray.t;
         const tree = col && col.flags & COL.TREE;
         const wreck = col && col.flags & COL.SALVAGE;
+        const rock = col && col.flags & COL.ROCK;
         // what a weapon does to what it struck is the clients' to draw, each from its own copy of the world (EVT.STRIKE);
         // a wreck besides keeps a record of the blow (Game.wreckHit). Claws just scuff it
         if (claws) g.impact(tree ? IMPACT.WOOD : wreck ? IMPACT.SPARK : col && col.flags & COL.STRUCT ? IMPACT.WOOD : IMPACT.DIRT, hx, hy, hz, -fx, -fy, -fz);
         else {
           g.strike(p, ev.weapon, heavy, hx, hy, hz, fx, fy, fz);
           const had = wreck ? (g.gather.get(col)?.left ?? WRECK_SALVAGE) : 0;
-          if (tree || wreck) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
+          if (tree || wreck || rock) g.gatherHit(p, col, hx, hy, hz, ev.weapon);
           if (wreck) g.wreckHit(col, hx, hy, hz, fx, fy, fz, blowOf(ev.weapon), heavy, (g.gather.get(col)?.left ?? had) < had);
         }
       }
@@ -547,6 +551,8 @@ export class Combat {
     if (solid) amount *= z.def.litResist;
     if (z.dazedT > 0 && z.def.stunHurt) amount *= z.def.stunHurt; // (a dog reeling from its ram)
     g.track?.dealt(attacker, z, amount);
+    // (a boss's rewards are for everybody who hurt it, not only whoever lands the last blow: killZombie)
+    if (z.boss && attacker?.kind === ENT.PLAYER && !attacker.zombie && amount > 0) (z.hurtBy ||= new Set()).add(attacker.id);
     z.hp -= amount;
     if (z.link) {
       z.linkDmg += amount;
@@ -587,6 +593,19 @@ export class Combat {
     return false;
   }
 
+  // the survivors a boss's rewards go to: each one who hurt it and is still in the game (down or dead included: they
+  // were in the fight), and whoever landed the kill
+  bossTeam(z, attacker) {
+    const ids = new Set(z.hurtBy || []);
+    if (attacker?.kind === ENT.PLAYER) ids.add(attacker.id);
+    const team = [];
+    for (const id of ids) {
+      const p = this.g.players.get(id);
+      if (p && !p.zombie) team.push(p);
+    }
+    return team;
+  }
+
   killZombie(z, attacker, opts = {}) {
     const g = this.g;
     if (z.dead) return;
@@ -610,6 +629,7 @@ export class Combat {
     );
     if (!opts.fire && !opts.gib) g.sound(z.boss ? SOUND.BOSS_ROAR : z.ztype === ZTYPE.DOG ? SOUND.DOG_YELP : SOUND.ZOMBIE_DEATH, z.x, z.y + Math.min(1.5, z.def.height), z.z, z.boss ? 150 : 35);
     if (g.phase === PHASE.NIGHT || g.escape?.active) g.nightStats.kills++;
+    g.director?.killed(g, z);
     // a boss still standing when the dawn sun sets it alight is the sun's kill, whoever lands the last blow: what it
     // carried burns with it. Its loot is for the team that brings it down before sunrise (a molotov or the
     // flamethrower is burnT, not onFire: that still pays out)
@@ -634,8 +654,9 @@ export class Combat {
           g.dropItem(item, n, z.x, z.y, z.z, { spread: 2 + g.rng() * 2, life: 400 });
         }
         g.cards?.bossDrop(z); // (and maybe a sealed pack of Dead Hand cards: its own stream, server/cards.js)
-        g.loadouts?.bossReward(z, attacker && attacker.kind === ENT.PLAYER ? attacker : null);
-        g.loadouts?.bossDrop(z, attacker && attacker.kind === ENT.PLAYER ? attacker : null);
+        const team = this.bossTeam(z, attacker);
+        g.loadouts?.bossReward(z, team);
+        g.loadouts?.bossDrop(z, team);
       } else if (g.rng() < z.def.loot * (attacker && attacker.kind === ENT.PLAYER ? playerMods(attacker).drops : 1)) {
         const [item, n] = g.rollTable(z.def.common ? ZOMBIE_LOOT : SPECIAL_LOOT);
         g.dropItem(item, n, z.x, z.y, z.z, { spread: 0.5, life: 150 });
@@ -721,7 +742,7 @@ export class Combat {
       }
     }
     // the loudest thing in the valley: whatever it did not kill comes running
-    g.zm.noise(x, z, opts.noise || NOISE.EXPLOSION, y);
+    g.zm.noise(x, z, opts.noise || NOISE.EXPLOSION, y, opts.owner, HEARD.BLAST);
   }
 
   // ---------------------------------------------------------------- the flare gun
@@ -864,6 +885,7 @@ export class Combat {
               s.pullZ = roper.z;
               tp.ropedBy = roper.id;
               g.track?.grabbed(tp, 'roped');
+              g.director?.grabbed(g, tp);
               g.sound(SOUND.ROPER_SHOOT, s.x, s.y + 1, s.z, 30);
               done = true;
               break;
@@ -936,7 +958,7 @@ export class Combat {
             this.spawnArea(AREA.FIRE, px, py, pz, THROWABLES[ITEM.MOLOTOV].radius, THROWABLES[ITEM.MOLOTOV].burnTime, e.ownerRef, THROWABLES[ITEM.MOLOTOV].dps);
             g.sound(SOUND.GLASS_BREAK, px, py, pz, 60);
             g.sound(SOUND.FIRE_WHOOSH, px, py, pz, 80);
-            g.zm.noise(px, pz, NOISE.MOLOTOV, py);
+            g.zm.noise(px, pz, NOISE.MOLOTOV, py, e.ownerRef, HEARD.MOLOTOV);
             done = true;
           }
           break;

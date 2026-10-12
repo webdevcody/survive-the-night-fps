@@ -10,7 +10,7 @@ import { C2S, S2C, SNAP, PROTOCOL_VERSION, Writer, Reader, qpos, usePos } from '
 import { ITEM, CONT, WEAPONS, CONT_TABLES } from '../shared/defs.js';
 import { SEARCH_TIME, NOISE, SERVER_DT } from '../shared/constants.js';
 import { BLOW, blowOf } from '../shared/surfaces.js';
-import { HITF, WRECKF } from '../shared/wrecks.js';
+import { HITF, WRECKF, ALARM_SAY } from '../shared/wrecks.js';
 import { PRY, pryTime, pryWeapon, trunkCar, hasBootLid } from '../shared/trunk.js';
 import { randomUUID } from 'node:crypto';
 
@@ -186,28 +186,76 @@ function force(p, c, weapon, stopAt = Infinity) {
   check('a boot already forced is not forced again', !again.started);
   c.state = 0;
 }
-// ---- the alarm: the boot's own, as it was
+// ---- the alarm: set with the car, and told before the boot is forced (#275)
 {
   const c = withLid[1];
   c.state = 0;
   let alarms = 0, during = 0;
   const trig = game.triggerCarAlarm;
   game.triggerCarAlarm = () => alarms++;
-  const rng = game.rng;
-  game.rng = () => 0; // (every draw the lowest: the one in ten comes up)
+  c.alarm = true;
   at(a, c, ITEM.BAT);
   game.holdBegin(a, idOf(c));
   for (let i = 0; i < 400 && a.hold && a.hold.t + DT < a.hold.need; i++) game.updateHold(a, DT);
   during = alarms;
   for (let i = 0; i < 5 && a.hold; i++) game.updateHold(a, DT);
-  game.rng = () => 0.999;
-  c.state = 0;
   const before = alarms;
+  c.state = 0;
+  force(a, c, ITEM.BAT); // (its alarm went with the first: this one is quiet)
+  const rearmed = alarms - before;
+  c.alarm = false;
+  c.state = 0;
+  const rng = game.rng;
+  game.rng = () => 0; // (every draw the lowest: no dice of the search's own set it off any more)
   force(a, c, ITEM.BAT);
   game.rng = rng;
   game.triggerCarAlarm = trig;
-  check('the alarm is the boot\'s own, as before: one chance in ten when it comes open - never from a heave on the way, and no second rule on top', during === 0 && before === 1 && alarms === 1, `${during} during, ${before} at the end, ${alarms - before} with the dice high`);
+  check('an armed car\'s alarm goes off when its boot comes open - never from a heave on the way, and only once', during === 0 && before === 1 && rearmed === 0, `${during} during, ${before} at the end, ${rearmed} after`);
+  check('a car that is not armed never goes off, whatever the dice', alarms === 1, `${alarms}`);
   c.state = 0;
+}
+// ...about one boot in ten is armed, decided when the car is (the start, and each dawn that refills it)
+{
+  const armable = trunks.filter((c) => game.trunkCol(c));
+  const day = game.day;
+  let n = 0, armed = 0;
+  for (let d = 0; d < 200; d++) {
+    game.day = d;
+    for (const c of armable) {
+      game.armTrunk(c);
+      n++;
+      if (c.alarm) armed++;
+    }
+  }
+  game.day = day;
+  for (const c of trunks) game.armTrunk(c);
+  check('about one boot in ten is armed (the alarm rate a search used to roll)', n > 1000 && Math.abs(armed / n - 0.1) < 0.02, `${armed} of ${n}`);
+  check('every boot behind a car can be armed; a boot with no car never is', armable.length >= trunks.length - 2 && trunks.filter((c) => !game.trunkCol(c)).every((c) => !c.alarm), `${armable.length} of ${trunks.length}`);
+}
+// ...and an armed car blinks and chirps at a survivor who comes near, before anything is searched
+{
+  const c = withLid[2];
+  c.state = 0;
+  for (const o of trunks) o.alarm = false;
+  c.alarm = true;
+  const tell = () => {
+    sent = [];
+    game.armedT = 0;
+    game.tellArmedTrunks(DT);
+    return decode(sent).filter((e) => e[0] === 'wreckAlarm');
+  };
+  a.state.x = c.x + 200;
+  a.state.z = c.z + 200;
+  const far = tell();
+  at(a, c, ITEM.BAT);
+  const near = tell();
+  const col = game.trunkCol(c);
+  c.state = 1;
+  const searched = tell();
+  c.state = 0;
+  c.alarm = false;
+  const quiet = tell();
+  check('an armed car says so (ALARM_SAY.ARMED, at its own collider) to a survivor near it - not to one far off, and not once searched or disarmed', far.length === 0 && near.length === 1 && near[0][4] === ALARM_SAY.ARMED && near[0][1] === qpos(col.x) && near[0][3] === qpos(col.z) && searched.length === 0 && quiet.length === 0, JSON.stringify({ far, near, searched, quiet }));
 }
 // ---- a boot that is no lid's: searched as ever
 {

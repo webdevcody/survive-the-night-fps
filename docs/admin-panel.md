@@ -9,7 +9,8 @@ of a running game is in `server/gameadmin.js`. `scripts/test-admin.js` (in `npm 
 
 Admin is the `is_admin` flag on an account (migration 009). Nothing else makes an admin: no password, no
 environment variable, no list of names in the code. `DEV_ADMIN=1` only switches on the chat commands inside games on
-a test server; it does not open the panel.
+a development or test server (`npm run dev` sets it, so they always work locally; production ignores it); it does
+not open the panel.
 
 Grant it from a shell with the database's URL, to the two accounts that run the game:
 

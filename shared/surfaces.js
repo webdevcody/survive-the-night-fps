@@ -91,7 +91,10 @@ for (const k of Object.keys(LIGHT_PROPS)) if (!PROPS[k]) delete LIGHT_PROPS[k];
 export function surfaceOf(col, terrain, ground = 'grass', structOf = null) {
   if (!col || terrain) return ground === 'road' || ground === 'gravel' ? SURF.STONE : ground === 'wood' ? SURF.WOOD : SURF.EARTH;
   if (col.flags & COL.TREE) return SURF.WOOD;
-  if (col.flags & COL.STRUCT) return STRUCT_DEFS[structOf ? structOf(col.id) : 0]?.metal ? SURF.METAL : SURF.WOOD;
+  if (col.flags & COL.STRUCT) {
+    const def = STRUCT_DEFS[structOf ? structOf(col.id) : 0];
+    return def?.metal ? SURF.METAL : def?.stone ? SURF.STONE : SURF.WOOD;
+  }
   const tag = col.tag;
   if (typeof tag === 'string') return surfaceOfMat(tag);
   if (tag) return surfaceOfProp(tag.type);

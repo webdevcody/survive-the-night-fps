@@ -416,6 +416,17 @@
 .stn-ui .mapscr .mx-bridge span {
   font: max(12px, calc(12 * var(--u))) / 1.1 var(--f-type);
 }
+/* written on the map by hand beside the island's bridge (issue #269) */
+.stn-ui .mapscr .mx-bridge .mx-note {
+  position: absolute;
+  bottom: 100%;
+  right: -10px;
+  margin-bottom: 1px;
+  transform: rotate(-7deg);
+  font: 600 max(17px, calc(20 * var(--u))) / 1 'Caveat', 'Segoe Print', 'Comic Sans MS', 'Marker Felt', cursive;
+  color: #7a1a12;
+  text-shadow: 0 0 3px rgba(232, 220, 192, 0.85);
+}
 
 /* ------------------------------------------------------------------ the view's edges: grid letters, edge pins */
 .stn-ui .mapscr .mx-rule {

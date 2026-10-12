@@ -14,6 +14,8 @@ try {
   // and the night's: threat.mp3, from nightfall to dawn
   const threat = import.meta.glob('./threat.mp3', { query: '?url', import: 'default', eager: true })['./threat.mp3'];
   if (threat) URLS['./samples/mus_threat.ogg'] = threat;
+  // the car radio's call for the airfield (issue #269): two AI-voiced takes beside this file, static and all
+  for (const [path, url] of Object.entries(import.meta.glob('./radio/car-radio-*.mp3', { query: '?url', import: 'default', eager: true }))) URLS[`./samples/vo_radio_${path.slice(18, -4)}.ogg`] = url;
 } catch {}
 
 // sr: decode rate. The long ambience files are 32 kHz and decode at that rate (a third less memory than the context
@@ -140,6 +142,9 @@ export const REC = {
   wolf_howl: { sr: 32000, lazy: true, slices: [0,9.052, 9.112,9.052, 18.224,9.052, 27.336,6.402] },
   bird_robin: { sr: 32000, lazy: true, slices: [0,2.392, 2.452,4.052, 6.564,1.242, 7.866,4.052, 11.978,3.482, 15.52,2.452, 18.032,3.842, 21.934,3.312, 25.306,4.052, 29.418,4.052] },
   bird_chickadee: { sr: 32000, lazy: true, slices: [0,1.952, 2.012,1.192, 3.264,1.902, 5.226,0.722, 6.008,1.142, 7.21,1.102, 8.372,0.462, 8.894,2.052, 11.006,2.052, 13.118,0.882] },
+  // the car radio's two takes (Game.carRadio picks one): heard once a run, so decoded only then
+  vo_radio_am_michael: { lazy: true },
+  vo_radio_af_bella: { lazy: true },
   // score stems (music.js): stereo loops cut on their bar lines, or crossfaded where there are none. Last, so the
   // big files queue behind everything the first minutes of play need (the one in use is asked for up front)
   mus_menu: BED32, // intro.mp3 (see URLS)

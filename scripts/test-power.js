@@ -304,27 +304,27 @@ const toLens = () => Math.hypot(shade.x - lens.x, shade.y + 1 - lens.y, shade.z 
   }
   check('with the generator off the floodlight is dark: a Shade walks through where its cone would be', flood.state === 0 && frozen === 0 && dist(shade, at(34)) > 12 && inFloodCone(lens, shade.x, shade.y + 1, shade.z), `${dist(shade, at(34)).toFixed(1)} m in 2.5 s`);
 
-  // powered: it freezes as it enters the cone
+  // powered: a lit base. It does not walk into the cone: it goes round the edge of the light instead
   gen.off = false;
   gen.burnLeft = 8;
   move(shade, at(34));
   run(1);
   check('(the Shade starts outside the cone, in the dark, on its way to the survivor)', flood.state === 1 && !shade.lit && toLens() > FLOOD_RANGE);
-  let ticks = 0;
-  while (!shade.lit && ticks++ < 100) run(1);
-  const where = toLens();
-  const spot = { x: shade.x, z: shade.z };
-  check('a Shade walking at a survivor freezes when it enters the powered cone', shade.lit && shade.anim === ZANIM.FROZEN && where <= FLOOD_RANGE + shade.def.radius && where > FLOOD_RANGE - 1.2 && inFloodCone(lens, shade.x, shade.y + 1, shade.z, shade.def.radius), `${where.toFixed(2)} m from the lens after ${(ticks * 0.05).toFixed(2)} s`);
-  run(40);
-  check('...and stands there for as long as the light is on it', shade.lit && dist(shade, spot) < 0.01 && seen(shade)?.q[4] === ZANIM.FROZEN);
+  let inside = 0;
+  let lit = 0;
+  for (let i = 0; i < 60; i++) {
+    run(1);
+    if (inFloodCone(lens, shade.x, shade.y + 1, shade.z)) inside++;
+    if (shade.lit) lit++;
+  }
+  check('a Shade walking at a survivor keeps out of the powered cone, and so is never pinned by it', inside === 0 && lit === 0 && dist(shade, at(34)) > 3, `${inside} ticks in the cone, ${lit} lit, ${dist(shade, at(34)).toFixed(1)} m from where it started`);
 
   // the generator runs dry
   A.notes.length = 0;
-  ticks = 0;
+  let ticks = 0;
   while (gen.burnLeft > 0 && ticks++ < 400) run(1);
-  const stoodUntilDry = dist(shade, spot) < 0.01;
   run(30);
-  check('...and moves again when the generator runs dry', gen.burnLeft === 0 && flood.state === 0 && stoodUntilDry && !shade.lit && dist(shade, spot) > 3 && seen(flood).q[4] === 0 && A.notes.some(([m]) => m === NOTIFY.GEN_OUT), `${dist(shade, spot).toFixed(1)} m on in 1.5 s`);
+  check('...and the floodlight goes dark when the generator runs dry', gen.burnLeft === 0 && flood.state === 0 && seen(flood).q[4] === 0 && A.notes.some(([m]) => m === NOTIFY.GEN_OUT));
 }
 {
   // a wall inside the cone casts a shadow it can move in
@@ -340,10 +340,14 @@ const toLens = () => Math.hypot(shade.x - lens.x, shade.y + 1 - lens.y, shade.z 
   run(4);
   const walked = dist(shade, at(14));
   check('behind a wall inside the cone it is not frozen', !!wall && flood.state === 1 && inCone && !lit && !shade.lit && walked > 0.3, `in the cone ${inCone}, lit ${lit}, ${walked.toFixed(2)} m in 0.2 s`);
+  // ...and, being inside a lit base, it makes its way out of it, never stepping into the light
   let ticks = 0;
-  while (!shade.lit && ticks++ < 200) run(1);
-  const side = Math.abs((shade.x - yard.x) * -uz + (shade.z - yard.z) * ux);
-  check('...until it steps out of the wall\'s shadow into the light', shade.lit && side > 1.4, `${side.toFixed(2)} m to the side of the wall's middle (it is 3 m wide)`);
+  let litT = 0;
+  while (inFloodCone(lens, shade.x, shade.y + 1, shade.z) && ticks++ < 200) {
+    run(1);
+    if (shade.lit) litT++;
+  }
+  check('...and it backs out of the cone, without stepping into the light on its way', !inFloodCone(lens, shade.x, shade.y + 1, shade.z) && litT === 0, `${(ticks * 0.05).toFixed(2)} s, ${litT} ticks lit`);
   // the same spot with the wall gone is lit
   game.destroyStructure(wall, false);
   move(shade, at(14));

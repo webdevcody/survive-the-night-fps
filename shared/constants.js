@@ -24,6 +24,12 @@ export const CAMPFIRE_HEAL_RADIUS = 7; // built campfires heal survivors resting
 export const CRAFT_STATION_RADIUS = 5.5; // stand this close to a lit campfire / workbench to use it
 export const MAX_STRUCTURES = 320;
 
+// ---- FROZEN CORE FEEL (issue #277) -------------------------------------------------------------------------------
+// Walk, sprint and crouch speed, the turned survivor's speed and the stamina numbers below, and each zombie kind's
+// `speed` in shared/defs.js ZOMBIE_DEFS, are the game's core feel: almost every system and test is built on them.
+// They are frozen. Do not retune them to fix a balance problem; retune through the multipliers in
+// shared/difficulty.js (or the thing being balanced) instead. Changing one is a design decision for the owner, made on
+// purpose after playtests, never a side effect: scripts/test-frozen.js fails until it is updated with them.
 // Player physics
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_HEIGHT = 1.8;
@@ -48,6 +54,7 @@ export const STAMINA_REGEN = 19;
 export const STAMINA_REGEN_DELAY = 0.9;
 export const STAMINA_JUMP_COST = 9;
 export const STAMINA_UNLOCK = 30; // exhausted until this much regained
+// ---- end of the frozen core feel ------------------------------------------------------------------------------------
 
 // Pinned by a leaper: both hands on it, shoving it off. The meter (s.shove, 0-1) fills by each press of jump and,
 // slower, while it is held, and sinks back while it is not; full, the server throws the leaper off (Zombies.throwOff).
@@ -153,6 +160,38 @@ export const BOSS_WAVE = 1;
 export const BOSS_HP_PER_PLAYER = 0.6; // boss health: its base hp, plus this share of it for every survivor after the first
 export const BOSS_HP_PER_NIGHT = 0.1; // ...and this share of it for every night after the first
 
+// The pacing director (server/director.js, issue #297): a rough read of how hard tonight is landing on each survivor,
+// which moves *when* the waves' groups come, never how many. Intensity per survivor, 0..PACE.MAX: damage taken adds
+// its amount, going down DOWN, a leaper's pin or a roper's rope GRAB, a kill within KILL_RANGE m KILL; it sinks by
+// DECAY a second. The team's is its highest survivor's. Above PEAK the director waits for a break (no survivor hit
+// by the dead for BREAK s), then holds the wave queues for RELAX s - HOLD_MAX s a night at most, so nothing is still
+// queued at dawn. Under QUIET for QUIET_TIME s between waves, it starts the next wave early (its first group at once).
+export const PACE = {
+  MAX: 100,
+  DOWN: 40,
+  GRAB: 25,
+  KILL: 3,
+  KILL_RANGE: 6,
+  DECAY: 6,
+  PEAK: 70,
+  BREAK: 3,
+  RELAX: 20,
+  HOLD_MAX: 25,
+  QUIET: 15,
+  QUIET_TIME: 20,
+};
+// The moon (Game.moon, decided at the dusk horn and shown from then until dawn). A blood moon is a hard night and
+// looks it: a red moon, red light, a horde BLOOD_MOON_HORDE times the size, no breathers from the director and
+// quiet spells cut to BLOOD_QUIET_TIME. From night BLOOD_MOON_FROM, BLOOD_MOON_CHANCE of nights, never two running,
+// and never for a team that is already struggling (Director.struggling): that team gets a clear moon instead - a
+// bright, white one, more moonlight, none of the red - and a director that gives it a breather sooner and longer.
+export const MOON = { NORMAL: 0, BLOOD: 1, CLEAR: 2 };
+export const BLOOD_MOON_FROM = 2;
+export const BLOOD_MOON_CHANCE = 0.3;
+export const BLOOD_MOON_HORDE = 1.25;
+export const BLOOD_QUIET_TIME = 10;
+export const CLEAR_PACE = { PEAK: 50, RELAX: 25, HOLD_MAX: 40 };
+
 // Noise: how far (m) each loud thing carries to the dead. Every zombie inside that radius with nobody to chase
 // comes to look, so a louder noise pulls in more of them - and the louder it was where a zombie stood, the
 // harder it runs (NOISE_RUSH). Gunshots: WEAPONS[w].noise, default NOISE.GUNSHOT
@@ -164,6 +203,7 @@ export const NOISE = {
   MOLOTOV: 45, // the bottle shattering
   SALVAGE: 35, // prying a wreck apart
   CHOP: 30,
+  MINE: 32, // breaking stone off a boulder
   BUILD: 30, // hammering a structure together
   BELL: 220, // each toll of the chapel bell
   RADIO: 90, // the Relay Station's radio calling for a supply drop

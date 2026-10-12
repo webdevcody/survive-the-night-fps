@@ -10,6 +10,8 @@ export const COL = {
   TREE: 16,
   NOBULLET: 32, // bullets pass through (e.g. wire, fences)
   SALVAGE: 64, // wreck: melee hits yield scrap
+  ROCK: 128, // boulder / rock face: melee hits yield stone
+  QUARRY: 256, // ...a quarry's: more stone a hit, and more hits before it is mined out
 };
 
 export const BOX = 0;

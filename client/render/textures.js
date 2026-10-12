@@ -3265,7 +3265,8 @@ GEN.atlas = () => {
     ctx.restore();
     grime(x, y, w, h, 10, 0.3);
   }
-  // billboard poster: faded motel ad, torn strips showing boards, water streaks, red graffiti
+  // billboard poster: a faded ad for the airfield past the bridge (issue #269: the run's far goal, seen from the
+  // breakdown), torn strips showing boards, water streaks, red graffiti
   {
     const [x, y, w, h] = ATLAS.billboard;
     ctx.save();
@@ -3292,12 +3293,12 @@ GEN.atlas = () => {
     ctx.beginPath();
     ctx.arc(x + 150, y + 52, 24, 0, 7);
     ctx.fill();
-    text('PINE HOLLOW', x + 322, y + 58, 44, '#7a2418');
-    text('MOTOR LODGE', x + 330, y + 108, 34, '#23364e');
-    text('COLOR TV  ·  HEATED POOL', x + 330, y + 150, 18, '#3a3a34');
+    text('CALDER FIELD', x + 300, y + 62, 36, '#7a2418');
+    text('AIRPORT', x + 300, y + 108, 34, '#23364e');
+    text('FLIGHTS OUT DAILY', x + 300, y + 148, 18, '#3a3a34');
     ctx.fillStyle = '#7a2418';
-    ctx.fillRect(x + 300, y + 170, 190, 36);
-    text('NEXT EXIT  →', x + 395, y + 189, 22, '#e8dcc0');
+    ctx.fillRect(x + 190, y + 170, 270, 36);
+    text('OVER THE BRIDGE  →', x + 325, y + 189, 22, '#e8dcc0');
     // sun fade
     ctx.fillStyle = 'rgba(230,226,205,0.28)';
     ctx.fillRect(x, y, w, h);
@@ -3592,6 +3593,7 @@ const CITY_CELLS = [
   ['gasprice', 256, 512],
   ['quarantine', 448, 224],
   ['evac', 448, 224],
+  ['road_airport', 256, 128], // (the island's Route 9: the way to the bridge, and past it the airfield - issue #269)
   ['billboard_a', 448, 224],
   ['billboard_b', 448, 224],
   ['poster_a', 112, 168],
@@ -4037,6 +4039,79 @@ GEN.city = () => {
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+  });
+  // a highway sign on the island's Route 9, on the way to the bridge: the airport, straight on (issue #269)
+  cell(ctx, 'road_airport', (cw, ch) => {
+    // (drawn at 384 x 192 and scaled into its cell: the atlas has no more room than this)
+    ctx.scale(cw / 384, ch / 192);
+    const w = 384, h = 192;
+    const q = rngf(1403);
+    ctx.fillStyle = '#1f5a36';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#e8e6da';
+    ctx.lineWidth = 7;
+    ctx.strokeRect(10, 10, w - 20, h - 20);
+    ctx.fillStyle = '#ece9dc';
+    // the plane, seen from above, nose up
+    ctx.save();
+    ctx.translate(74, h / 2);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 9, 46, 0, 0, 7);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-50, 6);
+    ctx.lineTo(50, 6);
+    ctx.lineTo(8, -16);
+    ctx.lineTo(-8, -16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-20, 42);
+    ctx.lineTo(20, 42);
+    ctx.lineTo(5, 30);
+    ctx.lineTo(-5, 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    fit('AIRPORT', 190, 58, sans);
+    ctx.fillText('AIRPORT', 236, 64);
+    fit('CALDER FIELD  VIA BRIDGE', 210, 22, sans);
+    ctx.fillText('CALDER FIELD  VIA BRIDGE', 236, 112);
+    // straight on
+    ctx.beginPath();
+    ctx.moveTo(236, 128);
+    ctx.lineTo(262, 156);
+    ctx.lineTo(246, 156);
+    ctx.lineTo(246, 176);
+    ctx.lineTo(226, 176);
+    ctx.lineTo(226, 156);
+    ctx.lineTo(210, 156);
+    ctx.closePath();
+    ctx.fill();
+    // years by the road: dirt, rust from the bolts, a few shots
+    for (let k = 0; k < 18; k++) {
+      const px = q() * w, py = q() * h, R = 8 + q() * 40;
+      const g = ctx.createRadialGradient(px, py, 0, px, py, R);
+      g.addColorStop(0, `rgba(34,26,18,${0.12 + q() * 0.2})`);
+      g.addColorStop(1, 'rgba(34,26,18,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(px - R, py - R, R * 2, R * 2);
+    }
+    for (const bx of [24, w - 24]) {
+      const g = ctx.createLinearGradient(0, 18, 0, 90);
+      g.addColorStop(0, 'rgba(118,62,26,0.6)');
+      g.addColorStop(1, 'rgba(118,62,26,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(bx - 3, 18, 6, 72);
+    }
+    for (let k = 0; k < 4; k++) {
+      ctx.fillStyle = '#0c0b0a';
+      ctx.beginPath();
+      ctx.arc(20 + q() * (w - 40), 20 + q() * (h - 40), 3 + q() * 3, 0, 7);
+      ctx.fill();
+    }
   });
   // ---- soft: read back and written per pixel (noise shapes them; a canvas gradient is too clean)
   const img = canvasToImg(c);

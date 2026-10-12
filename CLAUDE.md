@@ -1,5 +1,7 @@
 # Survive The Night
 
+Who the game is for and the pillars every feature serves: [docs/design.md](docs/design.md). Read it before you add or grow a feature.
+
 Before you build or change a model, a hand pose, anything a survivor holds or wears, a ground pickup or a prop's placement, read and follow [docs/clippy.md](docs/clippy.md) so nothing clips.
 
 Any headless browser must go through `scripts/clip/lib.js`'s launcher (`launchChrome`); never launch Chrome, puppeteer or any other browser yourself.

@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { LoadoutService, MemoryLoadoutStore, PgLoadoutStore } from '../server/userloadout.js';
 import { openDb } from '../server/db/index.js';
 import { migrate } from '../server/db/migrate.js';
-import { Loadouts, LocalLoadouts, clearLoadoutRun, loadoutCombatEffect } from '../server/loadouts.js';
+import { Loadouts, LocalLoadouts, clearLoadoutRun, loadoutCombatEffect, LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY, LOADOUT_STRONGBOX_CHANCE, LOADOUT_STRONGBOX_PITY, pityChance, pityStreak } from '../server/loadouts.js';
 import { Game } from '../server/game.js';
 import { AMMO, ITEM, ZTYPE } from '../shared/defs.js';
 import { ACT, C2S, PROTOCOL_VERSION, SALVAGE_FROM, WORN, WORN_DO, Writer } from '../shared/protocol.js';
@@ -516,6 +516,98 @@ async function guestMergeTwice() {
   }
 }
 
+// ---- bad-luck protection and shared boss rewards (#275)
+async function pityStore() {
+  for (const [label, makeStore] of [
+    ['memory', async () => ({ store: new MemoryLoadoutStore() })],
+    [
+      'postgres',
+      async () => {
+        const db = await openDb('pglite:memory');
+        await migrate(db);
+        return { store: new PgLoadoutStore(db), again: () => new PgLoadoutStore(db) };
+      },
+    ],
+  ]) {
+    console.log(`\n-- loadout pity counter (${label})`);
+    const { store, again } = await makeStore();
+    const svc = new LoadoutService({ store });
+    const o = guest();
+    const r = room();
+    svc.fromRoom(r, { t: 'loadout', op: 'enter', owner: o });
+    await settle();
+    check(`${label}: a new owner has missed nothing`, JSON.stringify(r.colls(o).at(-1)?.pity) === '{"boss":0,"box":0}', JSON.stringify(r.colls(o).at(-1)));
+    for (let i = 0; i < 3; i++) svc.fromRoom(r, { t: 'loadout', op: 'miss', owner: o, kind: 'boss' });
+    svc.fromRoom(r, { t: 'loadout', op: 'miss', owner: o, kind: 'box' });
+    svc.fromRoom(r, { t: 'loadout', op: 'miss', owner: o, kind: 'nonsense' });
+    await svc.queue;
+    await settle();
+    check(`${label}: each missed chance is counted, by kind, and told to the game`, JSON.stringify(r.colls(o).at(-1)?.pity) === '{"boss":3,"box":1}', JSON.stringify(r.colls(o).at(-1)?.pity));
+    if (again) {
+      const later = await new LoadoutService({ store: again() }).collection(o);
+      check(`${label}: the count is kept for the next run`, later.pity.boss === 3 && later.pity.box === 1, JSON.stringify(later.pity));
+    }
+    await svc.grant(o, 1, { kind: 'boss', boss: ZTYPE.BOSS_BRUTE }, 'pity:boss');
+    const after = await svc.collection(o);
+    check(`${label}: a boss drop resets the boss count, not the strongbox one`, after.pity.boss === 0 && after.pity.box === 1, JSON.stringify(after.pity));
+    await svc.close();
+  }
+}
+
+async function pityInRun() {
+  console.log('\n-- loadout pity in a run');
+  check('the chance climbs with each miss and is certain in the end', pityChance(LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY, 0) === LOADOUT_BOSS_CHANCE && pityChance(LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY, 4) > LOADOUT_BOSS_CHANCE && pityChance(LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY, 99) === 1);
+  const bossWorst = pityStreak(LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY);
+  const boxWorst = pityStreak(LOADOUT_STRONGBOX_CHANCE, LOADOUT_STRONGBOX_PITY);
+  check('the worst dry streak is bounded: a boss item by the 18th boss, a strongbox item by the 50th strongbox', bossWorst === 17 && boxWorst === 49, `${bossWorst}, ${boxWorst}`);
+  const service = new LoadoutService({ store: new MemoryLoadoutStore() });
+  const game = new Game({ seed: 12, cards: null, loadouts: new LocalLoadouts(service), dayLength: 999, nightLength: 999, godMode: true });
+  game.code = 'PITY';
+  const pid = randomUUID();
+  const owner = `g:${createHash('sha256').update(pid).digest('hex')}`;
+  const p = join(game, 'Unlucky', pid);
+  await settle();
+  const rng = game.rng;
+  game.rng = () => 0.9999; // (the worst luck there is: every roll as high as it goes)
+  let kills = 0;
+  for (; kills < 40 && !(await service.collection(owner)).items.length; ) {
+    game.loadouts.bossDrop({ id: 1000 + kills, ztype: ZTYPE.BOSS_BRUTE, boss: true }, [p]);
+    kills++;
+    await service.queue;
+    await settle();
+  }
+  game.rng = rng;
+  const c = await service.collection(owner);
+  check('with the worst luck there is, the boss item still drops - on the 18th boss, and the count starts again', kills === bossWorst + 1 && c.items.length === 1 && c.pity.boss === 0, `${kills} bosses, ${c.items.length} items, ${JSON.stringify(c.pity)}`);
+}
+
+async function bossTeam() {
+  console.log('\n-- boss rewards for the whole team');
+  const service = new LoadoutService({ store: new MemoryLoadoutStore() });
+  const game = new Game({ seed: 13, cards: null, loadouts: new LocalLoadouts(service), dayLength: 999, nightLength: 999, godMode: true });
+  game.code = 'TEAM';
+  const pids = [randomUUID(), randomUUID(), randomUUID()];
+  const owners = pids.map((pid) => `g:${createHash('sha256').update(pid).digest('hex')}`);
+  const [killer, helper, idle] = ['Killer', 'Helper', 'Idle'].map((n, i) => join(game, n, pids[i]));
+  await settle();
+  const s = killer.state;
+  const z = game.zm.spawn(ZTYPE.BOSS_BRUTE, s.x + 20, s.z, { horde: true, boss: true });
+  game.combat.damageZombie(z, 50, helper, {});
+  const rng = game.rng;
+  // every roll high: the killer's misses; the helper has missed so often that theirs is certain - the drop is theirs
+  game.loadouts.own.get(owners[1]).pity.boss = pityStreak(LOADOUT_BOSS_CHANCE, LOADOUT_BOSS_PITY);
+  game.rng = () => 0.99;
+  game.combat.damageZombie(z, z.hp + 1, killer, {});
+  game.rng = rng;
+  await service.queue;
+  await settle();
+  const got = await Promise.all(owners.map((o) => service.collection(o)));
+  check('a boss kill rolls for each survivor who hurt it: the helper can get the drop the killer missed', z.dead && got[1].items.length === 1 && got[0].items.length === 0 && got[0].pity.boss === 1, JSON.stringify(got.map((c) => [c.items.length, c.pity])));
+  check('...and one who never hurt it gets no roll', got[2].items.length === 0 && got[2].pity.boss === 0);
+  const balances = await Promise.all(owners.map((o) => service.balance(o)));
+  check('the boss\'s Zombie Skulls go to the killer and the helper alike, not to the idle one', balances[0] > 0 && balances[1] === balances[0] && balances[2] === 0, JSON.stringify(balances));
+}
+
 catalogRules();
 await persistence();
 await inRunRules();
@@ -524,6 +616,9 @@ await handoffTradeReplay();
 await handoffWagerReplay();
 await leaveDuringWagerLock();
 await guestMergeTwice();
+await pityStore();
+await pityInRun();
+await bossTeam();
 
 if (fails.length) {
   console.error(`\n${fails.length} loadout test(s) failed: ${fails.join(', ')}`);

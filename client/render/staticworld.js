@@ -7,7 +7,8 @@ import { getMaterial, staticSurface } from './materials.js';
 import { createProp, propVariant } from './models/props.js';
 import { PROPS } from '../../shared/props.js';
 import { LIGHT_PROPS } from '../../shared/surfaces.js';
-import { buildCity, TIER } from './citykit.js';
+import { buildCity, buildSigns, TIER } from './citykit.js';
+import { airportSigns } from './airportsigns.js';
 import { MultiMesh } from './multimesh.js';
 
 const CHUNK = 80;
@@ -494,6 +495,9 @@ export class StaticWorld {
     }
     // the city's buildings, built from what the world says of each (world.city.buildings)
     if (world.city) buildCity(world, (x, z, matName, tpl, tier = 0) => add(x, z, staticSurface(getMaterial(matName)), tpl, IDENTITY, null, null, null, tier));
+    // the island's AIRPORT signs on Route 9, the way to the bridge (issue #269)
+    const signs = airportSigns(world);
+    if (signs.length) buildSigns(signs, (x, z, matName, tpl, tier = 0) => add(x, z, staticSurface(getMaterial(matName)), tpl, IDENTITY, null, null, null, tier));
     // ---- the buffers. Every vertex of a material, whatever chunk it is in, is in one run of one vertex buffer, and
     // the material is ONE mesh: each frame it draws the runs of the chunks that are near enough and in the view,
     // all of them in a single draw call (multimesh.js). A valley's static world is then some

@@ -1,5 +1,5 @@
 // What the match records say, for tuning the game: `npm run report` prints every analytics_* question
-// (server/db/migrations/003_analytics.sql) asked of DATABASE_URL.
+// (server/db/migrations/003_analytics.sql, 004 and 020) asked of DATABASE_URL.
 //   npm run report                       the last 30 days
 //   npm run report -- --days 7
 //   npm run report -- --since 2026-10-01
@@ -25,6 +25,7 @@ const QUESTIONS = [
   ['daily', 'Day by day'],
   ['by_team_size', 'By team size (most players at once)'],
   ['night_funnel', 'Night by night: how many teams reach each night and see it through'],
+  ['night_pacing', 'The pacing director by team size and moon: breathers (relaxes) and early groups (pulls) a night'],
   ['bosses', 'Bosses'],
   ['death_causes', 'What downs and kills survivors'],
   ['damage_sources', 'Where the damage survivors take comes from'],
@@ -33,6 +34,7 @@ const QUESTIONS = [
   ['supply_pacing', 'Pacing: minutes into a match each car supply is first found / installed'],
   ['retention', 'Do players come back (by matches played)'],
   ['difficulty', 'How hard players say it is (end screen votes: avg 1 too easy .. 5 too hard, the rest % of votes)'],
+  ['moments', "A run's best and worst moment (end screen picks: how many picked each, of how many answered in that bucket)"],
   ['skulls', 'Zombie Skulls week by week: earned by play, spent in the Skull shop and on auction fees, net change held'],
   ['server_health', 'Server health'],
 ];

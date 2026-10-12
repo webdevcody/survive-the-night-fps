@@ -36,6 +36,7 @@ const COLS = {
       matchId: 'uuid', night: 'smallint', startedAt: 'timestamptz', endedAt: 'timestamptz', durationS: 'real', theme: 'text', boss: 'text', bossKilled: 'boolean',
       hordeSize: 'integer', hordeHpMul: 'real', playersStart: 'smallint', survivorsStart: 'smallint', survivorsEnd: 'smallint',
       kills: 'integer', structuresLost: 'integer', downs: 'integer', deaths: 'integer', revives: 'integer', outcome: 'text',
+      moon: 'text', relaxes: 'smallint', pulls: 'smallint',
     },
     conflict: 'ON CONFLICT (match_id, night) DO NOTHING',
   },

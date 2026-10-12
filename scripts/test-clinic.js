@@ -236,9 +236,12 @@ if (worlds[0]?.clinic) {
     check(`${tag} it is day`, game.phase === PHASE.DAY);
     const inWard = spawn(ZTYPE.SHADE, -4.4, 19.6);
     const inHall = spawn(ZTYPE.SHADE, -5, 11.3);
-    const inReception = spawn(ZTYPE.SHADE, 6, 0);
-    const mouth = spawn(ZTYPE.SHADE, 6, 5.5);
-    const outside = zm.spawn(ZTYPE.SHADE, ...at(4, -9));
+    // no Shade comes out into the day: one may only be put where the daylight does not reach
+    check(`${tag} by day a Shade spawns in the wards and never in daylight`, !!inWard && !!inHall && !spawn(ZTYPE.SHADE, 6, 0) && !zm.spawn(ZTYPE.SHADE, ...at(4, -9)));
+    // (put there all the same, for what the daylight does to one that walks out into it)
+    const inReception = spawn(ZTYPE.SHADE, 6, 0, { force: true });
+    const mouth = spawn(ZTYPE.SHADE, 6, 5.5, { force: true });
+    const outside = zm.spawn(ZTYPE.SHADE, ...at(4, -9), { force: true });
     run(0.3);
     check(`${tag} by day no light is on a Shade in the wards`, !zm.isLit(inWard) && !zm.isLit(inHall) && !inWard.lit && !inHall.lit);
     check(`${tag} ...the day pins one in reception, at the mouth of the passage and outside`, zm.isLit(inReception) && zm.isLit(mouth) && zm.isLit(outside) && inReception.lit && outside.lit);

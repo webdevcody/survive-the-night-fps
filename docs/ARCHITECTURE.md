@@ -45,6 +45,8 @@ server/      authoritative game server (uWebSockets.js)
   room-worker.js one game server: a worker thread running one Game and its tick loop
   wire.js        the packed frames the two threads pass sockets' messages in
   game.js        the simulation of one game (Game), and everything it sends
+  director.js    the pacing director (breathers after a peak, the next group early when it is quiet) and tonight's
+                 moon: a blood moon now and then, a clear one for a team that is struggling (see Night waves)
 client/      three.js client (Vite root)
   index.html, main.js
   net/        connection, snapshot decode, interpolation, prediction
@@ -476,7 +478,7 @@ does (`perkMods(mask)`: one frozen object per mask; no ordinary stat past `PERK_
   whether a set could be had (order not looked at). An `id` is a bit of the mask: never reuse or renumber one, none past 30.
 - **XP is stored, the level is worked out** (`levelOf`), so the curve can be retuned without touching a record. It is
   awarded on the server only, where the board's stats are bumped (`Game.award`, times Quick Study's `xp`): kills by kind
-  (`killXp`: half past `XP.killsFull` in one night or day, nothing for one of the dead that has been after a survivor
+  (`killXp`: half as the kill, the other half as the fresh-night bonus (`XPS.fresh`) on the first `XP.killsFull` in one night or day, nothing for one of the dead that has been after a survivor
   for `WEDGED_FOR` without getting anywhere or striking anything, `z.wedgeT`; nothing for a turned player), bosses,
   revives (`XP.revivesFull` a night), being alive at dawn, a dawn past the furthest day on the record (`p.best`), and the
   escape (more in the car than left behind). Dying keeps what was earned. `/xp <n>` (admin) adds to the record outside
@@ -684,6 +686,15 @@ Off unless `CLUSTER=1` with Postgres; docs/scaling.md has the design, the settin
 A run is two maps (issue #111, `shared/acts.js`). Act 1 is the island: fix the car, survive its final stand, drive
 off. That is no longer the victory: the car crosses a broken bridge (`PHASE.CROSSING`, a cutscene) to the mainland,
 act 2, where the same loop is played with a plane and flying out wins.
+
+The island hints at what comes after it (issue #269): the objective tracker carries a standing "Then: ... the
+mainland" line so the car never reads as the end, and from the start the island points at the airfield, all of it
+client-side so the world's generation is unchanged: the breakdown's billboard is an ad for Calder Field "over the bridge", green AIRPORT plates hang on Route
+9's power poles from the breakdown to the bridge end (`client/render/airportsigns.js`, laid with citykit.js
+`buildSigns` from the city atlas's `road_airport`), the island's map has "to airfield" pencilled by the bridge, and
+installing the car battery turns the car's radio on (`Game.carRadio`: one of two AI-voiced takes in
+`client/audio/radio/`, picked at random, static and then the survivors' call for the airfield, with the words on
+screen). `scripts/test-airfield-hints.js` holds them.
 
 - **A world has its own size.** `world.kind` (`WORLD.ISLAND` / `WORLD.MAINLAND`, which is also the act's number),
   `world.size` / `half` / `gridN`, `world.start` (where a run on it begins) and `world.posScale`. Nothing that
@@ -1608,6 +1619,15 @@ nobody's state; the one thing the server keeps is each wreck's short record of t
   The horde takes one new kind a night: `startNight` zeroes the weight of every kind whose `ZOMBIE_DEFS[t].minNight`
   is still to come, and puts the night's new one in the second wave if the draw left it out. By day the kinds are not
   gated by night but by distance from the car (`Zombies.daySpecial`, `DAY_SPECIAL_*`).
+  The pacing director (`server/director.js`, `PACE` in constants.js) keeps `p.intensity` per survivor (damage, downs,
+  grabs, nearby kills, decaying by the second) and moves only *when* groups come: past `PACE.PEAK` it waits for a break
+  in the hits and holds the wave queues (`Director.tick`, at most `PACE.HOLD_MAX` s a night); a quiet spell between
+  waves brings the next wave's first group early. Boss timing and horde size are untouched. At the dusk horn
+  `Director.pickMoon` sets `Game.moon` (in the global state): a blood moon (`BLOOD_MOON_CHANCE` from night 2, never two
+  running) brings `BLOOD_MOON_HORDE` times the horde and no breathers; a team that is struggling gets a clear moon
+  instead (`CLEAR_PACE`: breathers sooner and longer). The client tints the sky, the moon and the light to match
+  (`Environment.applyMoon`) and says so at the horn, on the dusk card and at nightfall. Night records carry the moon
+  and the relax / pull counts (`npm run report -- --only night_pacing`).
 - **Noise.** `Zombies.noise(x, z, loud)` is the one entry point: `loud` is the radius (m) the noise carries
   (`NOISE` in constants.js; gunshots use `WEAPONS[w].noise`). Every zombie inside it with no target heads for
   the spot (`alertX/Z`, `alertT`), at a speed set by how loud it was where the zombie stood (`alertRush`,

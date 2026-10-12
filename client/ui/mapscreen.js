@@ -524,6 +524,8 @@ export class MapScreen {
     this.bridgeLab = el('div', 'mx-bridge', this.labels);
     el('b', '', this.bridgeLab, 'Route 9 bridge');
     el('span', '', this.bridgeLab, plane ? 'back to Harlan Valley · its last span is down' : `to the Calder Coast · fix the ${W.thing} to cross`);
+    // (on the island's map: somebody's pencil beside it, the run's far goal - issue #269)
+    if (!plane) el('i', 'mx-note', this.bridgeLab, 'to airfield');
     this.bridgeLab.hidden = true;
     if (world.bridge) {
       const b = world.bridge;
@@ -713,6 +715,8 @@ export class MapScreen {
     for (const v of d.vehicles || []) if (!v.mine) put(v.x, v.z, 'veh' + (v.down ? ' down' : ''), v.kind === 2 ? glyph('car') : itemIcon(v.kind === 1 ? ITEM.MOPED_KIT : ITEM.BIKE_KIT), VEH_LABEL[v.kind] + (v.down ? ' (not running)' : ''));
     // car supplies on the ground where someone dropped them or fell, named for what they are
     for (const p of d.parts) put(p.x, p.z, 'part', itemIcon(p.item), ITEM_DEFS[p.item].name);
+    // (a team that has found nothing yet: the rumour narrowed to round here, then the spot itself)
+    for (const h of d.helped || []) put(h.x, h.z, 'part', itemIcon(h.item), ITEM_DEFS[h.item].name + (h.exact ? '' : ' · round here?'));
     for (const c of d.crates) put(c.x, c.z, 'crate', glyph('hazard'), 'Supply drop');
     for (const p of d.pings) put(p.x, p.z, 'ping p' + p.kind, glyph('ping'), `${PING_WORD[p.kind] || 'Ping'} · ${p.name}`);
     put(d.car.x, d.car.z, 'car', glyph(W.glyph), W.thing === 'car' ? 'Car' : 'Plane');

@@ -27,7 +27,7 @@ import { mulberry32 } from '../shared/rng.js';
 export const HANDOFF_RESERVE = +(process.env.HANDOFF_RESERVE_SECONDS || 180); // s a restored player's place is kept
 
 // the run's own numbers (Game constructor and startGame), as they are
-const GAME_FIELDS = ['seed', 'worldPlayed', 'tick', 'time', 'phase', 'day', 'timeLeft', 'restartT', 'supplies', 'supplyHints', 'supplyFound', 'unlocked', 'schemHints', 'wave', 'bossPending', 'bossId', 'warned', 'shadeWarned', 'escape', 'supplyAt', 'nightStats', 'dropSeq', 'hordeHpMul', 'act', 'checkpoint', 'crossing'];
+const GAME_FIELDS = ['seed', 'worldPlayed', 'tick', 'time', 'phase', 'day', 'timeLeft', 'restartT', 'supplies', 'supplyHints', 'supplyFound', 'supplyHintSpots', 'supplyClock', 'supplyHelp', 'unlocked', 'schemHints', 'wave', 'bossPending', 'bossId', 'warned', 'shadeWarned', 'escape', 'supplyAt', 'nightStats', 'dropSeq', 'hordeHpMul', 'pace', 'moon', 'lastMoon', 'act', 'checkpoint', 'crossing'];
 // what of a player is the connection's or the leaderboard's, or is worked out again (resume starts a client afresh)
 const PLAYER_SKIP = new Set(['session', 'rec', 'view', 'shadow', 'cmdQueue', 'cmdBudget', 'lastSeq', 'hasSeq', 'recvSeq', 'renderTick', 'renderFrac', 'hx', 'hy', 'hz', 'selfSync', 'snapTick', 'ackSent', 'pingAt', 'ping', 'chatT', 'chatCount', 'onAir', 'pingT', 'boardT', 'ts', 'admin', 'adminT', 'adminFails', 'greeted', 'selfCache', 'globalCache', 'listVer', 'away', 'arriving', 'useItem', 'hold', 'invDirty', 'invSort', 'splitKeep', 'lastDrop', 'state']);
 const ZOMBIE_SKIP = new Set(['def', 'hx', 'hy', 'hz', 'hitStruct']);
@@ -83,12 +83,12 @@ function revive(v) {
   return out;
 }
 
-// a tree or a wreck of the static world, by where it stands (as EVT.STRIPPED names them): [tree, qx, qy0, qz]
+// a tree, a wreck or a rock of the static world, by where it stands (as EVT.STRIPPED names them): [tree, qx, qy0, qz]
 const colKey = (c) => [c.flags & COL.TREE ? 1 : 0, qpos(c.x), qpos(c.y0), qpos(c.z)];
 const _near = [];
 function colAt(world, [tree, qx, qy, qz]) {
   if (tree) return treeAt(world, qx, qy, qz);
-  for (const c of world.staticGrid.query(dqpos(qx), dqpos(qz), 0.5, _near)) if (c.flags & COL.SALVAGE && qpos(c.x) === qx && qpos(c.y0) === qy && qpos(c.z) === qz) return c;
+  for (const c of world.staticGrid.query(dqpos(qx), dqpos(qz), 0.5, _near)) if (c.flags & (COL.SALVAGE | COL.ROCK) && qpos(c.x) === qx && qpos(c.y0) === qy && qpos(c.z) === qz) return c;
   return null;
 }
 

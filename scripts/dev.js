@@ -3,9 +3,11 @@
 // The database is a PGlite one in data/pglite (Postgres in the server's own process: nothing to install) unless
 // DATABASE_URL says otherwise - a real Postgres, or DATABASE_URL= (empty) for none at all. A restart on a change hands
 // the games being played over to the restarted server, as a deploy does (server/handoff.js), through data/handoff.
+// Every player may use the admin chat commands (DEV_ADMIN=1, scripts/dev-env.js); DEV_ADMIN=0 turns them off.
 import { spawn } from 'node:child_process';
+import { devServerEnv } from './dev-env.js';
 
-const env = { ...process.env, NODE_ENV: process.env.NODE_ENV ?? 'development', DATABASE_URL: process.env.DATABASE_URL ?? 'pglite:./data/pglite', HANDOFF_DIR: process.env.HANDOFF_DIR ?? './data/handoff' };
+const env = devServerEnv();
 const procs = [
   spawn(process.execPath, ['--watch-path=server', '--watch-path=shared', 'server/index.js'], { stdio: 'inherit', env }),
   spawn(process.execPath, ['node_modules/vite/bin/vite.js'], { stdio: 'inherit', env: process.env }),

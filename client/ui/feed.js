@@ -201,6 +201,7 @@ export class Notifier {
 
 function toneFor(text) {
   const t = text.toUpperCase();
+  if (/BLOOD MOON/.test(t)) return 'blood'; // ("NIGHT 4: BLOOD MOON" is a blood moon's title before it is a night's)
   if (/^NIGHT \d/.test(t)) return 'night'; // a night's title, whatever its theme is called ("NIGHT 2: LIGHTS OUT")
   if (/DIED|DEAD|HORDE|BOSS|ABOMINATION|QUEEN|FINAL|OUT\b/.test(t)) return 'blood';
   if (/ESCAPE|DAWN|SURVIVED|READY|REPAIRED/.test(t)) return 'dawn';

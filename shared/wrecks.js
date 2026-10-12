@@ -31,8 +31,8 @@ export const WRECK_ALARM = {
   bonnet: 0.3, // a blow this far (of the wreck's half length) or more towards its front end, while it rings, kills it
 };
 export const ALARM = { UNKNOWN: 0, DEAD: 1, LIVE: 2, WARNED: 3, RINGING: 4, SPENT: 5 };
-// what EVT.WRECK_ALARM says
-export const ALARM_SAY = { QUIET: 0, CHIRP: 1, RING: 2 };
+// what EVT.WRECK_ALARM says. ARMED: the car's trunk is armed - forcing its boot sets it off (Game.tellArmedTrunks)
+export const ALARM_SAY = { QUIET: 0, CHIRP: 1, RING: 2, ARMED: 3 };
 // too light to wake it: a blade drawn across a panel
 export const alarmBlow = (blow) => blow !== BLOW.SLASH && blow !== BLOW.SHOT;
 

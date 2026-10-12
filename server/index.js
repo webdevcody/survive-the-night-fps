@@ -37,6 +37,7 @@ import { LoadoutService, PgLoadoutStore, MemoryLoadoutStore, ownerKey as loadout
 import { LobbyCards } from './lobbycards.js';
 import { PublicStats, RANGES } from './publicstats.js';
 import { idKey } from './stats.js';
+import { devAdminAllowed } from './devadmin.js';
 import { api, HttpError, parseCookies, sameOrigin } from './http.js';
 import { FileStore, PgStore, BUILD } from './handoff.js';
 import { Builds } from './builds.js';
@@ -145,8 +146,8 @@ const lobby = new Lobby({
     nightLength: process.env.NIGHT_SECONDS ? +process.env.NIGHT_SECONDS : undefined,
     startDay: process.env.START_DAY ? +process.env.START_DAY : undefined,
     godMode: process.env.GODMODE === '1',
-    // Test and look-dev servers can authorize every player without accounts. Other environments ignore it.
-    devAdmin: ['development', 'test'].includes(process.env.NODE_ENV) && process.env.DEV_ADMIN === '1',
+    // Test, look-dev and `npm run dev` servers authorize every player without accounts. Other environments ignore it.
+    devAdmin: devAdminAllowed(),
   },
 });
 
@@ -830,6 +831,32 @@ route(
     if (!feedback) throw new HttpError(503, 'Votes are not kept on this server.');
     const user = await auth.userForToken(ctx.cookies[COOKIE]);
     return { body: await feedback.voteDifficulty(user ? { userId: user.id } : { guestKey: idKey(b.guestId) }, b.rating) };
+  },
+  { body: true }
+);
+
+// The run that just ended's best or worst moment, from its end screen: { which: 'best' | 'worst', moment: one of
+// feedback.js MOMENTS or null to take it back, guestId? } -> { which, moment }. Filed as the difficulty vote is.
+route(
+  'post',
+  '/api/feedback/moment',
+  async (ctx, b) => {
+    if (!feedback) throw new HttpError(503, 'Votes are not kept on this server.');
+    const user = await auth.userForToken(ctx.cookies[COOKIE]);
+    return { body: await feedback.pickMoment(user ? { userId: user.id } : { guestKey: idKey(b.guestId) }, b.which, b.moment) };
+  },
+  { body: true }
+);
+
+// "Do you play survival / FPS games?", asked once per account or guest: { plays?: true | false, guestId? } ->
+// { plays: true | false | null }. Without plays it only says what the answer is (null: never asked); the first answer stays.
+route(
+  'post',
+  '/api/feedback/genre',
+  async (ctx, b) => {
+    if (!feedback) throw new HttpError(503, 'Votes are not kept on this server.');
+    const user = await auth.userForToken(ctx.cookies[COOKIE]);
+    return { body: await feedback.genre(user ? { userId: user.id } : { guestKey: idKey(b.guestId) }, b.plays) };
   },
   { body: true }
 );

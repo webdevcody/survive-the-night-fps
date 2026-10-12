@@ -1637,6 +1637,15 @@ function sign(S, G) {
   for (const px of G.posts || []) S.bar('rust', tier, [px, -hh - (G.post || 0), 0.06], [px, hh, 0.06], 0.1);
 }
 
+// signs on their own, where there is no city (the island's AIRPORT signs: airportsigns.js)
+export function buildSigns(signs, add) {
+  const S = new Soup();
+  for (const G of signs) {
+    sign(S, G);
+    S.flush(add, G.x, G.z);
+  }
+}
+
 // ------------------------------------------------------------------ the city
 export function buildCity(world, add) {
   const C = world.city;

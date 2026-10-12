@@ -188,14 +188,14 @@ expected.get(ITEM.SEALED_PACK).set('bosses', BOSS_PACK_CHANCE);
 }
 
 // ---------------------------------------------------------------- gathering: GATHER mirrors Game.gatherHit
-// The one table the guide cannot derive. Swing the starting knife at trees and wrecks on a real server and count.
+// The one table the guide cannot derive. Swing the starting knife at trees, wrecks and rocks on a real server and count.
 {
   const game = new Game({ seed: 4242, log: () => {} });
   let got = {};
   game.giveOrDrop = (p, item, n) => (got[item] = (got[item] || 0) + n);
   game.notify = () => {};
   const p = { id: 0, state: { x: 0, y: 0, z: 0 } }; // (where a felled tree falls away from)
-  const flags = [COL.TREE, COL.SALVAGE];
+  const flags = [COL.TREE, COL.SALVAGE, COL.ROCK, COL.ROCK | COL.QUARRY];
   GATHER.forEach((g, i) => {
     // a living tree of the plain kind (tv 0); a wreck has no kinds
     const one = { flags: flags[i], tv: 0 };

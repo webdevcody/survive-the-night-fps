@@ -37,7 +37,8 @@ npm run dev        # game server on :3000 + Vite dev server on :5173 -> open htt
 `npm run dev` gives the server a database of its own: PGlite (Postgres compiled to WebAssembly, run inside the
 server process) kept in `data/pglite`, migrated on start - accounts, friends, messages and match records all work
 with nothing to install. Point `DATABASE_URL` at a real Postgres to use that instead, or set it empty
-(`DATABASE_URL= npm run dev`) for no database at all.
+(`DATABASE_URL= npm run dev`) for no database at all. Every player on it may use the admin chat commands (`/give`,
+`/tp`, ...), signed in or not (`DEV_ADMIN=0 npm run dev` turns that off); a production server never allows that.
 
 Production:
 
@@ -69,7 +70,8 @@ Several servers behind the proxy (`npm run proxy`, docs/scaling.md): `CLUSTER=1`
 Testing only: `HANDOFF_STATE_VERSION` and `CLIENT_BUILD` (a server of another build), `GAME_IDLE_SECONDS` (90: how long an empty game lasts), `JOIN_WAIT_SECONDS` (15: how long a socket
 may hold a seat without joining), `LOBBY_LIMITS=0` (no per-address allowance on making games or asking for codes,
 and no one-game-each: load tests), `DAY_SECONDS`, `NIGHT_SECONDS`, `START_DAY`, `GODMODE=1` (survivors take no damage), `DEV_ADMIN=1`
-(every player may use admin commands when `NODE_ENV` is `development` or `test`; other environments ignore it).
+(every player may use admin commands when `NODE_ENV` is `development` or `test`; other environments ignore it.
+`npm run dev` sets it, so the chat commands always work locally; `DEV_ADMIN=0 npm run dev` plays without them).
 
 A player (a signed-in account, or a guest's address) may have one game they made going at a time. The most games at
 once over every server is a setting in the database, so it changes without a deploy or a restart (the servers read it

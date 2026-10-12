@@ -26,6 +26,7 @@ import {
   CAR_REACH,
   STAMINA_MAX,
   BTN,
+  MOON,
 } from '../../shared/constants.js';
 import {
   ITEM,
@@ -35,7 +36,7 @@ import {
   STRUCT,
   STRUCT_DEFS,
   STRUCT_ORDER,
-  REPAIR_COST,
+  repairCostOf,
   ZOMBIE_DEFS,
   SCHEM_BIT,
   THROW_ITEMS,
@@ -63,6 +64,9 @@ import { worldFor } from '../../shared/worlds.js';
 import { WORLD, CROSSING, TAKEOFF_TIME, PLANE_REACH, RUNWAY } from '../../shared/acts.js';
 import { SUPPLIES, SUPPLY_NEED, W, setAct, wordsOf } from './act.js'; // (this act's supplies, and the words for what they go into)
 import { usePos } from '../../shared/protocol.js';
+import { SUPPLY_HELP, narrowedAt } from '../../shared/supplyhelp.js';
+import { gridRef } from '../ui/mapmarks.js';
+import { Crows } from '../render/crows.js';
 import { characterFor, defaultCharacter, CHARACTER_COUNT } from '../../shared/characters.js';
 import { chosenCharacter } from '../ui/picker.js';
 import { decode, lookKey } from '../../shared/appearance.js';
@@ -83,6 +87,7 @@ const _wcHit = { t: -1, col: null, terrain: false };
 const WC_RAYS = [[0, 0], [0.3, -0.25]]; // (right, up) of the view: straight on, and out past the right hand
 import { zombieHitbox, playerHitbox, rayHitbox } from '../../shared/hitbox.js';
 import { difficultyOf } from '../../shared/difficulty.js';
+import { heardShow, loadHeardSeen, saveHeardSeen } from '../ui/heard.js';
 import { deerHitbox, DEER_UNDEAD } from '../../shared/deer.js';
 import { readHeader, readGlobal, readSelf, readEntities, readEvents } from '../net/decode.js';
 import { Connection } from '../net/connection.js';
@@ -108,6 +113,7 @@ import { Highlight } from './highlight.js';
 import { Input } from './input.js';
 import { TouchPad } from '../ui/touchpad.js';
 import { actionsOf, bindTag, bindPair, bindLabel } from './binds.js';
+import { mateDown } from './matedown.js';
 import { DropHold } from './drophold.js';
 import { SkyFlares } from './skyflares.js';
 import { Voice } from './voice.js';
@@ -159,6 +165,11 @@ const HAZE_THIN = 22;
 const FAR_SMALL = 520;
 const FAR_BIG = 1700;
 import { bearing, tonightBrief, PING_LABEL } from '../ui/hud2.js';
+// what the car's radio says once its battery is in (carRadio), word for word as the owner wrote it
+const CAR_RADIO_LINE = 'if anyone can hear us, we are trying to go to the airfield, it’s our only way to escape this hell';
+// ...in one of two voices (client/audio/radio/, samples.js REC), whose words begin this many seconds in
+const CAR_RADIO_TAKES = ['vo_radio_am_michael', 'vo_radio_af_bella'];
+const CAR_RADIO_WORDS = 1.6;
 
 const WEATHER_TOAST = {
   fog: 'Fog is rolling in',
@@ -221,6 +232,11 @@ const mmss = (t) => {
   const n = Math.ceil(t);
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 };
+// '1 Planks, 1 Nails': what a repair takes, for its prompt
+const costText = (cost) =>
+  Object.entries(cost)
+    .map(([id, n]) => `${n} ${ITEM_DEFS[id].name}`)
+    .join(', ');
 const RUN_JOIN_GRACE = 60; // seconds into day one by which a player must have joined for the run to go on their record
 const BOARD_EVERY = 4000; // ms between two requests for the leaderboard while it is open
 // Turning while aimed is slowed by the gun's zoom, tan(aimed fov / 2) / tan(hip fov / 2) (the ratio of the two
@@ -263,7 +279,7 @@ export class Game {
     this.perksUp = false; // the Perks panel opened with [P] mid-run (togglePerks)
     this.achUp = false; // the Achievements panel opened with [U] mid-run (toggleAchievements)
     this.admin = false; // the server lets us run the admin commands (WELCOMEF.ADMIN): the spawn menu [`] is ours
-    this.global = { phase: PHASE.WAITING, day: 0, timeLeft: 0, hordeLeft: -1, bossId: 0, supplies: [0, 0, 0, 0, 0], hints: [255, 255, 255, 255, 255, 255, 255], found: 0, unlocked: 0, schemHints: [255, 255, 255, 255, 255], wave: 0, waves: 3, escapeT: 0, flags: 0, finale: false, suppliesDone: false, escapeReady: false, humansAlive: 0, playersTotal: 0, restartT: 0, benches: [], parts: [] };
+    this.global = { phase: PHASE.WAITING, day: 0, timeLeft: 0, hordeLeft: -1, bossId: 0, supplies: [0, 0, 0, 0, 0], hints: [255, 255, 255, 255, 255, 255, 255], found: 0, spots: [0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff], help: 0, unlocked: 0, schemHints: [255, 255, 255, 255, 255], wave: 0, waves: 3, escapeT: 0, flags: 0, finale: false, suppliesDone: false, escapeReady: false, humansAlive: 0, playersTotal: 0, restartT: 0, benches: [], parts: [] };
     this.self = { alive: 1, hp: 100, maxHp: 100, armor: 0, armorMax: 0, battery: 100, weapons: [0, 0, 0, 0, 0], mags: [0, 0], ammo: AMMO_ITEMS.map(() => 0) };
     this.inventory = { slots: new Array(INVENTORY_MAX).fill(null), armor: null, backpack: 0 };
     this.craftQueue = []; // recipe ids of bulk crafts waiting to be sent (sendCrafts)
@@ -695,6 +711,7 @@ export class Game {
     if (!this.impacts) this.impacts = new Impacts(this);
     else this.impacts.setWorld();
     if (!this.flyover) this.flyover = new Flyover(this.scene, this.effects.atlas);
+    (this.crows ||= new Crows(this.scene)).setWorld(this.world); // over every hiding place still holding a car supply
     (this.graves ||= new Graves(this)).setWorld(this.world); // the earth of St. Agnes Cemetery, when it breaks open
     if (!this.atmosphere) this.atmosphere = new Atmosphere(this.scene);
     this.weather.setWorld(this.world);
@@ -768,6 +785,7 @@ export class Game {
     this.vehicles.setWorld(null);
     for (const em of this.staticEmitters) this.effects.removeEmitter(em);
     this.flyover?.clear();
+    this.crows?.setWorld(null);
     this.highlight.reset();
     this.world = null;
   }
@@ -1585,6 +1603,15 @@ export class Game {
       bestiary(flags, mask) {
         bestiaryEvent(flags, mask);
       },
+      heard(what, woke, loud, ids) {
+        g.heardSeen ||= loadHeardSeen();
+        const sh = heardShow(what, woke, loud, { always: g.settings.heardRings, seen: g.heardSeen });
+        if (sh.label) {
+          saveHeardSeen(g.heardSeen);
+          g.ui.notify(sh.label, 'toast', 4);
+        }
+        if (sh.show) g.ui.hud?.minimap?.heard(loud, ids);
+      },
       ping(pid, kind, x, y, z) {
         g.pings = g.pings.filter((p) => p.pid !== pid);
         g.pings.push({ pid, kind, x, y, z, t: g.time, name: g.name(pid) });
@@ -1610,6 +1637,29 @@ export class Game {
     return left > 0xf000 ? 0 : left / SERVER_TICK_RATE;
   }
 
+  // the car's battery is in, and its radio comes on: static, then a voice (issue #269: from the first day, the run's
+  // far goal is the airfield past the bridge). The voice is one of two takes, picked at random (CAR_RADIO_TAKES: their
+  // static comes first, the words CAR_RADIO_WORDS s in); a take still loading is waited for a few seconds, and with
+  // no take at all the radio's own static plays at the car. The words are on screen as they are spoken.
+  carRadio() {
+    const key = CAR_RADIO_TAKES[Math.floor(Math.random() * CAR_RADIO_TAKES.length)];
+    const caption = () => {
+      if (this.state !== 'playing') return;
+      this.ui.notify('THE CAR RADIO CRACKLES', 'big', 9);
+      this.ui.notify(`"${CAR_RADIO_LINE}"`, 'sub', 9);
+    };
+    let tries = 0;
+    const play = () => {
+      if (this.state !== 'playing') return;
+      if (this.audio.playRecording?.(key)) return void setTimeout(caption, CAR_RADIO_WORDS * 1000);
+      if (++tries < 16) return void setTimeout(play, 250);
+      const car = this.world.car;
+      if (car) this.audio.play(SOUND.RADIO_TUNE, { x: car.x, y: car.y + 1, z: car.z });
+      setTimeout(caption, 1400);
+    };
+    play();
+  }
+
   onNotify(msg, arg) {
     const ui = this.ui;
     const a = this.audio;
@@ -1620,8 +1670,17 @@ export class Game {
       case NOTIFY.NIGHT_FALLS: {
         // a themed night says so (the same theme the server drew: both work it out from the seed)
         const th = nightTheme(this.seed, arg, this.act);
-        ui.notify(th ? `NIGHT ${arg}: ${th.name.toUpperCase()}` : `NIGHT ${arg}`, 'big', th ? 6 : 4);
-        ui.notify(th ? th.warn : arg <= 1 ? 'The horde is coming to wherever you are. Hold your shelter.' : `Horde ${arg}: more of them than last night.`, 'sub', th ? 6 : 4);
+        const moon = this.global.moon;
+        if (moon === MOON.BLOOD) {
+          // a blood moon leads: it is the thing about tonight (the theme still says what the horde is made of)
+          ui.notify(`NIGHT ${arg}: BLOOD MOON`, 'big', 6);
+          ui.notify('More of them than any night yet, and they will not let up. Hold together.', 'sub', 6);
+          if (th) ui.notify(`${th.name}: ${th.warn}`, 'toast', 8);
+        } else {
+          ui.notify(th ? `NIGHT ${arg}: ${th.name.toUpperCase()}` : moon === MOON.CLEAR ? `NIGHT ${arg}: CLEAR MOON` : `NIGHT ${arg}`, 'big', th ? 6 : 4);
+          ui.notify(th ? th.warn : moon === MOON.CLEAR ? 'A bright moon and a calmer night. Regroup and patch up.' : arg <= 1 ? 'The horde is coming to wherever you are. Hold your shelter.' : `Horde ${arg}: more of them than last night.`, 'sub', th ? 6 : 4);
+          if (th && moon === MOON.CLEAR) ui.notify('A clear moon: a calmer night. Regroup and patch up.', 'toast', 6);
+        }
         a.stinger?.('night');
         break;
       }
@@ -1637,7 +1696,12 @@ export class Game {
       case NOTIFY.HORDE_SOON:
         // one line. What tonight brings (its theme, the new kind, its boss) is on the card under the clock from now to
         // dark (hud2.js Tonight, from Game.tonight), and the objective says where to board up
-        ui.notify('THE HORDE IS COMING', 'danger', 5);
+        // ...unless tonight is a blood moon: that is said out loud (and the sky turns red as the sun goes)
+        if (this.global.moon === MOON.BLOOD) {
+          ui.notify('A BLOOD MOON IS RISING', 'big', 6);
+          ui.notify('Tonight will hurt: more of them, and no let-up. Dig in.', 'sub', 6);
+          a.stinger?.('boss');
+        } else ui.notify('THE HORDE IS COMING', 'danger', 5);
         break;
       case NOTIFY.BOSS: {
         const zd = ZOMBIE_DEFS[arg];
@@ -1658,6 +1722,15 @@ export class Game {
         ui.notify('A supply plane is inbound - follow its smoke trail to the drop.', 'toast', 6);
         a.stinger?.('supply');
         break;
+      case NOTIFY.SUPPLY_HINT: {
+        // (to a team that has found nothing yet) a voice on the walkie-talkie
+        const zid = this.global.hints[arg];
+        const sp = this.world.partSpots[this.global.spots[arg]];
+        const item = ITEM_DEFS[SUPPLIES[Math.min(arg, 4)]];
+        ui.notify(`RADIO: "...${item?.name || 'a supply'}, ${ZONE_NAMES[zid] || 'out there'}${sp ? ', grid ' + gridRef(this.world, sp.x, sp.z) : ''}. Look for the crows."`, 'toast', 9);
+        a.playLocal('notify');
+        break;
+      }
       case NOTIFY.SUPPLY_FOUND:
         ui.notify(`${ITEM_DEFS[arg]?.name || 'A supply'} found! Bring it to the ${W.thing}.`, 'good', 5);
         a.stinger?.('car_part');
@@ -1665,6 +1738,7 @@ export class Game {
       case NOTIFY.CAR_PART:
         ui.notify(`${ITEM_DEFS[arg]?.name || 'Part'} installed in the ${W.thing}`, 'good', 4);
         a.playLocal('install_part');
+        if (arg === ITEM.CAR_BATTERY && this.act !== WORLD.MAINLAND) this.carRadio();
         break;
       case NOTIFY.SUPPLIES_DONE:
         ui.notify(this.act === WORLD.MAINLAND ? 'THE PLANE IS FIXED' : 'EVERY SUPPLY IS IN', 'big', 5);
@@ -1706,7 +1780,7 @@ export class Game {
       case NOTIFY.DOWNED:
         if (arg === this.myId) {
           a.stinger?.('death');
-        } else ui.notify(`${this.name(arg)} is down! Hold ${bindTag('interact')} on them to revive.`, 'danger', 5);
+        } else mateDown(this, arg);
         break;
       case NOTIFY.REVIVED:
         ui.notify(arg === this.myId ? "You're back on your feet." : `${this.name(arg)} is back up.`, 'good', 3);
@@ -1790,7 +1864,7 @@ export class Game {
         break;
       }
       case NOTIFY.SEARCH_EMPTY:
-        ui.notify(arg === 1 ? 'This tree is stripped bare' : arg === 2 ? 'Nothing left to salvage' : 'Already searched', 'toast', 1.6);
+        ui.notify(arg === 1 ? 'This tree is stripped bare' : arg === 2 ? 'Nothing left to salvage' : arg === 3 ? 'Mined out' : 'Already searched', 'toast', 1.6);
         break;
       case NOTIFY.INVENTORY_FULL: {
         // arg: the item a full backpack left lying where the survivor walked over it (0: a craft, a search, a swap)
@@ -1854,8 +1928,8 @@ export class Game {
   // null by night, before the horn and in the final stand
   tonight(g) {
     if (g.phase !== PHASE.DAY || g.finale || !g.day || g.timeLeft > DUSK_WARNING) return null;
-    const key = `${this.seed}:${this.act}:${g.day}`;
-    if (this._tonight?.key !== key) this._tonight = { key, rows: tonightBrief(this.seed, g.day, this.act) };
+    const key = `${this.seed}:${this.act}:${g.day}:${g.moon || 0}`;
+    if (this._tonight?.key !== key) this._tonight = { key, rows: tonightBrief(this.seed, g.day, this.act, g.moon) };
     return this._tonight;
   }
 
@@ -3025,7 +3099,7 @@ export class Game {
     }
     if (t.kind === ENT.PLAYER) return this.cards.chooser(t.id); // a teammate on their feet: a match or a trade (nothing is sent until one is picked)
     if (t.kind === ENT.STRUCTURE && this.power.press(t)) return; // (a generator: a tap pours fuel, held it is the switch)
-    if (t.kind === ENT.STRUCTURE) this.askedCost = REPAIR_COST;
+    if (t.kind === ENT.STRUCTURE) this.askedCost = repairCostOf(t.stype);
     this.conn.action(ACT.INTERACT, t.id);
   }
 
@@ -3530,6 +3604,7 @@ export class Game {
     // (the mainland's passage was kept lit to the end - its lamps every few metres: down it a little of the light stays,
     // so its timbers, rails and tubs read; the island's mine is as dark as it was)
     this._envOver.under = this.world.size > 1000 && deep > 0 ? this.under * 0.8 : this.under;
+    this._envOver.moon = this.debugMoon ?? (cine ? 0 : g.moon || 0); // tonight's moon (MOON), from the dusk horn to dawn
     this._envOver.fogMul = this.debugFog ?? (cine ? cine.fogMul : 0); // (a cutscene's long shots see further than the day's haze lets a survivor; debugFog: a look-dev camera's)
     this.env.update(dt, cycle, cam.position, time, weather, this._envOver);
     this.viewDist = Math.max(cine ? cine.far : 0, this.env.fogVisibility + 40); // how far anything is drawn: past it the haze has it
@@ -3569,6 +3644,7 @@ export class Game {
     this.effects.update(dt, cam, this.renderer.renderer.domElement.height);
     this.impacts.update(dt);
     this.flyover.update(dt, time, cam, this.env, weather);
+    this.crows.update(time, this.crowSpots());
     this.graves.update(dt);
     const flashOn = this.localFlash && self.alive && !s.zombie;
     // (no rain or blown leaves once the eye is well down a drift: what falls in the mouth is kept out by its roof)
@@ -3907,7 +3983,7 @@ export class Game {
           if (s.slot === SLOT_BUILD) this.prompt += `${lit ? ` · burns ${mmss(this.burnLeft(e))}` : ''} · ${bindTag('demolish')} Remove`;
         } else if (s.slot === SLOT_BUILD) {
           if (e.stype === STRUCT.TORCH) this.prompt = hp < 1 || e.q[4] === 0 ? `${bindTag('interact')} Relight torch (1 Cloth) · ${bindTag('demolish')} Remove` : `Burns ${mmss(this.burnLeft(e))} · ${bindTag('demolish')} Remove torch`;
-          else this.prompt = hp < 0.99 ? `${bindTag('interact')} Repair ${def.name} (1 Planks, 1 Nails) · ${bindTag('demolish')} Demolish` : `${bindTag('demolish')} Demolish ${def.name}`;
+          else this.prompt = hp < 0.99 ? `${bindTag('interact')} Repair ${def.name} (${costText(repairCostOf(e.stype))}) · ${bindTag('demolish')} Demolish` : `${bindTag('demolish')} Demolish ${def.name}`;
         } else if (def.station === 'bench') this.prompt = `Workbench · craft here ${bindTag('inventory')}`;
         this.contextStructure = { name: def.name, hp };
         return;
@@ -4216,6 +4292,27 @@ export class Game {
     return best;
   }
 
+  // the partSpots indices the crows circle over: every hint whose supply is still in its hiding place and still needed
+  crowSpots() {
+    const g = this.global;
+    const out = (this._crowSpots ||= []);
+    out.length = 0;
+    g.spots.forEach((si, k) => {
+      const i = Math.min(k, 4);
+      if (si !== 0xffff && !(g.found & (1 << k)) && g.supplies[i] < SUPPLY_NEED[i] && !out.includes(si)) out.push(si);
+    });
+    return out;
+  }
+
+  // Where the help points for hint k (global.help: shared/supplyhelp.js): near the spot once the rumour is narrowed,
+  // on it from the compass ping on. null: no help yet, or nothing hidden there any more (the rumour's place will do)
+  supplyHintAt(k) {
+    const g = this.global;
+    const sp = this.world.partSpots[g.spots[k]];
+    if (!sp || g.help < SUPPLY_HELP.NARROW || g.found & (1 << k)) return null;
+    return g.help >= SUPPLY_HELP.PING ? sp : narrowedAt(sp, k);
+  }
+
   buildMarkers(h, rp) {
     const g = this.global;
     const cm = h.compassMarks || (h.compassMarks = []);
@@ -4234,13 +4331,18 @@ export class Game {
       const si = Math.min(i, 4);
       if (zid === 255 || done(si) || g.found & (1 << i)) return;
       const z = this.world.zoneById[zid];
-      if (!z || hintSeen.has(zid + ':' + si)) return;
+      if (!z) return;
+      // a team that has found nothing yet is helped (shared/supplyhelp.js): the marker closes in on the spot, then sits
+      // on it, pinned to the tape's edge
+      const at = this.supplyHintAt(i) || z;
+      if (at === z && hintSeen.has(zid + ':' + si)) return;
       hintSeen.add(zid + ':' + si);
-      const d = dist(z.x, z.z);
+      const d = dist(at.x, at.z);
       if (d < 25) return;
       hintSeen.add(zid);
+      const ping = g.help >= SUPPLY_HELP.PING;
       // (the compass spells a marker's name out while you face it; a rumour keeps its question mark, as on the map)
-      cm.push({ kind: 'hint', bearing: bearing(z.x - rp.x, z.z - rp.z), icon: itemIcon(SUPPLIES[si]), label: `${Math.round(d)}m`, name: ZONE_NAMES[zid] + '?', d });
+      cm.push({ kind: 'hint', bearing: bearing(at.x - rp.x, at.z - rp.z), icon: itemIcon(SUPPLIES[si]), label: `${Math.round(d)}m`, name: ZONE_NAMES[zid] + (ping ? '' : '?'), d, pinEdge: ping, cls: ping ? 'urgent' : '' });
     });
     // discovered places nearby (a place that already has a supply icon or a waypoint on it needs no flag too)
     const wp = this.waypoint;
@@ -4344,15 +4446,22 @@ export class Game {
     const mates = [];
     const crates = [];
     const enemies = []; // the living zombies, and players turned (big: a Tank or a boss)
+    // only the dead on your own level: up top, not those down the mine under your feet; down there, not those on the
+    // ground over you. (Within a couple of metres of your height they count wherever they are: in the mouth of a
+    // portal, on their way in or out - a drift's floor is always 4.5 m or more under the ground over it)
+    const mine = this.world.mine;
+    const rp = this.renderPos;
+    const down = !!mine?.under(rp.x, rp.y + 0.3, rp.z);
+    const near = (e) => !mine || Math.abs(e.ry - rp.y) < 2.5 || mine.under(e.rx, e.ry + 0.3, e.rz) === down;
     for (const e of this.entities.ents.values()) {
       if (e.kind === ENT.PLAYER) {
         if (e.q[5] & PFLAG.DEAD) continue;
-        if (e.q[5] & PFLAG.ZOMBIE) enemies.push({ x: e.rx, z: e.rz, big: false });
+        if (e.q[5] & PFLAG.ZOMBIE) near(e) && enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false });
         else mates.push({ x: e.rx, z: e.rz, name: this.name(e.id), status: e.downed ? 'downed' : 'alive' });
       } else if (e.kind === ENT.ZOMBIE) {
-        if (!e.dead) enemies.push({ x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
+        if (!e.dead && near(e)) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: e.ztype === ZTYPE.TANK || !!ZOMBIE_DEFS[e.ztype]?.boss });
       } else if (e.kind === ENT.DEER) {
-        if (!e.dead && e.variant & DEER_UNDEAD) enemies.push({ x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
+        if (!e.dead && e.variant & DEER_UNDEAD && near(e)) enemies.push({ id: e.id, x: e.rx, z: e.rz, big: false }); // (the mainland's: they hunt you)
       } else if (e.kind === ENT.CRATE && e.q[3] !== 2) crates.push({ x: e.rx, z: e.rz });
     }
     const carried = {};
@@ -4370,6 +4479,8 @@ export class Game {
       discovered: this.discovered,
       hints: g.hints,
       found: g.found,
+      // the help a team that has found nothing gets (shared/supplyhelp.js): where each still hidden one is, near enough
+      helped: g.hints.map((zid, k) => ({ k, at: this.supplyHintAt(k) })).filter((h) => h.at && g.supplies[Math.min(h.k, 4)] < SUPPLY_NEED[Math.min(h.k, 4)]).map(({ k, at }) => ({ item: SUPPLIES[Math.min(k, 4)], x: at.x, z: at.z, exact: g.help >= SUPPLY_HELP.PING })),
       schemHints: g.schemHints,
       unlocked: g.unlocked | 0,
       supplies: g.supplies,

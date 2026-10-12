@@ -8,6 +8,7 @@ import { CARDS, cardDef, owned, validateDeck, defaultDeck, deckFaction, DECK_RUL
 import { el, svgEl } from './dom.js';
 import { glyph } from './icons.js';
 import { cardFace } from './cardface.js';
+import { CARD_SOURCE } from '../../shared/collections.js';
 
 const KINDS = [
   ['unit', 'Units'],
@@ -30,7 +31,7 @@ export class DeckBuilder {
     this.slot = 0;
     this.work = null; // { name, leader, cards } being built
     this.dirty = false;
-    this.filter = { f: -1, kind: 'unit', row: -1, owned: true, q: '' };
+    this.filter = { f: -1, kind: 'unit', row: -1, owned: false, q: '' };
 
     // ---- the slots
     const slots = el('div', 'cd-slots', this.root);
@@ -47,7 +48,7 @@ export class DeckBuilder {
     const own = el('label', 'cd-check', bar);
     this.ownBox = el('input', '', own);
     this.ownBox.type = 'checkbox';
-    this.ownBox.checked = true;
+    this.ownBox.checked = false; // (the cards not owned yet show too, greyed: what is left to find, issue #286)
     el('span', '', own, 'Owned');
     this.ownBox.addEventListener('change', () => {
       this.filter.owned = this.ownBox.checked;
@@ -196,11 +197,12 @@ export class DeckBuilder {
       const have = owned(c.id, found);
       const inDeck = c.k === K.LEADER ? (this.work.leader === c.id ? 1 : 0) : this.work.cards[c.id] || 0;
       const cap = c.k === K.LEADER ? 1 : Math.min(have, DECK_RULES.copies[c.r]);
-      t.n.textContent = c.k === K.LEADER ? (inDeck ? 'leads' : have ? 'owned' : 'not owned') : `${inDeck} / ${cap}${have > cap ? ` (${have})` : ''}`;
+      t.n.textContent = !have ? 'not owned' : c.k === K.LEADER ? (inDeck ? 'leads' : 'owned') : `${inDeck} / ${cap}${have > cap ? ` (${have})` : ''}`;
       t.root.classList.toggle('none', !have);
+      t.root.title = have ? '' : `Not owned yet. ${CARD_SOURCE}.`;
       t.root.classList.toggle('in', inDeck > 0);
       t.root.classList.toggle('off', c.k !== K.LEADER && df >= 0 && c.f !== F.NEUTRAL && c.f !== df);
-      t.root.classList.toggle('full', c.k !== K.LEADER && inDeck >= cap);
+      t.root.classList.toggle('full', have > 0 && c.k !== K.LEADER && inDeck >= cap); // (one not owned is greyed, not dimmed as full)
       want.push(t.root);
     }
     const g = this.grid;

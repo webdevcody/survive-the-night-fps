@@ -1,10 +1,22 @@
 // Iteration 2 HUD pieces: compass strip, objective tracker ("field notes"), world markers (teammate
 // nameplates, pings, the car), damage direction arrows and the dusk card. (Downed and the dawn lines: endscreens.js)
 // Same conventions as hud.js: update() is called every frame and only touches the DOM on change.
+//
+// ---------------------------------------------------------------- what matters most (#272)
+// Not everything on screen is equally important. In each phase the HUD and the menus follow one order, and the thing
+// at the top is the loudest on screen: the biggest, the reddest, the one that moves or the one with room round it.
+// A redesign of any screen says how it follows this order, and passes the greyscale test: take a screenshot, take the
+// colour out, and the top item still stands out most. (A night can put ~120 of the dead on screen: README.)
+//   Night:          a downed teammate > your own health and bleed-out > the wave and the boss > ammo > the rest
+//   Day:            time to dusk > the objective > the compass > loot and [E] prompts
+//   Final stand:    the car's (or the plane's) health > downed teammates > your own health
+//   Menus:          one primary action per screen (inventory, cards, auction, loadouts), the rest quieter
+// A teammate in danger is as loud as you are: a downed one gets a solid red plate, a pulsing compass chip that keeps
+// its place over every other marker (Compass, RANK below), a red toast and an alarm (game/matedown.js).
 import { ITEM_DEFS, ZONE_NAMES, ITEM, ZOMBIE_DEFS, supplyRumours } from '../../shared/defs.js';
 import { SUPPLIES, SUPPLY_NEED, W, ACT_NOW } from '../game/act.js'; // (this act's: the car's supplies, or the plane's parts)
 import { WORLD, RUNWAY, nightRank } from '../../shared/acts.js';
-import { PHASE, DUSK_WARNING, BOSS_WAVE } from '../../shared/constants.js';
+import { PHASE, DUSK_WARNING, BOSS_WAVE, MOON } from '../../shared/constants.js';
 import { nightBoss, nightTheme } from '../../shared/nights.js';
 import { el, svgEl, fmtTime, clamp, replay } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
@@ -275,6 +287,8 @@ export class Objective {
     this.pips = Array.from({ length: SUPPLY_NEED.reduce((a, b) => a + b, 0) }, () => el('i', '', pips));
     this.hCount = el('span', 'obj-count', head, '');
     this.directive = el('div', 'obj-dir', this.root, '');
+    // the far goal (issue #269): on the island, that the car is not the end of the run
+    this.next = el('div', 'obj-next', this.root, '');
     this.list = el('div', 'obj-list', this.root);
     this.rows = SUPPLIES.map((item, i) => {
       const r = el('div', 'obj-row', this.list);
@@ -438,8 +452,11 @@ export class Objective {
     this.directive.textContent = dir;
     this.directive.className = 'obj-dir' + (tone ? ' dir-' + tone : '');
     this.directive.hidden = !dir;
+    const next = plane ? '' : 'Then: drive over the old bridge to the mainland, where the airfield is.';
+    this.next.textContent = next;
+    this.next.hidden = !next;
     this.root.classList.toggle('compact', o.phase === PHASE.NIGHT || o.finale);
-    this.headTip.body = `${done} of ${total} ${W.parts} are in the ${W.thing}. Install them all, ${W.start} and ${W.go}.` + (dir ? `\n\nNow: ${dir}` : '');
+    this.headTip.body = `${done} of ${total} ${W.parts} are in the ${W.thing}. Install them all, ${W.start} and ${W.go}.` + (dir ? `\n\nNow: ${dir}` : '') + (next ? `\n\n${next}` : '');
     if (this.tipFor) this._hover(this.tipFor); // (what it says may just have changed)
   }
 }
@@ -636,10 +653,13 @@ function newKinds(night, act) {
 }
 
 // ---------------------------------------------------------------- the dusk card
-// What tonight brings, one row a thing: its theme, the kinds that join the horde, its boss. A name and a few words on
-// what to do about it (the dawn card had the long version). Worked out from the seed like the dawn card's
-export function tonightBrief(seed, night, act) {
+// What tonight brings, one row a thing: its moon, its theme, the kinds that join the horde, its boss. A name and a few
+// words on what to do about it (the dawn card had the long version). Worked out from the seed like the dawn card's,
+// but for the moon: the server picks that at the horn, off how the team is doing (global.moon, server/director.js)
+export function tonightBrief(seed, night, act, moon = MOON.NORMAL) {
   const rows = [];
+  if (moon === MOON.BLOOD) rows.push({ kind: 'blood', ico: 'moon', name: 'Blood Moon', tag: 'Hard night', text: 'More of them, and no let-up. Dig in together.' });
+  else if (moon === MOON.CLEAR) rows.push({ kind: 'clear', ico: 'moon', name: 'Clear Moon', tag: 'Calm night', text: 'A bright moon and breathers between waves. Regroup.' });
   const th = nightTheme(seed, night, act);
   if (th) rows.push({ kind: 'theme', ico: 'horde', name: th.name, tag: '', text: th.brief || th.warn });
   for (const d of newKinds(night, act)) rows.push({ kind: 'new', ico: 'claw', name: d.name + 's', tag: 'New', text: d.introBrief || d.intro });

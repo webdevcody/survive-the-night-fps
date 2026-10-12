@@ -978,6 +978,14 @@ export class Entities {
               g.audio.play(snd, { x: e.rx, y: e.ry + (alpha ? 1.2 : dog ? 0.6 : 1.5), z: e.rz, volume: e.ztype === ZTYPE.BAT ? 0.6 : alpha ? 1.4 : 0.9, rate: e.voice * (alpha ? 0.66 : e.ztype === ZTYPE.BOSS_BLOATER ? 0.62 : 1) });
               v.vocalize?.(snd === SOUND.RUNNER_SCREAM || snd === SOUND.DOG_BARK ? 1 : snd === SOUND.TANK_ROAR || snd === SOUND.BOSS_ROAR ? 2 : 0);
             }
+            // a bat's wings, beat after beat while it is near: what gives away the ones coming over the wall
+            if (e.ztype === ZTYPE.BAT && distC < 25 * 25) {
+              e.flapT = (e.flapT ?? Math.random() * 0.4) - dt;
+              if (e.flapT <= 0) {
+                e.flapT = 0.36 + Math.random() * 0.08;
+                g.audio.playBank('z_bat_flap', { x: e.rx, y: e.ry + 0.2, z: e.rz, cat: 'step', volume: 0.7, rate: e.voice });
+              }
+            }
             // a tank's (or a boss's) footfalls thump: they carry as far as its voice, and close by they shake the ground
             const heavy = e.ztype === ZTYPE.TANK || (!!ZOMBIE_DEFS[e.ztype].boss && e.ztype !== ZTYPE.BOSS_ALPHA); // (the Alpha runs on pads: no quake)
             if (e.speed > 0.4 && !ZOMBIE_DEFS[e.ztype].flying && e.q[7] !== 3 && (heavy || distC < 22 * 22)) {

@@ -6,7 +6,7 @@
 // What a driver's prediction cannot know of is settled here and written into their state, which rebases their
 // client: the dead in its way (strike), a blow on it (damage), fuel poured in, a breakdown.
 import { SERVER_DT, CMD_DT, INTERACT_REACH, INTERACT_SLACK, PLAYER_RADIUS, PLAYER_HEIGHT, NOISE, PHASE, BTN, WATER_LEVEL } from '../shared/constants.js';
-import { SOUND, NOTIFY, ITEM, AMMO, AMMO_MAX, KILLER, VEH_NO, VEH_OFFS, IMPACT, SCHEM_BIT } from '../shared/defs.js';
+import { SOUND, NOTIFY, HEARD, ITEM, AMMO, AMMO_MAX, KILLER, VEH_NO, VEH_OFFS, IMPACT, SCHEM_BIT } from '../shared/defs.js';
 import { ENT, HOLD, VACT, VFLAG, SIPHON_ID, qpos, dqpos, qangle16, dqangle16 } from '../shared/protocol.js';
 import { WORLD } from '../shared/acts.js';
 import { CROWD_SLOW, VEH, VSTATE, VEHICLES, VEH_NAMES, FIX, fixMask, REPAIR, REPAIR_HP, FIX_TIME, STARTER_TIME, FIX_FREE, REPAIR_TIME, FUEL_TIME, FUEL_POUR, SIPHON_TIME, STARTERS, QUEST_FUEL, QUEST_HP, COL_VEHICLE, HORN, stepVehicle, seatAt, seatFeet, vehicleSpots, starterSpots, questCar, vehicleGrid, parkedCollider, siphonOf } from '../shared/vehicles.js';
@@ -342,10 +342,10 @@ export class Vehicles {
         const horn = b & HORN ? 1 : 0;
         if (horn && !e.horn) {
           if (P.pedal) g.sound(SOUND.BIKE_BELL, e.x, e.y + 1, e.z, 40);
-          this.noise(e, P.pedal ? 25 : NOISE.HORN);
+          this.noise(e, P.pedal ? 25 : NOISE.HORN, p, HEARD.HORN);
           e.hornT = g.time + 1;
         } else if (horn && !P.pedal && g.time >= e.hornT) {
-          this.noise(e, NOISE.HORN);
+          this.noise(e, NOISE.HORN, p, HEARD.HORN);
           e.hornT = g.time + 1;
         }
         e.horn = horn && !P.pedal ? 1 : 0;
@@ -392,11 +392,11 @@ export class Vehicles {
 
   // a noise at the vehicle, with the module's own random stream in the game's place for the call (the noise scatters
   // where each of the dead heads for: a vehicle must not shift what the rest of a seeded run rolls)
-  noise(e, loud) {
+  noise(e, loud, by, what) {
     const g = this.g;
     const swap = g.rng;
     g.rng = this.rng;
-    g.zm.noise(e.x, e.z, loud, e.y);
+    g.zm.noise(e.x, e.z, loud, e.y, by, what);
     g.rng = swap;
   }
 
