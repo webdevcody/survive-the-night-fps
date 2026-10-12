@@ -1,0 +1,162 @@
+/* =====================================================================================
+   The coach card (ui/coach.js, #270): a new player's walkthrough step or a first-time tip, under the compass, and the
+   markers it puts in the world (the zombie coming for them, the tree or rock to hit). Amber is the guide's colour;
+   a step about a threat is blood red and pulses; a "well done" is green.
+   ===================================================================================== */
+.stn-ui .coach {
+  position: absolute;
+  left: 50%;
+  top: calc(112 * var(--u));
+  transform: translateX(-50%);
+  width: min(calc(520 * var(--u)), calc(100vw - 32px));
+  min-width: 300px;
+  padding: calc(12 * var(--u)) calc(18 * var(--u)) calc(14 * var(--u));
+  background: linear-gradient(180deg, rgba(18, 14, 11, 0.9), rgba(10, 8, 7, 0.86));
+  border: 1px solid rgba(232, 163, 61, 0.35);
+  border-left: calc(4 * var(--u)) solid var(--amber);
+  border-radius: 3px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  color: var(--bone);
+  text-shadow: var(--shadow-s);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.stn-ui.inv-open .coach,
+.stn-ui.map-open .coach,
+.stn-ui.paused .coach {
+  display: none;
+}
+
+.stn-ui .coach.in {
+  animation: stn-coach-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.stn-ui .coach-tag {
+  font: 500 max(10px, calc(11 * var(--u))) / 1 var(--f-num);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.stn-ui .coach-title {
+  margin-top: calc(5 * var(--u));
+  font: 400 max(20px, calc(28 * var(--u))) / 1 var(--f-head);
+  letter-spacing: 0.04em;
+}
+
+.stn-ui .coach-text {
+  margin-top: calc(7 * var(--u));
+  font: 400 max(13px, calc(15 * var(--u))) / 1.55 var(--f-num);
+  letter-spacing: 0.02em;
+  color: var(--bone-2);
+}
+
+.stn-ui .coach-text .kbd {
+  margin: 0 0.15em;
+  font-size: max(11px, calc(13 * var(--u)));
+  border-color: var(--amber);
+  color: var(--amber);
+  vertical-align: 0.05em;
+}
+
+.stn-ui .coach.in .coach-text .kbd {
+  animation: stn-warnpulse 0.8s 0.35s 2;
+}
+
+/* a threat: blood red, and the edge breathes until it is dealt with */
+.stn-ui .coach.urgent {
+  border-color: rgba(212, 42, 42, 0.5);
+  border-left-color: var(--blood-hi);
+  animation: stn-coach-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2), stn-coach-alarm 1.2s 0.45s ease-in-out infinite;
+}
+.stn-ui .coach.urgent .coach-tag {
+  color: var(--blood-lite);
+}
+.stn-ui .coach.urgent .coach-text .kbd {
+  border-color: var(--blood-lite);
+  color: #ffd2cc;
+}
+
+/* a "well done" */
+.stn-ui .coach.good {
+  border-color: rgba(182, 208, 138, 0.35);
+  border-left-color: var(--good);
+}
+.stn-ui .coach.good .coach-tag {
+  color: var(--good);
+}
+
+@keyframes stn-coach-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(calc(-14 * var(--u))) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes stn-coach-alarm {
+  0%,
+  100% {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 0 rgba(212, 42, 42, 0);
+  }
+  50% {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 22px 2px rgba(212, 42, 42, 0.45);
+  }
+}
+
+/* ---- the markers it puts in the world (hud2.js Markers: .wmk.k-<kind>) */
+/* the zombie coming for a new player: red, bigger, and bobbing so the eye finds it */
+.stn-ui .wmk.k-threat {
+  color: var(--blood-lite);
+}
+.stn-ui .wmk.k-threat .wmk-ico svg {
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+  min-width: 22px;
+  min-height: 22px;
+  filter: drop-shadow(0 0 6px rgba(255, 60, 40, 0.85)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  animation: stn-threat-bob 0.9s ease-in-out infinite;
+}
+.stn-ui .wmk.k-threat .wmk-name,
+.stn-ui .wmk.k-gather .wmk-name {
+  font-size: max(13px, calc(15 * var(--u)));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* the tree or rock to hit */
+.stn-ui .wmk.k-gather {
+  color: var(--amber);
+}
+.stn-ui .wmk.k-gather .wmk-ico svg {
+  width: calc(26 * var(--u));
+  height: calc(26 * var(--u));
+  min-width: 20px;
+  min-height: 20px;
+  filter: drop-shadow(0 0 5px rgba(232, 163, 61, 0.7)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  animation: stn-threat-bob 1.4s ease-in-out infinite;
+}
+
+@keyframes stn-threat-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(-5 * var(--u)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stn-ui .coach.in,
+  .stn-ui .coach.urgent,
+  .stn-ui .coach.in .coach-text .kbd,
+  .stn-ui .wmk.k-threat .wmk-ico svg,
+  .stn-ui .wmk.k-gather .wmk-ico svg {
+    animation: none;
+  }
+}

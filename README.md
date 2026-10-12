@@ -314,10 +314,26 @@ hints and controls lists name whatever the keys are now.
 
 The HUD names a key at the moment it answers something: the flashlight when night falls and the light is off,
 quick heal when you are under half health with something that heals in the pack, a quick drink when you
-run yourself out of stamina with an energy drink in the pack, the build slot at the dusk
-warning if you carry enough to build, and the map and the inventory once each in the first minute. Each hint
-stops for good once you have done the thing twice (remembered in the browser); Settings -> Key hints turns
-them off.
+run yourself out of stamina with an energy drink in the pack, attack when one of the dead closes in (and,
+once you have, sprint away when it gets close), the build slot at the dusk warning if you carry enough to
+build, and the map and the inventory once each in the first minute, after the opening card. The order is
+what a new player needs first: the goal (the opening card and the objective tracker say it), then the
+threat, then the map, the inventory and building. Each hint stops for good once you have done the thing
+twice (remembered in the browser); Settings -> Key hints turns them off.
+
+**First run.** A player who has not been through the survivor's guide yet starts their first run turned to face
+the car, on any difficulty (the new-game card suggests Ember). A card under the compass walks them through it one
+step at a time, naming the keys they have bound: the goal and the car, moving, the first zombie (with a red "Zombie
+· attack it!" marker bobbing over its head until it is dead), the first car part, trees and rocks (an amber "Chop:
+sticks & planks" / "Mine: stone" marker over the nearest one), searching, crafting, the dusk horn and the night.
+A threat takes over the card from a calmer step. Once every step is done, a first night is survived or a run
+ends, the guide is not shown again (a player with a run on record from before the guide counts as through it). Apart from the guide, a player sees each first-time tip once, when it first
+applies: the Perks key on the first level up, the Achievements key on the first unlock, and the Bestiary key on
+the first kind of zombie that is not a walker or runner. In every run, 20 seconds into day 1, one walker turns
+up about 38 m ahead of a survivor and shambles over, unless one of the dead is already within 45 m. Settings ->
+Interface -> Tutorial tips turns the guide and the tips off. To see it all again, open the game with `?newplayer`
+in the address (`http://localhost:5173/?newplayer` in dev): the guide, the tips, the key hints and the remembered
+difficulty start over in this browser. Your record of runs is kept.
 
 ## The game
 

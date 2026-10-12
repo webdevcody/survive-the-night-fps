@@ -13,6 +13,8 @@ import { BESTIARY } from '../../shared/bestiary.js';
 import { reloadTracked } from '../ui/books.js';
 import { perkMask, progressView, perkLock, perkDependents, levelOf, xpForLevel } from '../../shared/progress.js';
 import { CardsClient } from '../game/cards.js';
+import { Coach } from '../ui/coach.js';
+import { CORE, TIPS } from '../ui/firstrun.js';
 import { CARDMSG } from '../../shared/protocol.js';
 import { F } from '../../shared/cards.js';
 import { legalMoves } from '../../shared/cardgame.js';
@@ -445,6 +447,11 @@ switch (screen) {
     buildScene(bg || 'fire');
     ui.showSplash();
     if (q.get('settings')) setTimeout(() => ui.settingsPanel.show(), 50);
+    // &newgame=1: the new-game card (&runs=N: N runs in this browser's record, so not a brand-new player)
+    if (q.get('newgame')) {
+      if (q.get('runs')) localStorage.setItem('stn.runs', JSON.stringify({ v: 1, runs: [], total: { runs: +q.get('runs'), escapes: 0, streak: 0 }, best: {} }));
+      setTimeout(() => ui.splash.creator.show(), 50);
+    }
     break;
   }
   case 'auction': {
@@ -500,6 +507,17 @@ switch (screen) {
     if (q.get('achtrack')) fakeAchievements();
     // &weapon=<item id>&mag=<n>&reserve=<n>&reload=<0..1>: try the ammo block with any primary
     if (q.get('weapon')) Object.assign(h, { weapons: [+q.get('weapon'), ...baseHud.weapons.slice(1)], mag: +q.get('mag') || 0, reserve: +(q.get('reserve') ?? 24), reloading: q.get('reload') == null ? -1 : +q.get('reload') });
+    // &coach=<step id | tip id>: the first-run guide's card (#270), with the marker the step puts in the world
+    if (q.get('coach')) {
+      const id = q.get('coach');
+      const s = CORE.find((x) => x.id === id);
+      const t = TIPS[id];
+      const n = Math.max(1, CORE.indexOf(s) + 1);
+      const fill = (x) => x.replace('{need}', '7').replace('{name}', 'Spitter');
+      setTimeout(() => new Coach(ui.hud.root).show(s ? { tag: `Survivor's guide · ${n} of ${CORE.length}`, title: s.title, text: fill(s.text), urgent: !!s.urgent } : { tag: 'New', title: fill(t.title), text: fill(t.text) }), 100);
+      if (id === 'zombie') h.worldMarks = [{ kind: 'threat', x: 1010, y: 470, icon: glyph('claw'), name: 'Zombie · attack it!', sub: '27m', cls: 'urgent', scale: 1.1 }];
+      if (id === 'harvest') h.worldMarks = [{ kind: 'gather', x: 560, y: 300, icon: glyph('axe'), name: 'Chop: sticks & planks', sub: '', scale: 1 }];
+    }
     ui.hideSplash();
     ui.updateHud(h);
     perfCheck(h);

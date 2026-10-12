@@ -19,11 +19,13 @@ import { linkedCode, inviteLink, showCodeInAddress, gameInfo, listGames } from '
 import { comeBack } from './net/comeback.js';
 import { moveBack as movedBack, joinVerdict, pageBuild, mayReload, reloadedInto, RELOAD_LOOP_TEXT } from './net/moveback.js';
 import { setMaxAnisotropy } from './render/textures.js';
+import { applyNewPlayer } from './ui/firstrun.js';
 import { setMaxAnisotropy as setCharAnisotropy } from './render/models/charTextures.js';
 
 let game = null;
 let lobbyCards = null;
 let joining = false;
+applyNewPlayer(); // ?newplayer: this tab plays as a brand-new player, to see the first run again (ui/firstrun.js)
 applyTouchSetting(loadSettings().touchControls); // a phone or a tablet: on-screen controls, and buttons named for keys (game/touchmode.js)
 installTouchGestures(); // ...and a finger's long press and double tap, a right click and a double-click on the screens
 loadBinds(); // the player's keybinds, as this browser keeps them (game/binds.js): before anything names a key

@@ -118,6 +118,13 @@ const CITY_STREET_SHARE = 0.2; // of the roaming dead that turn up by day, the s
 // START_CLEAR m of it, so a team that has just come off the bridge is not in a fight before it has found its feet
 // (nearStart). By day the dead notice a survivor ~26 m off, so the ones beyond it leave them be.
 export const START_CLEAR = 60;
+// The one exception (#270): a run's first minute shows the threat. OPENER_AT s into day 1, if none of the dead is yet
+// within OPENER_NEAR m of a survivor, one walker turns up OPENER_DIST m off ahead of one of them and shambles over
+// (spawnOpener). Until OPENER_UNTIL: a team that is not in the game by then has missed it, and that is fine.
+export const OPENER_AT = 20;
+export const OPENER_UNTIL = 50;
+export const OPENER_DIST = 38;
+const OPENER_NEAR = 45;
 const SPAWN_TRIES = 18; // candidates a horde spawn pick looks at before settling for the least exposed one
 const SPAWN_HEAD = 1.7; // a zombie at a spot is in view when a survivor's eyes have a clear line to this far above its ground (m)
 const SPAWN_SPREAD = 4; // a horde group is scattered this far round the spot picked for it (Game.spawnHordeGroup)
@@ -155,6 +162,7 @@ export class Zombies {
     this.next = new Int32Array(MAX_ENTITIES).fill(-1);
     this.fieldRR = 0;
     this.maintainT = 0;
+    this.opener = false; // this run's opening walker has been seen to (spawnOpener)
     this.humansCache = [];
     this.crowdList = []; // the dead after someone, counted for the flow fields (nav.js setCrowd)
     this.lights = []; // this tick's burning point lights, flat [x, y, z, radius, ...]
@@ -329,11 +337,12 @@ export class Zombies {
 
   // ---------------------------------------------------------------- handoff (gamestate.js: the zombies themselves are saved there)
   save() {
-    return { packSeq: this.packSeq, maintainT: this.maintainT, herds: this.herds.save() };
+    return { packSeq: this.packSeq, maintainT: this.maintainT, opener: this.opener, herds: this.herds.save() };
   }
   load(s) {
     this.packSeq = s.packSeq;
     this.maintainT = s.maintainT;
+    this.opener = s.opener ?? true; // (a save from before it: a run under way has had its first minute)
     this.herds.load(s.herds);
   }
 
@@ -363,6 +372,7 @@ export class Zombies {
   }
 
   spawnInitial() {
+    this.opener = false;
     const g = this.g;
     const w = g.world;
     const pop = g.diff.zombies;
@@ -582,6 +592,35 @@ export class Zombies {
       const z = p.z + (g.rng() - 0.5) * 4;
       const sp = this.daySpecial(x, z);
       return this.spawn(sp >= 0 ? sp : g.rng() < 0.2 ? ZTYPE.RUNNER : ZTYPE.WALKER, x, z, { hpMul: 1 + 0.05 * g.day });
+    }
+    return null;
+  }
+
+  // The run's opening walker (OPENER_*): ahead of a survivor, coming their way at a shamble. None when one of the dead
+  // is already close enough to be seen. Returns the walker, or null.
+  spawnOpener(humans) {
+    const g = this.g;
+    this.opener = true;
+    for (const z of g.zombies) {
+      if (z.dead) continue;
+      for (const h of humans) if (Math.hypot(h.state.x - z.x, h.state.z - z.z) < OPENER_NEAR) return null;
+    }
+    const s = humans[Math.floor(g.rng() * humans.length)].state;
+    const lim = g.world.half - 14;
+    for (let tries = 0; tries < 12; tries++) {
+      const a = s.yaw + (g.rng() - 0.5) * (0.5 + tries * 0.15); // dead ahead first, then wider (forward is (-sin yaw, -cos yaw))
+      const x = s.x - Math.sin(a) * OPENER_DIST;
+      const z = s.z - Math.cos(a) * OPENER_DIST;
+      if (Math.abs(x) > lim || Math.abs(z) > lim || g.world.isDeepWater(x, z) || g.nav.isBlocked(x, z)) continue;
+      const e = this.spawn(ZTYPE.WALKER, x, z);
+      if (!e) continue;
+      e.alertX = s.x;
+      e.alertZ = s.z;
+      e.alertLvl = 1;
+      e.alertRush = 0;
+      e.alertU = false;
+      e.alertT = NOISE_MEMORY_MAX;
+      return e;
     }
     return null;
   }
@@ -859,6 +898,12 @@ export class Zombies {
         const h = humans[this.fieldRR++ % humans.length];
         if (!h.under) g.nav.computeField(h.id, h.state.x, h.state.z, true);
       }
+    }
+
+    if (!this.opener && g.phase === PHASE.DAY && g.day === 1 && humans.length) {
+      const t = g.dayLen - g.timeLeft;
+      if (t >= OPENER_UNTIL) this.opener = true;
+      else if (t >= OPENER_AT) this.spawnOpener(humans);
     }
 
     // day population maintenance (not during the final stand: its zombies are counted, and need the room under the cap)
@@ -2294,6 +2339,13 @@ export class Zombies {
           return true;
         }
         break;
+      case ZTYPE.SMOKER:
+        // it needs no line to them: it smokes out the ground between, and the dead come on through it
+        if (z.specialCd <= 0 && dist < def.smokeRange && Math.abs(ty - z.y) < 4) {
+          windup(0.8, 13, SOUND.SMOKER_HISS);
+          return true;
+        }
+        break;
       case ZTYPE.BOSS_BRUTE:
         // badly hurt, it stops to roar, and comes on at a run from then on
         if (!z.enraged && z.hp <= z.maxHp * def.enrage) {
@@ -2621,6 +2673,11 @@ export class Zombies {
         z.specialCd = def.spewRate + g.rng() * 2;
         break;
       }
+      case 13:
+        // a smoker breathes out its cloud, where it stands
+        c.spawnArea(AREA.SMOKE, z.x, z.y, z.z, def.smokeRadius, def.smokeLife);
+        z.specialCd = def.smokeRate + g.rng() * 4;
+        break;
       case 99: {
         // boomer detonation. Bursting against a structure, that piece takes the brunt: the blast alone falls off so
         // gently that a number big enough to open a wall would level its neighbours too

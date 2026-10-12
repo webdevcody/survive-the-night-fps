@@ -467,6 +467,7 @@ try {
     BOSS_BRUTE: { bones: 22, sig: '25caaa306e41', k: 0.9915, headC: [0, 0.1125, 0], h: 2.38, w: 0.68, d: 0.62 },
     BOSS_ALPHA: { bones: 23, sig: '29658d9bc6fe', k: 2, headC: [0, 0.015, -0.06], h: 1.56, w: 0.3, d: 1.34 },
     BOSS_BLOATER: { bones: 24, sig: '1d303268902b', k: 1.6162, headC: [0, 0.1035, 0], h: 2.76, w: 1, d: 1.25 },
+    SMOKER: { bones: 23, sig: 'dbb56fc011fa', k: 0.9862, headC: [0, 0.1008, 0], h: 1.82, w: 0.25, d: 0.21 },
   };
   // triangles: a boss is alone on the screen, a special comes in threes and fours, dogs in packs and bats in swarms
   const BOSS_TRIS = 12000, DOG_TRIS = 4500, ALPHA_TRIS = 7000, BAT_TRIS = 1500;
@@ -511,7 +512,7 @@ try {
     check(`${def.name}: the rig origin/main's animations and hitboxes hang on (bones, bind positions, head, calibration)`, rigOk, detail);
     check(`${def.name}: one draw call`, one);
     const budget = def.boss ? (t === ZTYPE.BOSS_ALPHA ? ALPHA_TRIS : BOSS_TRIS) : t === ZTYPE.DOG ? DOG_TRIS : t === ZTYPE.BAT ? BAT_TRIS : t === ZTYPE.TANK ? BOSS_TRIS : DEAD_NEAR;
-    const lod = [ZTYPE.SPITTER, ZTYPE.LEAPER, ZTYPE.ROPER, ZTYPE.BOOMER, ZTYPE.SHADE].includes(t);
+    const lod = [ZTYPE.SPITTER, ZTYPE.LEAPER, ZTYPE.ROPER, ZTYPE.BOOMER, ZTYPE.SHADE, ZTYPE.SMOKER].includes(t);
     check(`${def.name}: ${tris} tris (<= ${budget})${lod ? `, ${far} far (<= ${DEAD_FAR})` : ''}`, tris > 500 && tris <= budget && (!lod || (far > 0 && far <= DEAD_FAR)));
     // the size it had: as tall (within 7%), no wider than 8% over (it is shot at its hitbox's width) nor 15% under, about as deep
     check(`${def.name}: the size it was (${h.toFixed(2)} m tall, ${w.toFixed(2)} half wide, ${d.toFixed(2)} half deep; was ${want.h}, ${want.w}, ${want.d})`,
