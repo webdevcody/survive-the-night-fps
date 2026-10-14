@@ -124,6 +124,11 @@ window.fetch = async (url, opts) => {
   }
   if (path.includes('/api/loadout')) {
     await new Promise((r) => setTimeout(r, 80));
+    // (a save keeps the slots it was sent, so equipping can be tried here)
+    if (opts?.method === 'POST') {
+      const slots = JSON.parse(opts.body || '{}').slots;
+      if (Array.isArray(slots)) demoLoadout.slots = slots.slice(0, 3);
+    }
     return new Response(JSON.stringify({ ...demoLoadout }), { status: 200, headers: { 'content-type': 'application/json' } });
   }
   return realFetch(url, opts);
