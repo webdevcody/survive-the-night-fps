@@ -1,11 +1,12 @@
 // Game: the first-person view - the camera, the hands and what they hold.
 import * as THREE from 'three';
-import { ZTYPE, WEAPONS, ITEM } from '../../../shared/defs.js';
+import { ZTYPE, ITEM } from '../../../shared/defs.js';
 import { ENT, HOLD } from '../../../shared/protocol.js';
 import { punchOf, stepClimb, punchAt } from '../aimview.js';
 import { raycastWorld } from '../../../shared/collision.js';
 import { ViewModel } from '../../render/models/weapons.js';
-import { eyeHeight, currentWeapon, shotClimb, aimingWith } from '../../../shared/playersim.js';
+import { eyeHeight, currentWeapon, heldDef, shotClimb, aimingWith } from '../../../shared/playersim.js';
+import { isDual } from '../../../shared/akimbo.js';
 import { SLOT_BUILD, BTN } from '../../../shared/constants.js';
 import { pryWeapon } from '../../../shared/trunk.js';
 import { FaceLatch } from '../facelatch.js';
@@ -108,7 +109,7 @@ export const methods = {
     const bobY = (Math.sin(this.camBob * 2) * (s.downed ? 0.06 : 0.035) * Math.min(1, hspeed / 5) + this.swimK * (Math.sin(time * 1.7) * 0.035 + Math.sin(time * 0.63) * 0.02)) * bobK - this.landDip - stepLag - this.quake * 0.03 * shakeK;
     // the gun's climb and the last round's punch (aimview.js): the view is lifted by both, so the sights or the
     // crosshair are where the next round goes
-    const gdef = self.alive && !s.zombie && !this.gun.manning ? WEAPONS[currentWeapon(s)] : null;
+    const gdef = self.alive && !s.zombie && !this.gun.manning ? heldDef(s) : null;
     this.viewClimb = stepClimb(this.viewClimb, gdef && !gdef.melee ? shotClimb(s, gdef, aimingWith(s, buttons)) : 0, dt);
     this.punchT += dt;
     const viewKick = this.viewClimb + this.punch * punchAt(this.punchT / this.punchLen);
@@ -148,7 +149,7 @@ export const methods = {
     const self = this.self;
     const cam = this.camera;
     // ADS zoom
-    const aiming = self.alive && !!(buttons & BTN.ALT) && wdef && !wdef.melee && s.reloadT <= 0 && !this.handcar.handsOn && !this.vehicles.handsOn && !swim && !s.pet; // (hands on a handcar's lever or a vehicle's controls, swimming, or the cat in our arms: no sights)
+    const aiming = self.alive && !!(buttons & BTN.ALT) && wdef && !wdef.melee && !wdef.pair && s.reloadT <= 0 && !this.handcar.handsOn && !this.vehicles.handsOn && !swim && !s.pet; // (hands on a handcar's lever or a vehicle's controls, swimming, the cat in our arms, or a pair: no sights)
     const baseFov = (this.debugCam && this.debugCam.fov) || this.settings.fov || 75; // (a debug camera may bring its own lens)
     const targetFov = aiming ? baseFov * (ADS_ZOOM[currentWeapon(s)] ?? ADS_ZOOM_ANY) : s.sprinting ? baseFov * 1.06 : baseFov;
     this.fovCur += (targetFov - this.fovCur) * Math.min(1, dt * 12);
@@ -171,11 +172,13 @@ export const methods = {
     const self = this.self;
     const cam = this.camera;
     const weaponNow = s.zombie ? -2 : self.alive ? currentWeapon(s) : 0;
-    if (weaponNow !== this.vmItem) {
+    const pairNow = weaponNow > 0 && isDual(s, s.slot); // (two of the gun: one in each hand, shared/akimbo.js)
+    if (weaponNow !== this.vmItem || pairNow !== !!this.vmPair) {
       this.vmItem = weaponNow;
+      this.vmPair = pairNow;
       this.input.clearToggle('aim'); // (an aim on toggle is let go with the weapon it was on)
       if (weaponNow === -2) this.vm.setItem(0, { claws: true });
-      else this.vm.setItem(s.slot === SLOT_BUILD && !weaponNow ? 0 : weaponNow, { tuck: self.alive }); // (tuck: nunchucks are folded away first)
+      else this.vm.setItem(s.slot === SLOT_BUILD && !weaponNow ? 0 : weaponNow, { tuck: self.alive, akimbo: pairNow }); // (tuck: nunchucks are folded away first)
     }
     const stroking = this.cat.holding && !!(buttons & BTN.ATTACK) && !this.ui.inventoryOpen && !this.ui.mapOpen; // (the cat in our arms, the fire button held)
     this.cat.update(dt, stroking);

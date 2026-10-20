@@ -1,10 +1,10 @@
 // Game: the HUD's state, gathered once a frame for ui/hud.js.
 import { SLOT_PRIMARY, SLOT_THROW, SLOT_RADIO } from '../../../shared/constants.js';
-import { ITEM, ITEM_DEFS, WEAPONS, STRUCT_DEFS, ZOMBIE_DEFS, CONSUMABLES } from '../../../shared/defs.js';
+import { ITEM, ITEM_DEFS, STRUCT_DEFS, ZOMBIE_DEFS, CONSUMABLES } from '../../../shared/defs.js';
 import { ENT } from '../../../shared/protocol.js';
 import { trackedRecipe } from '../tracked.js';
 import { SUPPLIES, SUPPLY_NEED } from '../act.js';
-import { shotSpread, currentWeapon } from '../../../shared/playersim.js';
+import { shotSpread, currentWeapon, heldDef } from '../../../shared/playersim.js';
 import { crosshairGap } from '../aimview.js';
 import { perkMods } from '../../../shared/progress.js';
 import { ROLE, GUARD, DRAG } from '../../../shared/roles.js';
@@ -37,7 +37,8 @@ export const methods = {
     // the mash meter: pinned by a leaper or a crawler, or a fire to beat out (hudmeters.js)
     updateMeters(this, s, h);
     const w = currentWeapon(s);
-    const def = WEAPONS[w];
+    const def = heldDef(s); // (a pair's numbers for two of the gun: its magazine and reload are both guns')
+    h.pair = !!def?.pair;
     if (def && !def.melee) {
       h.mag = s.mags[s.slot === SLOT_PRIMARY ? 0 : 1];
       h.reserve = s.ammo[def.ammo];

@@ -8,6 +8,7 @@ import { ENT, SNAP, UPOS, UEXT, UEXT_ABS, qpos, qangle8, qangle16, qlookYaw, qlo
 import { ZOMBIE_DEFS, PROJ, STRUCT } from '../shared/defs.js';
 import { GUN_CARRIED } from '../shared/mountedgun.js';
 import { currentWeapon } from '../shared/playersim.js';
+import { isDual } from '../shared/akimbo.js';
 
 export const SLOTS = 10; // (the most fields a kind has: a player's, with PSTAT)
 
@@ -91,7 +92,7 @@ function quant(e) {
       q[6] = e.zombie ? 0 : currentWeapon(s); // (the walkie-talkie slot: ITEM.WALKIE)
       q[7] = Math.max(0, Math.min(255, Math.ceil((e.hp / e.maxHp) * 255)));
       q[8] = s.fireCount & 255;
-      q[9] = (s.ears > 0 && !e.zombie ? PSTAT.EARS : 0) | (e.burning ? PSTAT.BURNING : 0);
+      q[9] = (s.ears > 0 && !e.zombie ? PSTAT.EARS : 0) | (e.burning ? PSTAT.BURNING : 0) | (!e.zombie && isDual(s, s.slot) ? PSTAT.AKIMBO : 0);
       break;
     }
     case ENT.ZOMBIE:

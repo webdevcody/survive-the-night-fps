@@ -26,6 +26,7 @@ export function createPlayerState() {
     slot: SLOT_MELEE,
     weapons: [0, ITEM.PISTOL, ITEM.KNIFE, 0, 0],
     mags: [0, 12],
+    dual: 0, // the weapon slots that hold a pair of their gun (a bit each: DUAL_BIT in shared/akimbo.js)
     ammo: AMMO_ITEMS.map((_, i) => (i === AMMO.P9 ? 24 : 0)),
     throwCount: 0,
     switchT: 0,
@@ -83,7 +84,7 @@ export function createPlayerState() {
 // ammo - are copied and compared element by element besides)
 const SIM_FIELDS = [
   'x', 'y', 'z', 'vx', 'vy', 'vz', 'yaw', 'pitch', 'onGround', 'crouch', 'stamina', 'exhausted', 'staminaDelay', 'sprinting',
-  'slot', 'throwCount', 'switchT', 'cooldown', 'reloadT', 'recoil',
+  'slot', 'dual', 'throwCount', 'switchT', 'cooldown', 'reloadT', 'recoil',
   'zombie', 'leapCd', 'pulled', 'pullX', 'pullY', 'pullZ', 'pinned', 'shove', 'burning', 'stunT', 'ears', 'downed', 'using',
   'lastBtn', 'fireCount', 'ride', 'rideT', 'rideGo', 'cart', 'cartS', 'cartV', 'hmg', 'pet', 'drag',
   'drive', 'driveK', 'dyaw', 'dsteer', 'dfuel', 'ddead', 'dhold', 'pass', 'passN', 'perks',
@@ -140,6 +141,7 @@ export function hashPlayerState(s) {
   mix(Math.round(s.stamina * 64));
   mix(Math.round(s.staminaDelay * 512));
   mix(s.slot | (s.mags[0] << 8) | (s.mags[1] << 16) | (s.throwCount << 24));
+  if (s.dual) mix(s.dual | 0x6475);
   for (let i = 0; i < WEAPON_SLOTS; i++) mix(s.weapons[i]);
   for (let i = 0; i < AMMO_ITEMS.length; i++) mix(s.ammo[i]);
   mix(Math.round(s.switchT * 512));

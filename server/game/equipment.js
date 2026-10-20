@@ -5,6 +5,7 @@ import { FLASHLIGHT_MAX, SLOT_THROW, SLOT_BUILD, INVENTORY_SIZE } from '../../sh
 import { ITEM_DEFS, WEAPONS, CONSUMABLES, useWasted, SOUND, NOTIFY, salvageOf } from '../../shared/defs.js';
 import { WORN, WORN_DO, UNDO_NO } from '../../shared/protocol.js';
 import { DRAW_TIME } from '../../shared/playersim.js';
+import { canPair, isDual, DUAL_BIT } from '../../shared/akimbo.js';
 import { invCap, removeItem, takeFrom, countItem, freeSlot, slotMag, setSlotMag } from '../inventory.js';
 import { playerMods } from '../loadouts.js';
 
@@ -14,9 +15,34 @@ const UNDO_DROP_TIME = 6;
 const UNDO_DROP_REACH = 5;
 
 export const methods = {
+  // A pair (shared/akimbo.js) in weapon slot `slot` taken apart: the slot keeps one of the guns and its half of the
+  // rounds, and the other is returned ({ item, mag }) for the caller to put somewhere. Null when the slot holds no pair
+  splitPair(p, slot) {
+    const s = p.state;
+    if (!isDual(s, slot)) return null;
+    const m = slotMag(s, slot);
+    const off = m >> 1;
+    s.dual &= ~DUAL_BIT[slot];
+    setSlotMag(s, slot, m - off);
+    if (s.slot === slot) s.reloadT = 0; // (a pair's reload must not finish on one gun)
+    return { item: s.weapons[slot], mag: off };
+  },
+
+  // ...and the other gun into the backpack, or down at their feet when there is no room for it there
+  splitPairOff(p, slot) {
+    const off = this.splitPair(p, slot);
+    if (!off) return;
+    const i = freeSlot(p.inv, invCap(p));
+    if (i >= 0) {
+      p.inv[i] = { item: off.item, count: 1, mag: off.mag };
+      p.invDirty = p.invSort = true;
+    } else this.dropItem(off.item, 1, p.state.x, p.state.y, p.state.z, { spread: 0.5, mag: off.mag });
+  },
+
   // A weapon out of its slot into the backpack (the inventory's Equipment panel: a click, or a drag onto the grid):
   // into backpack index `to` if that is free, else the first free one (255: any). Onto a weapon for the same slot it
   // is the swap a click on that one makes (useItem). The throwable slot only points at a stack in the backpack: no.
+  // Out of a pair, one of its guns goes and the other stays in the hand.
   unequip(p, slot, to) {
     const s = p.state;
     if (slot > SLOT_BUILD || slot === SLOT_THROW) return;
@@ -27,6 +53,12 @@ export const methods = {
     const cap = invCap(p); // (never into a locked slot: past the capacity)
     const i = to < cap && !there ? to : freeSlot(p.inv, cap);
     if (i < 0) return this.notify(NOTIFY.INVENTORY_FULL, 0, p.id);
+    const off = this.splitPair(p, slot);
+    if (off) {
+      p.inv[i] = { item: off.item, count: 1, mag: off.mag };
+      p.invDirty = true;
+      return;
+    }
     // (it keeps its magazine, as a weapon stored in the backpack does)
     p.inv[i] = { item: wpn, count: 1, mag: slotMag(s, slot), ...(p.loadoutWeapons[slot] ? { loadout: p.loadoutWeapons[slot] } : {}) };
     p.loadoutWeapons[slot] = null;
@@ -83,6 +115,26 @@ export const methods = {
     if (def.cat === 'weapon') {
       const slot = WEAPONS[it.item].slot;
       const cur = s.weapons[slot];
+      if (cur === it.item && canPair(cur) && !it.loadout && !p.loadoutWeapons[slot]) {
+        // the same gun again onto the one in its slot: the two are a pair, their magazines one (onto a pair already:
+        // nothing - two is all there are hands for)
+        if (isDual(s, slot)) return;
+        s.dual |= DUAL_BIT[slot];
+        setSlotMag(s, slot, slotMag(s, slot) + (it.mag || 0));
+        p.inv[idx] = null;
+        s.slot = slot;
+        s.switchT = DRAW_TIME;
+        s.reloadT = 0;
+        p.invDirty = true;
+        return;
+      }
+      // a pair swapped for another gun: both of its guns go into the backpack, so it takes a second free slot
+      if (isDual(s, slot)) {
+        const j = freeSlot(p.inv, invCap(p));
+        if (j < 0) return this.notify(NOTIFY.INVENTORY_FULL, 0, p.id);
+        const off = this.splitPair(p, slot);
+        p.inv[j] = { item: off.item, count: 1, mag: off.mag };
+      }
       const curMag = slotMag(s, slot);
       const curLoadout = p.loadoutWeapons[slot] || null;
       s.weapons[slot] = it.item;

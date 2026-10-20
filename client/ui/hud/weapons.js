@@ -2,6 +2,7 @@
 // ability panel. Methods laid onto Hud.
 import { ITEM_DEFS, WEAPONS, AMMO_NAMES } from '../../../shared/defs.js';
 import { GUN, MOUNTED_GUN } from '../../../shared/mountedgun.js';
+import { pairDef } from '../../../shared/akimbo.js';
 import { el, svgEl, clamp } from '../dom.js';
 import { itemIcon, glyph } from '../icons.js';
 
@@ -86,12 +87,14 @@ export const weaponsMethods = {
     // (manning the mounted gun: it stands in for the weapon in the hands, its belt for the magazine; the stray cat in
     // their arms stands in for it with no rounds at all)
     const id = h.mounted ? MOUNTED_GUN : h.cat ? HUD_CAT : slot === 3 ? h.throwItem || weapons[3] || 0 : weapons[slot] || 0;
-    if (c.wId !== id) {
+    const pair = !h.mounted && !h.cat && !!h.pair; // (two of the gun: a pair's magazine, shared/akimbo.js)
+    if (c.wId !== id || c.wPair !== pair) {
       const wasId = c.wId;
       c.wId = id;
-      this.wName.textContent = h.mounted ? GUN.name : h.cat ? 'Stray Cat' : id ? ITEM_DEFS[id]?.name || '' : 'Unarmed';
+      c.wPair = pair;
+      this.wName.textContent = h.mounted ? GUN.name : h.cat ? 'Stray Cat' : id ? (ITEM_DEFS[id]?.name || '') + (pair ? ' ×2' : '') : 'Unarmed';
       this.wIco.innerHTML = h.cat ? glyph('paw') : id ? itemIcon(id) : '';
-      const w = h.mounted ? GUN : h.cat ? null : WEAPONS[id];
+      const w = h.mounted ? GUN : h.cat ? null : pair ? pairDef(id) : WEAPONS[id];
       c.aTypeStr = w && !w.melee ? AMMO_NAMES[w.ammo] : '';
       c.magMax = w && w.mag ? w.mag : 0;
       c.magEach = !!(w && w.reloadEach);

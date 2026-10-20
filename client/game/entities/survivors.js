@@ -43,6 +43,7 @@ export const methods = {
     e.char = ch;
     this.addToScene(v.object, this.charShadows, false);
     e.weapon = -1;
+    e.pair = false;
     e.zombieForm = null;
     e.packOn = false;
   },
@@ -123,6 +124,11 @@ export const methods = {
     if (weapon !== e.weapon) {
       e.weapon = weapon;
       v.setWeapon(weapon);
+    }
+    const pair = !!weapon && !!(e.q[9] & PSTAT.AKIMBO); // (two of the gun: one in each hand, shared/akimbo.js)
+    if (pair !== !!e.pair) {
+      e.pair = pair;
+      v.setAkimbo?.(pair);
     }
     const downed = !!(flags & PFLAG.DOWNED) && !dead;
     e.downed = downed;

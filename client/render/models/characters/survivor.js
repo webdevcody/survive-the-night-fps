@@ -55,12 +55,19 @@ const _qMountInvGun = new THREE.Quaternion().setFromEuler(new THREE.Euler(HALF, 
 const _qMountInvMelee = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _grip = new THREE.Vector3();
+const _gripL = new THREE.Vector3();
+const _qWL = new THREE.Quaternion();
 const _lh = new THREE.Vector3();
 const _off = new THREE.Vector3();
 const _reachM = new THREE.Matrix4();
 const REACH_FIST = 0.075; // the middle of a closed fist, out from the wrist
 const MOUNT_POS = new THREE.Vector3(-0.025, -0.08, 0);
 const MOUNT_POS_L = new THREE.Vector3(0.025, -0.08, 0); // (the left fist's, for what a left hand holds: nunchucks)
+// a pair of the gun (PSTAT.AKIMBO, setAkimbo): each held out in front of its own shoulder in the pistol hold, the left
+// arm and gun the right ones mirrored. How far out from the middle of the chest the grips are
+const PAIR_GRIP_X = 0.17;
+const PAIR_STOCK_CLEAR = 0.08; // ...and a pair of shotguns that much further forward, its stocks clear of the chest,
+const PAIR_LONG_DOWN = -0.12; // ...and tipped down no further than this (rad), however low the look
 // the stray cat in their arms (s.cradle, s.pet): the forearms across in front of them under it (arm()'s pitch, abduction,
 // twist, elbow), and where the cat lies (cradleAt): its feet from the left wrist, in the survivor's frame. Stroking it
 // (solvePet), the right fist is put on its back by IK, the elbow out to the side and up so the forearm comes down onto
@@ -171,6 +178,15 @@ class SurvivorInstance {
     this.mount.position.copy(MOUNT_POS);
     this.mount.rotation.set(-HALF, 0, 0);
     this.bones[HAND_R].add(this.mount);
+    // the left gun of a pair, in the left fist, mirrored (setAkimbo)
+    this.akimbo = false;
+    this.weaponL = null;
+    this.muzzleL = null;
+    this.mountL = new THREE.Object3D();
+    this.mountL.position.copy(MOUNT_POS_L);
+    this.mountL.rotation.set(-HALF, 0, 0);
+    this.bones[HAND_L].add(this.mountL);
+    this.fireLeft = true; // (the gun of a pair that went off last: the right one goes first)
     this.flashlightAnchor = new THREE.Object3D();
     this.flashlightAnchor.position.set(0.16, this.P.shoulderY - this.P.chestY + 0.02, -0.16);
     this.bones[CHEST].add(this.flashlightAnchor);
@@ -199,6 +215,7 @@ class SurvivorInstance {
     this.fadeT = 1;
     this.fadeDur = 0.2;
     this.pulseFire = 9;
+    this.pulseFireL = 9;
     this.pulseMelee = 9;
     this.pulseThrow = 9;
     this.meleeSide = 0;
@@ -252,6 +269,7 @@ class SurvivorInstance {
       this.muzzle = null;
       this.leftGrip = null;
       this.stockZ = 0;
+      this._syncPair();
       return;
     }
     if (item && !this.zombie) {
@@ -267,6 +285,7 @@ class SurvivorInstance {
         this.stockZ = wm ? Math.max(0, wm.geometry.boundingBox.max.z) : 0;
       }
     }
+    this._syncPair();
   }
 
   // wearing the crafted backpack (PFLAG.BACKPACK). (The dead carry none)
@@ -284,11 +303,39 @@ class SurvivorInstance {
     this.mesh.geometry = v ? this.rigZ.geometry : this.rigH.geometry;
     if (this.weapon) this.weapon.visible = !v;
     if (!v && this.item && !this.weapon) this.setWeapon(this.item);
+    this._syncPair();
     this.z.state = -1;
   }
 
+  // two of the gun in hand (PSTAT.AKIMBO): one in each fist
+  setAkimbo(on) {
+    this.akimbo = !!on;
+    this._syncPair();
+  }
+  _syncPair() {
+    const want = this.akimbo && !this.zombie && !!this.weapon && (this.hold === HOLD_PISTOL || this.hold === HOLD_RIFLE) ? this.item : 0;
+    if ((this.weaponL?.userData.item | 0) === want) return;
+    if (this.weaponL) this.mountL.remove(this.weaponL);
+    this.weaponL = this.muzzleL = null;
+    if (!want) return;
+    const w = createWorldWeapon(want);
+    if (!w) return;
+    w.scale.x = -1;
+    w.userData.item = want;
+    this.mountL.add(w);
+    this.weaponL = w;
+    this.muzzleL = w.getObjectByName('muzzle') || null;
+    this.fireLeft = true;
+  }
+  get paired() {
+    return !!this.weaponL;
+  }
+
   fire() {
-    this.pulseFire = 0;
+    // (a pair: the guns go off in turn, from the right)
+    if (this.paired) this.fireLeft = !this.fireLeft;
+    if (this.paired && this.fireLeft) this.pulseFireL = 0;
+    else this.pulseFire = 0;
   }
   melee() {
     this.pulseMelee = 0;
@@ -312,6 +359,7 @@ class SurvivorInstance {
   }
 
   getMuzzleWorld(out) {
+    if (this.paired && this.fireLeft && this.muzzleL && this.weaponL.visible) return this.muzzleL.getWorldPosition(out);
     if (this.weapon && this.muzzle && this.weapon.visible) return this.muzzle.getWorldPosition(out);
     return this.bones[HAND_R].getWorldPosition(out);
   }
@@ -356,6 +404,7 @@ class SurvivorInstance {
     const time = s.time ?? this.time + dt;
     this.time = time;
     this.pulseFire += dt;
+    this.pulseFireL += dt;
     this.pulseMelee += dt;
     this.pulseThrow += dt;
     if (this.hit > 0) this.hit = Math.max(0, this.hit - dt * 5);
@@ -723,8 +772,10 @@ class SurvivorInstance {
     const kick = fu < 0.25 ? Math.exp(-fu * 18) * (1 - Math.exp(-fu * 80)) : 0;
     // weapon orientation (chest space)
     let wx = aimRel, wy = 0, wz = 0;
+    let wxL = 0; // (the left gun of a pair: its turn before the mirror, with its own kick)
+    const pair = this.paired;
     _grip.set(0, 0, 0);
-    if (hold === HOLD_RIFLE) {
+    if (hold === HOLD_RIFLE && !pair) {
       // far enough forward that the butt ends at the front of the shoulder (STOCK_POCKET) instead of inside the arm
       if (this.item === ITEM.RPG) _grip.set(0.1, cy - 0.12 + RPG_LIFT, -0.24); // (its tube rides on top of the shoulder)
       else _grip.set(0.1, cy - 0.12, Math.min(-0.24, STOCK_POCKET - this.stockZ));
@@ -740,14 +791,27 @@ class SurvivorInstance {
       wz += rl * 0.5;
       _grip.z += kick * 0.05;
       wx += kick * 0.12;
-    } else if (hold === HOLD_PISTOL) {
-      _grip.set(0.04, cy - 0.06, -0.44);
+    } else if (hold === HOLD_PISTOL || pair) {
+      // (a pair of shotguns: their stocks reach back past the grips, so they are held further forward and never
+      // tipped down as far as pistols, or the stocks come up into the arms)
+      const long = pair && hold === HOLD_RIFLE;
+      _grip.set(pair ? PAIR_GRIP_X : 0.04, cy - 0.06, -0.44);
+      if (long) _grip.z -= PAIR_STOCK_CLEAR;
       if (run > 0.01) {
-        wx = lerp(wx, -0.9, run);
+        wx = lerp(wx, long ? PAIR_LONG_DOWN : -0.9, run);
         _grip.y -= 0.22 * run;
         _grip.z += 0.2 * run;
       }
-      wx += rl * -0.5;
+      if (long) wx = Math.max(wx, PAIR_LONG_DOWN);
+      wx += rl * (long ? -0.15 : -0.5);
+      if (pair) {
+        // the left gun: the same hold, kicked by its own shots
+        const fl = this.pulseFireL;
+        const kickL = fl < 0.25 ? Math.exp(-fl * 18) * (1 - Math.exp(-fl * 80)) : 0;
+        _gripL.copy(_grip);
+        _gripL.z += kickL * 0.06;
+        wxL = wx + kickL * 0.3;
+      }
       _grip.z += kick * 0.06;
       wx += kick * 0.3;
     } else if (hold === HOLD_MELEE) {
@@ -793,8 +857,13 @@ class SurvivorInstance {
       _grip.z -= 0.18 * u;
       _grip.x -= 0.08 * u;
       wy += 0.5 * u;
+      if (pair) {
+        _gripL.z -= 0.18 * u;
+        _gripL.x -= 0.08 * u;
+      }
     }
     _grip.z += this.holdDZ; // (a deeper chest: everything held comes out in front of it)
+    _gripL.z += this.holdDZ;
     _e.set(wx, wy, wz, 'YXZ');
     _qW.setFromEuler(_e);
     // hand orientation = weapon * mount^-1 ; wrist target = grip - Qh * mountPos
@@ -812,6 +881,25 @@ class SurvivorInstance {
     // hand local = (clav * upper * lower)^-1 * Qh
     _qTmp.copy(clavR).multiply(b[UARM_R].quaternion).multiply(_qL).invert().multiply(_qH);
     b[HAND_R].quaternion.copy(_qTmp);
+    if (pair) {
+      // left arm: on the left gun of the pair, the right arm mirrored (x -> -x; a turn's Euler (x, y, z) -> (x, -y, -z))
+      this.weaponL.visible = !!this.weapon?.visible;
+      _e.set(wxL, -wy, -wz, 'YXZ');
+      _qWL.setFromEuler(_e);
+      _qH.copy(_qWL).multiply(_qMountInvGun);
+      _mountW.copy(this.mountL.position).applyQuaternion(_qH);
+      _T2.set(-_gripL.x, _gripL.y, _gripL.z).sub(_mountW);
+      _S.set(-P.shoulderW, cy, 0);
+      _pole.set(-0.7, -1, 0.35);
+      ikTwoBone(_S, _T2, P.uarmLen, P.farmLen, _pole, _qU, _qL);
+      const clavL = b[CLAV_L].quaternion;
+      _qTmp.copy(clavL).invert().multiply(_qU);
+      b[UARM_L].quaternion.copy(_qTmp);
+      b[FARM_L].quaternion.copy(_qL);
+      _qTmp.copy(clavL).multiply(b[UARM_L].quaternion).multiply(_qL).invert().multiply(_qH);
+      b[HAND_L].quaternion.copy(_qTmp);
+      return;
+    }
     // left arm: support grip on two-handed weapons
     let twoHand = false;
     if (hold === HOLD_RIFLE || hold === HOLD_PISTOL) {
@@ -978,6 +1066,7 @@ export function createSurvivor(seed = 0, character = -1, opts = undefined) {
     throwAnim: () => sv.throwAnim(),
     setZombie: (v) => sv.setZombie(v),
     setBackpack: (on) => sv.setBackpack(on),
+    setAkimbo: (on) => sv.setAkimbo(on),
     setHide: (m) => (sv.hide = m), // 0: all of them; 1: no head; 2: no head, no arms (our own body under our own eyes)
     headWorld: (out) => sv.bones[HEAD].getWorldPosition(out),
     shoulderWorld: (side, out) => sv.bones[side > 0 ? UARM_R : UARM_L].getWorldPosition(out),

@@ -8,6 +8,7 @@ import { el, button } from '../dom.js';
 import { itemIcon } from '../icons.js';
 import { bindLabel } from '../../game/binds.js';
 import { CAT_LABEL, statLines, costLine, shortName } from '../iteminfo.js';
+import { canPair, isDual, slotDef } from '../../../shared/akimbo.js';
 
 // the key of the game that uses an item without opening the inventory, said on its card
 function quickKey(id) {
@@ -101,7 +102,7 @@ export const cardMethods = {
     const d = ITEM_DEFS[id];
     const s = r.kind === 'slot' ? inv.slots[r.i] : null;
     const acts = this._acts(r);
-    const key = JSON.stringify([r, s?.count, inv.armor, inv.weapons, inv.mags, this._pocketsUsed(), this.unlocked]);
+    const key = JSON.stringify([r, s?.count, inv.armor, inv.weapons, inv.mags, inv.dual, this._pocketsUsed(), this.unlocked]);
     if (key === this._cardSig) return;
     this._cardSig = key;
     this.cardIco.innerHTML = itemIcon(id);
@@ -115,9 +116,12 @@ export const cardMethods = {
     if (r.kind === 'worn' && r.which === WORN.ARMOR && inv.armor) extra.push(`${Math.ceil(inv.armor.points)} / ${inv.armor.max} armor left`);
     if (r.kind === 'worn' && r.which === WORN.BACKPACK) extra.push(this._pocketsUsed() ? `${this._pocketsUsed()} / ${BACKPACK_SLOTS} of its slots in use: empty them to take it off` : `${BACKPACK_SLOTS} extra slots, all empty`);
     if (r.kind === 'eq' && isFirearm(id)) {
-      const w = WEAPONS[id];
+      const w = slotDef(inv, r.slot);
+      if (w.pair) extra.push('A pair: one in each hand, no sights');
       extra.push(`${inv.mags[r.slot === 0 ? 0 : 1] | 0} / ${w.mag} loaded · ${inv.ammo[w.ammo] | 0} ${AMMO_NAMES[w.ammo]} carried`);
     }
+    // a second one of the gun in its slot: the two can be held together
+    if (r.kind === 'slot' && canPair(id) && inv.weapons[WEAPONS[id].slot] === id && !isDual(inv, WEAPONS[id].slot)) extra.push('Dual wield it with the one you hold: twice the rounds, faster shots, no sights');
     // (a description that already gives a number - "Heals 80 HP." - is not told it again)
     const desc = (d.desc || '').toLowerCase();
     const stats = statLines(id).filter((x) => !desc.includes(x.toLowerCase()));

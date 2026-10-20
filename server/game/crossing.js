@@ -109,13 +109,14 @@ export const methods = {
   },
   kitOf(p) {
     const s = p.state;
-    return { weapons: s.weapons.slice(), mags: s.mags.slice(), ammo: s.ammo.slice(), inv: p.inv.map((it) => (it ? { ...it } : null)), armor: p.armor, armorMax: p.armorMax, armorItem: p.armorItem, backpackItem: p.backpackItem, kit: p.kit };
+    return { weapons: s.weapons.slice(), mags: s.mags.slice(), dual: s.dual | 0, ammo: s.ammo.slice(), inv: p.inv.map((it) => (it ? { ...it } : null)), armor: p.armor, armorMax: p.armorMax, armorItem: p.armorItem, backpackItem: p.backpackItem, kit: p.kit };
   },
   // ...and back on them
   wear(p, k) {
     const s = p.state;
     s.weapons = k.weapons.slice();
     s.mags = k.mags.slice();
+    s.dual = k.dual | 0; // (a pair crossed as a pair: shared/akimbo.js)
     s.ammo = k.ammo.slice();
     p.inv = k.inv.map((it) => (it ? { ...it } : null));
     p.armor = k.armor;

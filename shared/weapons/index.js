@@ -17,6 +17,7 @@
 //   recipe     its RECIPES row without id and out ({ n, cost, station, schem }), or null if it cannot be made
 //   salvage    its SALVAGE row, or null
 //   feat       the achievement a kill with it counts for (achievements.js KILL_FEATS), or null
+//   akimbo     optional: true for a gun that can be held two at once, a pair (shared/akimbo.js)
 //   (melee only)
 //   blow       the key in BLOW of how it strikes (surfaces.js blowOf: the marks it leaves)
 //   pry        s it takes to force a car's boot open with it (trunk.js PRY.time)

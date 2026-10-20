@@ -516,6 +516,8 @@ export const methods = {
     const left = { mag: 0, ammo: 0, items: [] };
     const gone = p.zombie || !p.alive; // the dead dropped theirs where they fell
     if (!gone) {
+      // (a pair of the starting pistol: the second one is theirs to leave behind like the rest of the backpack)
+      this.splitPairOff(p, SLOT_PISTOL);
       left.ammo = Math.min(s.ammo[AMMO.P9], kit.ammo);
       s.ammo[AMMO.P9] -= left.ammo;
       if (s.weapons[SLOT_PISTOL] === ITEM.PISTOL) left.mag = Math.min(s.mags[1], kit.mag);

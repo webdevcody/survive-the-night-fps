@@ -2,12 +2,12 @@
 // (update). Its methods for each responsibility live in game/ (game/index.js lays them onto it).
 import * as THREE from 'three';
 import { PHASE, SLOT_PISTOL, SLOT_BUILD, INVENTORY_MAX } from '../../shared/constants.js';
-import { WEAPONS, STRUCT, ZONE, AMMO_ITEMS } from '../../shared/defs.js';
+import { STRUCT, ZONE, AMMO_ITEMS } from '../../shared/defs.js';
 import { ENDED_CODE } from '../../shared/protocol.js';
 import { LookWarmer } from './lookwarm.js';
 import { HomeSense } from '../audio/home.js';
 import { MotifWatch } from '../audio/motifs.js';
-import { currentWeapon } from '../../shared/playersim.js';
+import { heldDef } from '../../shared/playersim.js';
 import { swimming } from '../../shared/swim.js';
 import { Connection } from '../net/connection.js';
 import { Prediction } from './prediction.js';
@@ -298,7 +298,7 @@ export class Game {
     if (swim !== this.swimming) this.onSwim(swim);
     this.updateCamera(dt, time, s, buttons, cine, hspeed, swim);
     const cam = this.camera;
-    const wdef = WEAPONS[currentWeapon(s)];
+    const wdef = heldDef(s); // (a pair's numbers for two of the gun: shared/akimbo.js)
     const aiming = this.updateZoom(dt, s, buttons, cine, wdef, swim);
     this.updateReloadSound(s, wdef);
 

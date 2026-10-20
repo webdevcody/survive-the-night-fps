@@ -6,6 +6,7 @@ import { ITEM, ITEM_DEFS, ZTYPE, AMMO_ITEMS, SOUND, EVT, NOTIFY, KILLER, THROW_I
 import { ACT, CAR_ID, readInput, qpos, dqpos, dqangle16, dqpitch, PING_KIND } from '../../shared/protocol.js';
 import { copyPlayerState, samePlayerState, hashPlayerState, simulatePlayer, eyeHeight, currentWeapon } from '../../shared/playersim.js';
 import { invCap, removeItem, takeFrom, countItem, freeSlot, slotMag, setSlotMag } from '../inventory.js';
+import { isDual } from '../../shared/akimbo.js';
 import { isLoadoutStack, isLoadoutWeapon } from '../loadouts.js';
 
 const NO_HASH = -2; // a command packet that came without a state fingerprint
@@ -239,9 +240,12 @@ export const methods = {
         if (slot > 4 || slot === SLOT_THROW) return;
         const wpn = s.weapons[slot];
         if (!wpn || isLoadoutWeapon(p, slot)) return;
-        const dropped = this.dropInFront(p, wpn, 1, { spread: 0.2, mag: slotMag(s, slot) });
+        // (out of a pair one gun goes down, with its half of the rounds, and the other stays in the hand)
+        const pair = isDual(s, slot);
+        const dropped = this.dropInFront(p, wpn, 1, { spread: 0.2, mag: pair ? slotMag(s, slot) >> 1 : slotMag(s, slot) });
         if (!dropped) return;
         p.lastDrop = { e: dropped, t: this.time };
+        if (pair) return void this.splitPair(p, slot);
         s.weapons[slot] = 0;
         setSlotMag(s, slot, 0);
         return;

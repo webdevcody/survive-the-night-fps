@@ -10,6 +10,7 @@ export default {
   // the Desert Eagle: more gun parts than a pistol is made of and a lot more steel; no schematic
   recipe: { n: 1, cost: { [ITEM.GUNPARTS]: 2, [ITEM.SCRAP]: 4, [ITEM.TAPE]: 1 }, station: 'bench' },
   salvage: { [ITEM.GUNPARTS]: 1, [ITEM.SCRAP]: 2 },
+  akimbo: true,
   feat: 'kill_pistol',
   hole: 1.15,
   shotSound: 'DEAGLE',

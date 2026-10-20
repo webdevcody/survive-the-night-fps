@@ -8,6 +8,7 @@ import { ENT } from '../../shared/protocol.js';
 import { COL, footprintContains, groundAt } from '../../shared/collision.js';
 import { invCap, addItem, countItem, freeSlot, slotMag, setSlotMag } from '../inventory.js';
 import { isLoadoutArmor, isLoadoutBackpack, isLoadoutStack, isLoadoutWeapon } from '../loadouts.js';
+import { isDual } from '../../shared/akimbo.js';
 
 // A stack a survivor put down on purpose (ACT.DROP_SLOT) is theirs to leave lying: walking over it does not put it
 // back in their backpack until they have been this far from it. A teammate's feet, and their own [E], take it as usual.
@@ -186,8 +187,13 @@ export const methods = {
         const wpn = s.weapons[slot];
         if (!wpn || slot === SLOT_THROW) continue;
         if (isLoadoutWeapon(p, slot)) continue;
-        this.dropItem(wpn, 1, x, y, z, { spread: 1.2, mag: slotMag(s, slot) });
+        // (a pair is two guns on the ground, the rounds shared out between them)
+        const m = slotMag(s, slot);
+        const pair = isDual(s, slot);
+        if (pair) this.dropItem(wpn, 1, x, y, z, { spread: 1.2, mag: m >> 1 });
+        this.dropItem(wpn, 1, x, y, z, { spread: 1.2, mag: pair ? m - (m >> 1) : m });
       }
+      s.dual = 0;
       for (let i = 0; i < AMMO_ITEMS.length; i++) if (s.ammo[i] > 0) this.dropItem(AMMO_ITEMS[i], s.ammo[i], x, y, z, { spread: 1.5, noAuto: 2 });
       if (p.armorItem && !isLoadoutArmor(p) && p.armor > p.armorMax * 0.3) this.dropItem(p.armorItem, 1, x, y, z);
       // the backpack goes down with what was in it (its pockets were emptied with the rest above)

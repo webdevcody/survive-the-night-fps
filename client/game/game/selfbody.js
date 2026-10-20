@@ -1,6 +1,7 @@
 // Game: our own survivor's body, for a debug camera or a seat in a vehicle.
 import { ITEM } from '../../../shared/defs.js';
 import { currentWeapon } from '../../../shared/playersim.js';
+import { isDual } from '../../../shared/akimbo.js';
 import { nkSounds } from '../nunchaku.js';
 import { createSurvivor } from '../../render/models/characters.js';
 
@@ -49,6 +50,7 @@ export const methods = {
       sv.object.traverse((m) => m.isMesh && (m.castShadow = true));
       this.scene.add(sv.object);
       this.selfBodyItem = -1;
+      this.selfBodyPair = false;
     }
     const cat = this.cat.poseOf(this.myId, this.selfCat || (this.selfCat = {})); // (the stray cat in our arms)
     sv.setHide(fp ? 2 : 0);
@@ -57,6 +59,11 @@ export const methods = {
     if (item !== this.selfBodyItem) {
       this.selfBodyItem = item;
       sv.setWeapon(item);
+    }
+    const pair = !!item && isDual(s, s.slot); // (two of the gun: one in each fist, as the others see it)
+    if (pair !== this.selfBodyPair) {
+      this.selfBodyPair = pair;
+      sv.setAkimbo(pair);
     }
     sv.object.position.set(rp.x, rp.y, rp.z);
     sv.object.rotation.set(0, this.input.yaw, 0);

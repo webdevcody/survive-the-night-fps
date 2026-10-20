@@ -169,6 +169,7 @@ export function readSelf(r, out, flags) {
     for (let i = 0; i < 5; i++) out.weapons[i] = r.u8();
     out.mags[0] = r.u8();
     out.mags[1] = r.u8();
+    out.dual = r.u8();
     for (let i = 0; i < AMMO_ITEMS.length; i++) out.ammo[i] = r.u16();
     out.throwCount = r.u8();
   }

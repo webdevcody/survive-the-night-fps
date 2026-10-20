@@ -119,9 +119,14 @@ export const methods = {
       if (slot < 0 || slot > SLOT_BUILD || slot === SLOT_THROW || isLoadoutWeapon(p, slot) || !SALVAGE[s.weapons[slot]]) return;
       item = s.weapons[slot];
       n = 1;
-      mag = slotMag(s, slot);
-      s.weapons[slot] = 0;
-      setSlotMag(s, slot, 0);
+      // (out of a pair one gun is torn down, with its half of the rounds, and the other stays in the hand)
+      const off = this.splitPair(p, slot);
+      if (off) mag = off.mag;
+      else {
+        mag = slotMag(s, slot);
+        s.weapons[slot] = 0;
+        setSlotMag(s, slot, 0);
+      }
     }
     p.invDirty = true;
     this.ach.salvaged(p, n);

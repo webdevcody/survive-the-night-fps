@@ -138,6 +138,7 @@ export const methods = {
             for (let i = 0; i < 5; i++) c.u8(s.weapons[i]);
             c.u8(s.mags[0]);
             c.u8(s.mags[1]);
+            c.u8(s.dual);
             for (let i = 0; i < AMMO_ITEMS.length; i++) c.u16(s.ammo[i]);
             c.u8(s.throwCount);
             break;

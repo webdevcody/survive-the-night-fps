@@ -39,9 +39,10 @@ function aimOf(ev, out) {
 // muzzle is (ev: the eye and its aim), into out
 function handOf(ev, ahead, out) {
   const cp = Math.cos(ev.pitch);
-  out.x = ev.x + Math.cos(ev.yaw) * 0.12 - Math.sin(ev.yaw) * cp * ahead;
+  const side = ev.hand === -1 ? -0.12 : 0.12; // (the left gun of a pair: shared/akimbo.js)
+  out.x = ev.x + Math.cos(ev.yaw) * side - Math.sin(ev.yaw) * cp * ahead;
   out.y = ev.y - 0.12 + Math.sin(ev.pitch) * ahead;
-  out.z = ev.z - Math.sin(ev.yaw) * 0.12 - Math.cos(ev.yaw) * cp * ahead;
+  out.z = ev.z - Math.sin(ev.yaw) * side - Math.cos(ev.yaw) * cp * ahead;
   return out;
 }
 
@@ -118,7 +119,7 @@ export const methods = {
   // strikes, shown now (predictPellet); a rocket or a flare flown on from here; the view's punch and shake
   ownShot(ev) {
     const def = WEAPONS[ev.weapon];
-    this.vm.fire();
+    this.vm.fire(ev.hand);
     if (def.flame) {
       // a stream of fire, not a shot: it leaves the nozzle, ahead of the eye and low on the right
       this.vm.getMuzzle(_v);

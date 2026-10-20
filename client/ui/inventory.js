@@ -17,6 +17,7 @@ import './ux-inventory.css';
 import { ITEM_DEFS, WEAPONS, SALVAGE, isFirearm, AMMO_NAMES, AMMO_ITEMS, SCHEM_BIT } from '../../shared/defs.js';
 import { INVENTORY_SIZE, INVENTORY_MAX, inventoryCap } from '../../shared/constants.js';
 import { SALVAGE_FROM, WORN, WORN_DO } from '../../shared/protocol.js';
+import { canPair, isDual } from '../../shared/akimbo.js';
 import { el, svgEl, button, clamp, replay } from './dom.js';
 import { itemIcon, glyph } from './icons.js';
 import { actionsOf } from '../game/binds.js';
@@ -50,7 +51,7 @@ export class Inventory {
   constructor(ui, parent, tipParent) {
     this.ui = ui;
     this.open = false;
-    this.inv = { slots: new Array(INVENTORY_MAX).fill(null), armor: null, backpack: 0, cap: INVENTORY_SIZE, ammo: AMMO_ITEMS.map(() => 0), weapons: [0, 0, 0, 0, 0], mags: [0, 0], throwCounts: {} };
+    this.inv = { slots: new Array(INVENTORY_MAX).fill(null), armor: null, backpack: 0, cap: INVENTORY_SIZE, ammo: AMMO_ITEMS.map(() => 0), weapons: [0, 0, 0, 0, 0], mags: [0, 0], dual: 0, throwCounts: {} };
     this.counts = {};
     this.near = { fire: false, bench: false };
     this.unlocked = 0;
@@ -370,16 +371,26 @@ export class Inventory {
     const cat = ITEM_DEFS[ref.item]?.cat;
     const salv = !!SALVAGE[ref.item];
     if (ref.kind === 'slot') {
-      const main = MAIN_OF[cat];
+      let main = MAIN_OF[cat];
+      let ok = !!main;
+      // a second one of the gun in its slot is put on beside it as a pair (shared/akimbo.js): one more than two, no
+      const slot = WEAPONS[ref.item]?.slot;
+      if (canPair(ref.item) && inv.weapons[slot] === ref.item) {
+        ok = !isDual(inv, slot);
+        main = ok ? 'Dual wield' : 'Equip';
+      }
       return {
-        main: { label: main || 'Use', ok: !!main },
+        main: { label: main || 'Use', ok },
         split: { label: 'Split', ok: s.count > 1 },
         drop: { label: s.count > 1 ? 'Drop 1' : 'Drop', ok: true },
         dropAll: { label: `Drop all ${s.count}`, ok: s.count > 1 },
         salvage: { label: 'Salvage', ok: salv },
       };
     }
-    if (ref.kind === 'eq') return { main: { label: 'Put in pack', ok: true }, split: null, drop: { label: 'Drop', ok: true }, dropAll: null, salvage: { label: 'Salvage', ok: salv } };
+    if (ref.kind === 'eq') {
+      const one = isDual(inv, ref.slot) ? ' one' : ''; // (out of a pair one gun goes, and the other stays in the hand)
+      return { main: { label: `Put${one} in pack`, ok: true }, split: null, drop: { label: `Drop${one}`, ok: true }, dropAll: null, salvage: { label: one ? 'Salvage one' : 'Salvage', ok: salv } };
+    }
     if (ref.kind === 'worn') {
       const pack = ref.which === WORN.BACKPACK;
       const ok = !pack || !this._pocketsUsed();
@@ -571,6 +582,7 @@ export class Inventory {
       ammo: inv.ammo || AMMO_ITEMS.map(() => 0),
       weapons: inv.weapons || [0, 0, 0, 0, 0],
       mags: inv.mags || [0, 0],
+      dual: inv.dual | 0,
       throwCounts: inv.throwCounts || {},
     };
     this.counts = {};

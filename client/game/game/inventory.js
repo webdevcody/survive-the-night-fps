@@ -38,7 +38,7 @@ export const methods = {
     this.lastHudInvKey = key;
     const throwCounts = {};
     for (const it of this.inventory.slots) if (it && THROW_ITEMS.includes(it.item)) throwCounts[it.item] = (throwCounts[it.item] || 0) + it.count;
-    this.ui.setInventory({ slots: this.inventory.slots, armor: this.inventory.armor, backpack: this.inventory.backpack, ammo: [...s.ammo], weapons: [...s.weapons], mags: [...s.mags], throwCounts });
+    this.ui.setInventory({ slots: this.inventory.slots, armor: this.inventory.armor, backpack: this.inventory.backpack, ammo: [...s.ammo], weapons: [...s.weapons], mags: [...s.mags], dual: s.dual | 0, throwCounts });
   },
 
   // what we carry, by item: the backpack, and the ammunition carried apart from it (the reserves we predict)

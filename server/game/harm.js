@@ -203,6 +203,7 @@ export const methods = {
       this.nightStats.deaths++;
       this.dropAll(p);
       s.weapons = [0, 0, 0, 0, 0];
+      s.dual = 0;
       p.armor = 0;
       p.armorItem = 0;
       p.armorMax = 0;

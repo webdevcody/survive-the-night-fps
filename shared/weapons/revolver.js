@@ -11,6 +11,7 @@ export default {
   // two gun parts for the lockwork, scrap for the frame and cylinder, wood for the grips
   recipe: { n: 1, cost: { [ITEM.GUNPARTS]: 2, [ITEM.SCRAP]: 3, [ITEM.WOOD]: 1 }, station: 'bench' },
   salvage: { [ITEM.GUNPARTS]: 1, [ITEM.SCRAP]: 1 },
+  akimbo: true,
   feat: 'kill_pistol',
   hole: 0.9,
   shotSound: 'PISTOL',

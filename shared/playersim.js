@@ -53,6 +53,7 @@ import { perkMods } from './progress.js';
 import { DRAG } from './roles.js';
 import { simNunchaku } from './nunchaku.js';
 import { spendStamina, recoverStamina } from './stamina.js';
+import { isDual, pairDef, pairHand } from './akimbo.js';
 
 // the state itself, and copying, comparing, rounding and fingerprinting it (shared/playerstate.js)
 export { createPlayerState, copyPlayerState, samePlayerState, snapPlayerState, hashPlayerState } from './playerstate.js';
@@ -66,6 +67,12 @@ export function currentWeapon(s) {
   if (s.zombie) return 0;
   if (s.slot === SLOT_RADIO) return ITEM.WALKIE;
   return s.weapons[s.slot] || 0;
+}
+
+// the numbers of what is in hand: a pair's (shared/akimbo.js) when the slot holds two of the gun, else its WEAPONS row
+export function heldDef(s) {
+  const item = currentWeapon(s);
+  return isDual(s, s.slot) ? pairDef(item) : WEAPONS[item];
 }
 
 export function canSelectSlot(s, slot) {
@@ -107,8 +114,8 @@ export const AIR_SPREAD = 0.05;
 
 // is the survivor behind the sights with these buttons held (as simulatePlayer judges it)
 export function aimingWith(s, buttons) {
-  const def = WEAPONS[currentWeapon(s)];
-  return !s.hmg && !s.pet && !!(buttons & BTN.ALT) && !!def && !def.melee && s.reloadT <= 0 && s.switchT <= 0; // (not with the cat in their arms)
+  const def = heldDef(s);
+  return !s.hmg && !s.pet && !!(buttons & BTN.ALT) && !!def && !def.melee && !def.pair && s.reloadT <= 0 && s.switchT <= 0; // (not with the cat in their arms, nor down two barrels: a pair has no sights)
 }
 
 // the cone of the next shot: its half-angle (radians)
@@ -218,7 +225,7 @@ export function simulatePlayer(s, cmd, world, events, dt = CMD_DT) {
   }
   s.crouch = !s.zombie && (s.downed || (b & BTN.CROUCH && !disabled && !swim && wade < CROUCH_WADE)) ? 1 : 0; // (never ducking the eyes under the water)
   const weapon = currentWeapon(s);
-  const wdef = WEAPONS[weapon];
+  const wdef = heldDef(s);
   const aiming = aimingWith(s, b);
   const moving = wl > 0;
   const pm = perkMods(s.zombie ? 0 : s.perks);
@@ -616,8 +623,10 @@ function finishReload(s, wdef, mi, pm, events) {
 }
 
 // One round out of magazine mi: its cone and climb as the gun stands now (before this round's heat), and the 'fire'
-// event the server resolves the shot from (its seed draws the pellets: shotDirections)
+// event the server resolves the shot from (its seed draws the pellets: shotDirections). A pair's says which of its
+// guns went off (hand: 1 the right, -1 the left; 0 a gun on its own)
 function fireRound(s, cmd, mi, weapon, wdef, aiming, pm, events) {
+  const hand = wdef.pair ? pairHand(s.mags[mi]) : 0;
   s.mags[mi]--;
   s.cooldown = wdef.rate;
   const spread = shotSpread(s, wdef, aiming);
@@ -637,6 +646,7 @@ function fireRound(s, cmd, mi, weapon, wdef, aiming, pm, events) {
       yaw: s.yaw,
       pitch: s.pitch,
       aiming,
+      hand,
     });
   }
 }

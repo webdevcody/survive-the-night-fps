@@ -71,6 +71,9 @@ export const methods = {
         if (def && def.cat === 'weapon') {
           const slot = WEAPONS[e.item].slot;
           const old = s.weapons[slot];
+          // (a pair goes down as its two guns)
+          const off = this.splitPair(p, slot);
+          if (off) this.dropItem(off.item, 1, s.x, s.y, s.z, { mag: off.mag, spread: 0.5 });
           const oldMag = slotMag(s, slot);
           // (the weapon in hand goes down first: with no entity id left for it there is no swap, and it is kept)
           if (old && !this.dropItem(old, 1, s.x, s.y, s.z, { mag: oldMag, spread: 0.5 })) return this.notify(NOTIFY.INVENTORY_FULL, 0, p.id);

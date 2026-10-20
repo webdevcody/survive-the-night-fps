@@ -1632,6 +1632,17 @@ nobody's state; the one thing the server keeps is each wreck's short record of t
 - **Unequip** (`ACT.UNEQUIP`: u8 weapon slot, u8 backpack index, 255 = the first free one) puts a weapon from its slot
   into the backpack with its magazine (`Game.unequip`): F or a double-click on it in the Loadout, or a drag onto the grid.
   Onto a weapon for the same slot it is `useItem`'s swap; a full backpack leaves it where it is. `test-unequip`.
+- **Two guns at once** (`shared/akimbo.js`). A gun whose file says `akimbo` (the pistol, the revolver, the Desert Eagle,
+  the pump shotgun and the double-barrel) can be held as a pair: put on from the backpack onto one of the same gun in its
+  slot (`useItem`), the two are one weapon of that slot, a bit of `s.dual` (`DUAL_BIT`) and one magazine of both guns'
+  rounds. The simulation fires it with its own numbers (`pairDef`, from `heldDef`): twice the magazine, `PAIR.rate` x
+  the time between shots, a wider cone, a longer reload, no sights (`aimingWith`); each round's `fire` event says which
+  hand (`pairHand`: from the right, then in turn). Taken apart (`Game.splitPair`) - put in the pack, dropped or torn down
+  (one gun goes, the other stays in the hand), swapped for another gun (both into the backpack), at a death (both on
+  the ground) or a leave - the second gun is a gun of its own again with half the rounds; nothing is lost or made.
+  Others see it through `PSTAT.AKIMBO`: the third-person survivor holds a mirrored second gun in the left fist
+  (`setAkimbo`), and the viewmodel draws the left gun and arm as the right ones mirrored (`ViewModel` `opts.akimbo`,
+  `_placeMirror`), so the left hand's fit is the right one's. `test-akimbo`.
 - **Ammunition** is not in the backpack: `state.ammo` (a reserve per `AMMO` calibre, up to `AMMO_MAX`) is the
   server's record, the simulation reloads from it and the client predicts it. `Game.giveItem` puts a cat `ammo` item
   there and returns what fit, so a full reserve leaves the rest lying; nothing ever puts one into `p.inv`. The

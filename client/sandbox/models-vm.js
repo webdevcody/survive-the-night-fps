@@ -14,6 +14,7 @@
 //   ?vm=hands    the hand poses side by side (&poses=a,b,.. which, &yaw= &pitch= &cd= the camera)
 //   &ts=a,b,c    a grid of the same item frozen at several times
 //   &latch=SHOVE a crawler on the face (facelatch.js) and the hands pinned under it, the shove meter at SHOVE (0..1)
+//   &akimbo=1    a pair of the gun, one in each hand (shared/akimbo.js); &hand=L with act=fire: the left one fires
 //   &act=talk    the walkie-talkie keyed;  &wall=M  a wall that far ahead of the eye (the tuck off it, Game.weaponClearance)
 // clip checking (docs/object-clipping.md):
 //   &clip=1      measure how far the hands, the sleeves and the item pass into each other: window.__clip, one per view:
@@ -342,11 +343,11 @@ if (params.get('vm') === 'hands') {
     else if (id === 'cat') {
       vm.setItem(ITEM.PISTOL); // (what is put away under it)
       vm.holdCat(createCat(+(params.get('coat') || 0), 3, true));
-    } else vm.setItem(id);
+    } else vm.setItem(id, { akimbo: params.get('akimbo') === '1' });
     if (params.get('xray') === '1') {
       // &xray=1: the item (and the use prop) see-through, drawn over the hands, so a finger inside it shows
       const glass = new THREE.MeshLambertMaterial({ color: 0x88aaff, transparent: true, opacity: 0.38, depthWrite: false });
-      for (const o of [...(vm.cur ? vm.cur.root.children : []), vm.kit, ...(vm.cat ? [vm.cat._inst.mesh] : [])]) {
+      for (const o of [...(vm.cur ? vm.cur.root.children : []), ...(vm.mirror ? vm.mirror.root.children : []), vm.kit, ...(vm.cat ? [vm.cat._inst.mesh] : [])]) {
         o.material = glass;
         o.renderOrder = 5;
       }
@@ -379,7 +380,7 @@ if (params.get('vm') === 'hands') {
     const w = WEAPONS[id];
     switch (act) {
       case 'fire':
-        v.vm.fire();
+        v.vm.fire(params.get('hand') === 'L' ? -1 : 1);
         break;
       case 'reload':
         if (w && w.reloadEach) v.vm.reload(w.reload, true);
@@ -601,6 +602,8 @@ function clipReport(v) {
   }
   const items = [];
   if (v.vm.cur) for (const m of v.vm.cur.root.children) if (m.isMesh && shown(m)) items.push({ name: 'item.' + (Object.keys(v.vm.cur.parts).find((k) => v.vm.cur.parts[k] === m) || '?'), m });
+  // (a pair's left gun: mirrored, which the normal matrix carries over, so its back faces still face in)
+  if (v.vm.mirror) for (const m of v.vm.mirror.root.children) if (m.isMesh && shown(m)) items.push({ name: 'itemL.' + (Object.keys(v.vm.mirror.parts).find((k) => v.vm.mirror.parts[k] === m) || '?'), m });
   if (shown(v.vm.kit)) items.push({ name: 'kit', m: v.vm.kit });
   if (v.vm.cat && shown(v.vm.cat.object)) {
     // the cat in our arms: its skinned mesh as it is posed now, baked into a plain one

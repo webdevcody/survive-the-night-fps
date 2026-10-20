@@ -1,12 +1,13 @@
 // "Your kit" in the inventory screen (inventory.js): the loadout strip in hotbar order, what is worn, Quick use and the
 // ammo pouch. Methods laid onto Inventory.
-import { ITEM, ITEM_DEFS, WEAPONS, isFirearm, AMMO_NAMES, AMMO_ITEMS, CONSUMABLES } from '../../../shared/defs.js';
+import { ITEM, ITEM_DEFS, isFirearm, AMMO_NAMES, AMMO_ITEMS, CONSUMABLES } from '../../../shared/defs.js';
 import { INVENTORY_SIZE, BACKPACK_SLOTS } from '../../../shared/constants.js';
 import { smallestStack } from '../../../shared/stacks.js';
 import { el, svgEl, clamp, button } from '../dom.js';
 import { itemIcon, glyph } from '../icons.js';
 import { bindLabel } from '../../game/binds.js';
 import { shortName } from '../iteminfo.js';
+import { slotDef, isDual } from '../../../shared/akimbo.js';
 
 const SLOT_LABELS = ['Primary', 'Pistol', 'Melee', 'Throwable', 'Build tool'];
 // The order [H] takes heals in (Game.quickHeal in game/game/inventory.js: change the two together): the big ones first when low
@@ -167,20 +168,22 @@ export const kitMethods = {
     const tc = inv.throwCounts || {};
     this.eqEls.forEach((q, i) => {
       const id = w[i] | 0;
-      if (q.item !== id) {
+      const pair = !!id && isDual(inv, i); // (two of the gun, one in each hand: shared/akimbo.js)
+      if (q.item !== id || q.pair !== pair) {
         q.item = id;
+        q.pair = pair;
         q.r.classList.toggle('empty', !id);
         q.ico.innerHTML = id ? itemIcon(id) : '';
-        q.name.textContent = id ? ITEM_DEFS[id]?.name || '?' : SLOT_LABELS[i];
+        q.name.textContent = id ? (ITEM_DEFS[id]?.name || '?') + (pair ? ' ×2' : '') : SLOT_LABELS[i];
         q.r.title = id ? `${SLOT_LABELS[i]} · ${bindLabel('slot' + (i + 1)) || i + 1}` : `${SLOT_LABELS[i]}: empty`;
       }
       const cnt = i === 3 && id && tc[id] > 0 ? '×' + tc[id] : '';
       if (q.cntTxt !== cnt) q.cnt.textContent = q.cntTxt = cnt;
       // a gun: its calibre, what is in the magazine, and what is carried for it - low (red) under one magazine
-      const gun = (i === 0 || i === 1) && isFirearm(id) ? WEAPONS[id] : null;
+      const gun = (i === 0 || i === 1) && isFirearm(id) ? slotDef(inv, i) : null;
       const mag = gun ? inv.mags[i] | 0 : 0;
       const spare = gun ? inv.ammo[gun.ammo] | 0 : 0;
-      const akey = gun ? `${id}:${mag}:${spare}` : '';
+      const akey = gun ? `${id}:${pair}:${mag}:${spare}` : '';
       if (q.akey === akey) return;
       q.akey = akey;
       q.ammo.hidden = !gun;

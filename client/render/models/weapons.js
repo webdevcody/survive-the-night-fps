@@ -191,6 +191,15 @@ const _pose6 = new Float64Array(6);
 const _pose6b = new Float64Array(6);
 const SHOULDER_R = new THREE.Vector3(0.2, -0.29, 0.1);
 const SHOULDER_L = new THREE.Vector3(-0.12, -0.31, -0.06);
+// two of the gun, one in each hand (setItem's opts.akimbo, shared/akimbo.js): the left arm is the right one mirrored,
+// from a shoulder and an elbow mirrored too, so the left hand holds the left gun exactly as the right holds the right
+const SHOULDER_L_PAIR = new THREE.Vector3(-SHOULDER_R.x, SHOULDER_R.y, SHOULDER_R.z);
+// ...each gun held a little further out to its side than one on its own, and turned in less toward the crosshair
+// (added to cfg.hip, by kind)
+const PAIR_HIP = { pistol: [0.025, 0.005, 0, 0, -0.07, 0], shotgun: [0.0, 0.0, -0.02, 0, -0.1, 0] };
+// ...and at a sprint (in place of cfg.sprint): carried low and turned out a little. A long gun's own sprint swings its
+// muzzle across the chest, through the left one - mirrored - swung across the other way; a pistol's turns in less
+const PAIR_SPRINT = { pistol: [0.0, -0.015, 0.03, -0.3, 0.06, 0.28], shotgun: [0.0, -0.04, 0.02, -0.32, -0.12, 0.15] };
 const POLE_R = new THREE.Vector3(0.75, -0.65, 0.15);
 const POLE_L = new THREE.Vector3(-0.75, -0.65, 0.15);
 const DB_LOAD_ARC = new THREE.Vector3(-0.12, 0.03, 0.03);
@@ -441,6 +450,13 @@ export class ViewModel {
     this.swayY = new Spring(160, 25);
     this.act = null; // {type, t, dur, heavy, perShell}
     this.fireT = 9; // time since last shot
+    // a pair (setItem's opts.akimbo): the left gun's own view (_mirrorView), kick and time since its last shot
+    this.akimbo = false;
+    this.mirror = null;
+    this.recZL = new Spring(260, 22);
+    this.recXL = new Spring(200, 18);
+    this.recYL = new Spring(150, 16);
+    this.fireTL = 9;
     this.cycleT = 9; // bolt/pump cycle timer
     this.clawSide = 1;
     this.reloadHold = 0;
@@ -457,6 +473,8 @@ export class ViewModel {
     this._lq = new THREE.Quaternion();
     this._rp = new THREE.Vector3();
     this._rq = new THREE.Quaternion();
+    this._wpL = new THREE.Vector3();
+    this._wqL = new THREE.Quaternion();
     this._tmpP = new THREE.Vector3();
     this._tmpQ = new THREE.Quaternion();
     this.armR.setVisible(false);
@@ -495,6 +513,25 @@ export class ViewModel {
     return v;
   }
 
+  // The left gun of a pair of the item: the same parts, in a root mirrored in X (its transform is the right gun's
+  // mirrored, _placeMirror). Built the first time the item is held as a pair
+  _mirrorView(cur) {
+    if (cur.mirror) return cur.mirror;
+    const root = new THREE.Group();
+    root.scale.x = -1;
+    root.visible = false;
+    const parts = {};
+    for (const name in cur.parts) {
+      const src = cur.parts[name];
+      const mesh = new THREE.Mesh(src.geometry, src.material);
+      mesh.frustumCulled = false;
+      root.add(mesh);
+      parts[name] = mesh;
+    }
+    this.sway.add(root);
+    return (cur.mirror = { root, parts });
+  }
+
   setItem(itemId, opts = {}) {
     // nunchucks put away with a tuck (opts.tuck: the game's own change of weapon, not a warm-up or a sandbox): the
     // fold takes a fifth of a second, then whatever is next comes out - a little way into its draw already, so that
@@ -509,6 +546,7 @@ export class ViewModel {
     this.pushing = false; // (hands on a leaper: _push puts the new item away and the arms on it again)
     const claws = !!(opts && opts.claws);
     if (this.cur) this.cur.root.visible = false;
+    if (this.mirror) this.mirror.root.visible = false;
     if (this.flameAnchor.parent) this.flameAnchor.parent.remove(this.flameAnchor);
     this.claws = claws;
     this.itemId = claws ? 0 : itemId | 0;
@@ -516,6 +554,12 @@ export class ViewModel {
     this.scopeOverlay.visible = false;
     this.group.userData.scoped = false;
     this.cur = claws ? null : this._getItemView(this.itemId);
+    // (a pistol or a shotgun comes as a pair: shared/akimbo.js)
+    this.akimbo = !!(opts && opts.akimbo) && !!this.cur && (this.cur.cfg.kind === 'pistol' || this.cur.cfg.kind === 'shotgun');
+    this.mirror = this.akimbo ? this._mirrorView(this.cur) : null;
+    this.fireTL = 9;
+    this.recZL.x = this.recXL.x = this.recYL.x = 0;
+    this.recZL.v = this.recXL.v = this.recYL.v = 0;
     this.act = null;
     this.kit.visible = false;
     this.drawT = lead;
@@ -533,7 +577,7 @@ export class ViewModel {
     this.armL.setStyle(style);
     // (nunchucks move the shoulders to a matched pair: back where everything else has them)
     this.armR.shoulder.position.copy(SHOULDER_R);
-    this.armL.shoulder.position.copy(SHOULDER_L);
+    this.armL.shoulder.position.copy(this.akimbo ? SHOULDER_L_PAIR : SHOULDER_L);
     if (this.nk) this.nk.meshes.trail.visible = false;
     if (this.cur && this.cur.cfg.nunchaku) this._nkView(this.cur).core.draw();
     if (this.cur) {
@@ -552,9 +596,9 @@ export class ViewModel {
     }
     const armsOn = claws || !!this.cur;
     this.armR.setVisible(armsOn);
-    this.armL.setVisible(claws || !!(this.cur && this.cur.lGrip));
+    this.armL.setVisible(claws || !!(this.cur && (this.cur.lGrip || this.akimbo)));
     this.armR.setPose(claws ? 'claw' : (this.cur && this.cur.cfg.rPose) || 'grip'); // (builds an item's own hand pose now, not mid-update)
-    this.armL.setPose(claws ? 'claw' : this.cur && this.cur.lGrip ? this.cur.lGrip.pose : 'grip');
+    this.armL.setPose(claws ? 'claw' : this.akimbo ? this.cur.cfg.rPose || 'grip' : this.cur && this.cur.lGrip ? this.cur.lGrip.pose : 'grip');
     if (this.cat) this._catHands(); // (the weapon changed under the cat in our arms: it stays put away)
   }
 
@@ -563,15 +607,19 @@ export class ViewModel {
     this.group.visible = v;
   }
 
-  fire() {
+  /** hand: which gun of a pair went off (the 'fire' event's: -1 the left one), else 0 */
+  fire(hand = 0) {
     if (!this.cur || this.cur.cfg.kind === 'melee' || this.cur.cfg.kind === 'throw') return;
     const rc = this.cur.cfg.recoil;
     const ads = 1 - this.adsT * 0.45;
-    this.recZ.v += rc.z * 32 * ads;
-    this.recX.v += rc.rx * 30 * ads;
-    this.recY.v += (Math.random() - 0.5) * rc.ry * 40;
+    const left = this.akimbo && hand === -1;
+    (left ? this.recZL : this.recZ).v += rc.z * 32 * ads;
+    (left ? this.recXL : this.recX).v += rc.rx * 30 * ads;
+    (left ? this.recYL : this.recY).v += (Math.random() - 0.5) * rc.ry * 40;
+    if (left) return void (this.fireTL = 0); // (its slide and hammer: _placeMirror)
     this.fireT = 0;
-    if (this.cur.cfg.kind === 'shotgun' || (this.cur.cfg.bolt && !this.cur.cfg.single)) this.cycleT = 0; // (single: the reload works the bolt)
+    // (a pair's pump is not worked: there is no free hand for it)
+    if ((this.cur.cfg.kind === 'shotgun' && !this.akimbo) || (this.cur.cfg.bolt && !this.cur.cfg.single)) this.cycleT = 0; // (single: the reload works the bolt)
     if (this.cur.cfg.crossbow || this.cur.cfg.rpg) {
       this.cocked = false;
       this.cockHold = 0.3;
@@ -651,7 +699,7 @@ export class ViewModel {
     if ((view || null) === this.cat) return;
     if (this.cat) this.sway.remove(this.cat.object);
     this.cat = view || null;
-    if (!this.cat) return void this.setItem(this.itemId, { claws: this.claws });
+    if (!this.cat) return void this.setItem(this.itemId, { claws: this.claws, akimbo: this.akimbo });
     this.sway.add(this.cat.object);
     this.cat.setLook(CAT_LOOK);
     this.catT = 0;
@@ -690,7 +738,11 @@ export class ViewModel {
       return out.set(0.12, -0.12, -0.5);
     }
     out.copy(this.cur.meta.muzzle);
-    out.applyQuaternion(this._wq).add(this._wp);
+    if (this.akimbo && this.fireTL < this.fireT) {
+      // (a pair whose left gun went off last: its muzzle, mirrored as the gun is, _placeMirror)
+      out.applyQuaternion(this._wqL).add(this._wpL);
+      out.x = -out.x;
+    } else out.applyQuaternion(this._wq).add(this._wp);
     out.applyQuaternion(this.sway.quaternion).add(this.sway.position);
     return out;
   }
@@ -719,7 +771,9 @@ export class ViewModel {
     this.moveT += ((onGround ? Math.min(1, speed / 4.3) : 0) - this.moveT) * k;
     this.drawT = Math.min(1, this.drawT + dt / 0.35);
     this.fireT += dt;
+    this.fireTL += dt;
     this.cycleT += dt;
+    if (this.mirror) this.mirror.root.visible = false; // (shown again with the right gun, _placeMirror)
     // landing
     if (onGround && !this.wasOnGround) this.land.v -= 0.9;
     this.wasOnGround = onGround;
@@ -728,6 +782,11 @@ export class ViewModel {
     this.recZ.step(dt);
     this.recX.step(dt);
     this.recY.step(dt);
+    if (this.akimbo) {
+      this.recZL.step(dt);
+      this.recXL.step(dt);
+      this.recYL.step(dt);
+    }
     // look lag (lookDX/lookDY: camera rotation this frame, radians; +x = turning right, +y = looking down).
     // Kept small: the weapon trails the view by about a degree at normal turn rates.
     const ldx = Math.max(-0.08, Math.min(0.08, s.lookDX || 0));
@@ -808,7 +867,7 @@ export class ViewModel {
 
     // ---- base weapon pose (hip / ads / sprint)
     const P6 = _pose6;
-    for (let i = 0; i < 6; i++) P6[i] = cfg.hip[i];
+    for (let i = 0; i < 6; i++) P6[i] = cfg.hip[i] + (this.akimbo ? PAIR_HIP[kind][i] : 0);
     if (isGun && this.adsT > 0.001) {
       // align the sight point on the view axis (optionally pitched around it by cfg.adsPitch)
       const pitch = cfg.adsPitch || 0;
@@ -822,7 +881,10 @@ export class ViewModel {
       P6[4] *= 1 - a;
       P6[5] *= 1 - a;
     }
-    if (this.sprintT > 0.001) for (let i = 0; i < 6; i++) P6[i] += cfg.sprint[i] * this.sprintT;
+    if (this.sprintT > 0.001) {
+      const sp = this.akimbo ? PAIR_SPRINT[kind] : cfg.sprint;
+      for (let i = 0; i < 6; i++) P6[i] += sp[i] * this.sprintT;
+    }
     if (cfg.talk) {
       this.talkT += ((s.talk ? 1 : 0) - this.talkT) * (1 - Math.exp(-dt * 11));
       const tk = ease(this.talkT, 2);
@@ -944,9 +1006,18 @@ export class ViewModel {
 
     // ---- actions
     if (act) {
-      if (act.type === 'reload') this._animReload(cur, u, P6, parts, meta);
+      if (act.type === 'reload') {
+        if (!this.akimbo) this._animReload(cur, u, P6, parts, meta); // (a pair goes down to be reloaded: below)
+      }
       else if (act.type === 'melee') {
         evalSwing(act.swing, P6.slice ? P6 : P6, u, _pose6b);
+        // (a pair shoves with both guns at once, each on its own side: the swing's jab without its turn across the
+        // middle, where the left gun - this one mirrored - would meet it)
+        if (this.akimbo) {
+          _pose6b[0] = P6[0];
+          _pose6b[4] = P6[4];
+          _pose6b[5] = P6[5];
+        }
         for (let i = 0; i < 6; i++) P6[i] = _pose6b[i];
       } else if (act.type === 'throw') {
         this._animThrow(u, P6, cur);
@@ -973,8 +1044,15 @@ export class ViewModel {
       if (rs.pose && rs.w > 0.3) lPose = rs.pose;
       if (rs.rPose) rPose = rs.rPose;
     }
+    // a pair is reloaded low, out of sight: both guns go down while the rounds go in, and come back up after
+    if (this.akimbo && this.reloadHold > 0) {
+      const h = smoothstep(0, 1, this.reloadHold);
+      P6[1] -= 0.24 * h;
+      P6[2] += 0.04 * h;
+      P6[3] -= 0.8 * h;
+    }
     // shotgun: tilt hold between per-shell reload calls
-    if (cfg.kind === 'shotgun' && !cfg.breakAction && this.reloadHold > 0) {
+    if (cfg.kind === 'shotgun' && !cfg.breakAction && !this.akimbo && this.reloadHold > 0) {
       const h = smoothstep(0, 1, this.reloadHold);
       P6[5] -= 1.05 * h;
       P6[3] += 0.18 * h;
@@ -1038,6 +1116,7 @@ export class ViewModel {
     const wq = this._wq.setFromEuler(_e1);
     this.weaponRoot.position.copy(wp);
     this.weaponRoot.quaternion.copy(wq);
+    if (this.akimbo) this._placeMirror(cur, P6);
 
     // ---- hands
     // right: grip frame (or bolt knob)
@@ -1057,7 +1136,7 @@ export class ViewModel {
     const rC = altR && altRw > 0 ? this._blendCenter(this.armR, cfg.rPose || 'grip', 'pinch', altRw) : cfg.kind === 'throw' ? cfg.rPose : undefined;
     // a long gun's butt swings across under the right forearm on a shove: the right elbow goes out to the side for it
     let poleR = cfg.poleR || POLE_R;
-    if (act && act.type === 'melee' && (cfg.kind === 'rifle' || cfg.kind === 'shotgun')) poleR = _v8.copy(poleR).lerp(SHOVE_POLE_R, win(u, 0.0, 0.2, 0.7, 0.95));
+    if (act && act.type === 'melee' && !this.akimbo && (cfg.kind === 'rifle' || cfg.kind === 'shotgun')) poleR = _v8.copy(poleR).lerp(SHOVE_POLE_R, win(u, 0.0, 0.2, 0.7, 0.95));
     this._solveArm(this.armR, rp, rq, SHOULDER_R, poleR, rC);
 
     // left
@@ -1067,7 +1146,19 @@ export class ViewModel {
     } else {
       this.kit.visible = false;
     }
-    if (cur.lGrip || altLw > 0) {
+    if (this.akimbo) {
+      // on the left gun of the pair, as the right hand is on the right one, mirrored (x -> -x; a turn's quaternion
+      // (x, y, z, w) -> (x, -y, -z, w), which is how handQ builds a left hand from the right one's)
+      const lp = this._lp.copy(rg.p).applyQuaternion(this._wqL).add(this._wpL);
+      lp.x = -lp.x;
+      const lq = this._lq.copy(this._wqL).multiply(rg.q);
+      lq.set(lq.x, -lq.y, -lq.z, lq.w);
+      this.armL.setPose(cfg.rPose || 'grip');
+      this.armL.setVisible(true);
+      _v7.copy(cfg.poleR || POLE_R);
+      _v7.x = -_v7.x;
+      this._solveArm(this.armL, lp, lq, SHOULDER_L_PAIR, _v7, undefined);
+    } else if (cur.lGrip || altLw > 0) {
       const lp = this._lp;
       const lq = this._lq;
       if (cur.lGrip) {
@@ -1132,6 +1223,31 @@ export class ViewModel {
       }
     } else {
       this.armL.setVisible(false);
+    }
+  }
+
+  // The left gun of a pair: the right one's hold (P6) with its own kick, mirrored across the middle of the view, and its
+  // moving parts as the right one's but for what its own shots work - the slide, a revolver's hammer
+  _placeMirror(cur, P6) {
+    const m = this.mirror;
+    const p = this._wpL.set(P6[0], P6[1], P6[2] + this.recZL.x);
+    _e1.set(P6[3] + this.recXL.x, P6[4] + this.recYL.x, P6[5], 'YXZ');
+    const q = this._wqL.setFromEuler(_e1);
+    m.root.position.set(-p.x, p.y, p.z);
+    m.root.quaternion.set(q.x, -q.y, -q.z, q.w);
+    m.root.visible = cur.root.visible;
+    for (const n in m.parts) {
+      const a = cur.parts[n];
+      const b = m.parts[n];
+      b.position.copy(a.position);
+      b.quaternion.copy(a.quaternion);
+      b.visible = a.visible;
+    }
+    const ft = this.fireTL;
+    if (m.parts.slide) m.parts.slide.position.z = cur.parts.slide.userData.base.z + (ft < 0.09 ? Math.sin((ft / 0.09) * PI) : 0) * 0.026;
+    if (m.parts.hammer && cur.cfg.revolver) {
+      const fall = ft < 0.025 ? ft / 0.025 : 1 - smoothstep(0.12, 0.3, ft);
+      m.parts.hammer.rotation.x = -0.62 * fall + (ft < 0.08 ? -0.08 * Math.sin((ft / 0.08) * PI) : 0);
     }
   }
 

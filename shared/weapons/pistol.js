@@ -8,6 +8,7 @@ export default {
   // what everyone starts with, made again cheaply when lost
   recipe: { n: 1, cost: { [ITEM.GUNPARTS]: 1, [ITEM.SCRAP]: 3, [ITEM.TAPE]: 1 }, station: 'bench' },
   salvage: { [ITEM.GUNPARTS]: 1, [ITEM.SCRAP]: 1 },
+  akimbo: true,
   feat: 'kill_pistol',
   hole: 0.75,
   shotSound: 'PISTOL',

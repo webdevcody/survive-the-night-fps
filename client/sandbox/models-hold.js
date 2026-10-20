@@ -3,6 +3,7 @@
 //   ?hold=ITEMID        what is in the right hand (0: nothing)
 //   &pose=idle|walk|sprint|crouch|crouchwalk|lookup|lookdown|reload|fire|melee|throw|downed|seated|swim|air
 //   &t=SECONDS          the clock (pulses - fire, melee, throw - start at t=1; t is the time after that for them)
+//   &akimbo=1           a pair of the gun, one in each fist (PSTAT.AKIMBO); with pose=fire the right one fires, &hand=L the left
 //   &pack=1             wearing the crafted backpack;  &seed=N  which survivor;  &look=CODE  a custom survivor
 //                       instead (the character creator: shared/appearance.js lookCode)
 //   &cam=yaw,pitch,dist[,tx,ty,tz]   an orbit round the right hand (tx..: offset of the target from it, m), or
@@ -52,6 +53,8 @@ const pose = q.get('pose') || 'idle';
 const T = +(q.get('t') ?? 1);
 const sv = q.has('look') ? createSurvivor(1, 'a:' + q.get('look')) : createSurvivor(+(q.get('seed') || 3));
 sv.setWeapon(item);
+if (q.get('akimbo') === '1') sv.setAkimbo(true);
+if (q.get('akimbo') === '1' && q.get('hand') === 'L') sv._inst.fireLeft = false; // (the next shot is the left gun's)
 if (q.get('pack') === '1') sv.setBackpack(true);
 scene.add(sv.object);
 const o = sv.object;
@@ -224,6 +227,7 @@ if (q.get('clip') === '1') {
   bg.boundingBox.union(fistM.geometry.boundingBox);
   const parts = [];
   if (inst.weapon) inst.weapon.traverse((m) => m.isMesh && m.visible && m.name !== 'nunchakuTrail' && parts.push(m));
+  if (inst.weaponL) inst.weaponL.traverse((m) => m.isMesh && m.visible && parts.push(m)); // (a pair's left gun)
   if (cat) {
     // the cat: its skinned mesh as it is posed now, baked into a plain one
     const ck = cat._inst.mesh;

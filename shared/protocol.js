@@ -34,7 +34,8 @@
 //   55: a recipe's id (ACT.CRAFT) is the item it makes, not its place in RECIPES
 //   56: the pledge window and its Skull buys (C2S.PLEDGE, S2C.PLEDGE)
 //   57: co-op roles (shared/roles.js): ZSTATUS.MARKED, s.drag (bit 2 of SELF.RIDE's arms byte), a scouted byte at the end of the global state, NOTIFY.SCOUTED
-export const PROTOCOL_VERSION = 57;
+//   58: two guns at once (shared/akimbo.js): s.dual after the magazines in the self state's weapons chunk, PSTAT.AKIMBO
+export const PROTOCOL_VERSION = 58;
 
 // The message ids, actions, entity kinds and status bits below are numbers picked by hand, and parallel branches pick
 // the same next free one: each table is made through this, so two names on one number stop the game from loading.
@@ -714,8 +715,9 @@ export const PFLAG = uniqueIds('PFLAG', {
   BACKPACK: 1024, // wearing a backpack (ITEM.BACKPACK): the third-person model carries it
 });
 // PLAYER field 9: what else shows of them. EARS: both hands clapped over the ears (s.ears: a screecher's scream).
-// BURNING: set alight by a flammer (PLAYER_FIRE in defs/fire.js), until it is put out
-export const PSTAT = uniqueIds('PSTAT', { EARS: 1, BURNING: 2 });
+// BURNING: set alight by a flammer (PLAYER_FIRE in defs/fire.js), until it is put out. AKIMBO: what is in their
+// hands is a pair of the gun (shared/akimbo.js): the third-person survivor holds one in each
+export const PSTAT = uniqueIds('PSTAT', { EARS: 1, BURNING: 2, AKIMBO: 4 });
 // ...and in the five bits above them, the seat of a ride the player sits in + 1 (fair.js; 0: on foot)
 export const PRIDE_SHIFT = 11;
 export const playerRide = (flags) => flags >> PRIDE_SHIFT;
