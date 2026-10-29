@@ -13,7 +13,7 @@ import { bindTag, onBindsChange } from './binds.js';
 // `spent`: what the prompt says of one that has given all it gives in a day.
 export const HARVEST = [
   { flag: COL.TREE, verb: 'chop', where: 'chop trees', gives: [ITEM.STICK, ITEM.WOOD], spent: 'Stripped bare · nothing left to chop until dawn' },
-  { flag: COL.SALVAGE, verb: 'salvage', where: 'salvage wrecks', gives: [ITEM.SCRAP, ITEM.NAILS], spent: 'Picked clean · nothing left to salvage until dawn' },
+  { flag: COL.SALVAGE, verb: 'salvage', where: 'salvage wrecks and metal junk', gives: [ITEM.SCRAP, ITEM.NAILS], spent: 'Picked clean · nothing left to salvage until dawn' },
   { flag: COL.ROCK, verb: 'mine', where: 'mine boulders (the quarry gives the most)', gives: [ITEM.STONE], spent: 'Mined out · nothing left to break off until dawn' },
 ];
 // The server names a used-up tree, wreck or rock by its collider's quantized x, y0, z (EVT.STRIPPED; y0 tells the wrecks

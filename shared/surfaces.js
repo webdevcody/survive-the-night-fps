@@ -73,12 +73,13 @@ export function surfaceOfProp(type) {
 }
 
 // Things light enough for a blow to rock on their base and settle (they do not go anywhere: where a prop stands is
-// the world's, and the server's). Their weight: 1 a barrel, more is stiffer.
+// the world's, and the server's). Their weight: 1 a barrel, more is stiffer. Nothing that gives salvage (props.js) is
+// one: a dumpster or a gas pump is taken apart as a wreck is.
 export const LIGHT_PROPS = {
   barrel: 1, crate: 1.2, crate_small: 0.7, chair: 0.6, table: 1.3, road_sign: 0.8, mailbox: 0.8, trash_bin: 0.8, newspaper_box: 1,
-  parking_meter: 1.2, pallet: 1, military_crate: 1.4, mail_dropbox: 1.6, fire_hydrant: 2.2, checkpoint_sign: 0.8, gas_pump: 2.4,
+  parking_meter: 1.2, pallet: 1, military_crate: 1.4, mail_dropbox: 1.6, fire_hydrant: 2.2, checkpoint_sign: 0.8,
   street_bench: 1.6, picnic_table: 1.8, log_bench: 1.8, cart: 1.6, medical_cart: 0.8, gurney: 0.9, shop_gondola: 1.8, locker: 1.4,
-  cabinet: 1.4, filing_cabinet: 1.3, fridge: 1.8, vending_machine: 2.4, stove: 1.8, dumpster: 2.6, boom_gate: 1.4, lantern_post: 1.5,
+  cabinet: 1.4, filing_cabinet: 1.3, fridge: 1.8, vending_machine: 2.4, stove: 1.8, boom_gate: 1.4, lantern_post: 1.5,
   scarecrow: 0.7, grave_cross: 1.6, tire_pile: 1.3, strongbox: 1.6, kitchen_table: 1.3, office_desk: 1.6, dresser: 1.5, wardrobe: 1.8,
   bookshelf: 1.6, shelf: 1.4, armchair: 1.4, sofa: 2, tv_set: 0.9, field_cot: 0.8, hospital_bed: 1.4, waiting_chairs: 1.2,
   traffic_light: 2.6, streetlight: 2.8, fence: 1.8, fence_chain: 1.2, satellite_dish: 2.4, windsock: 1.4,

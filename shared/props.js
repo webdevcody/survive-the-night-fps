@@ -5,7 +5,8 @@
 // cyls:  collision cylinders [cx, cz, radius, height] (and, for one that does not stand on the ground, its base: a
 //        fifth number).
 // A box/cyl top is walkable (players can stand on it) if they can step/jump onto it.
-// salvage: true -> hitting it with a melee weapon yields scrap (limited per day).
+// salvage: true -> hitting it with a melee weapon yields scrap (limited per day). The wrecks, and the metal junk too
+//                  (dumpsters, fuel tanks, gas pumps): a valley without cars still has scrap and nails in it.
 //
 // The colliders follow the model, and scripts/test-hitbox.js holds them to it (docs/hitboxes.md): a shot over a
 // bonnet goes on, a shot into the cabin stops. So most things are several boxes. What goes with that:
@@ -188,7 +189,7 @@ export const PROPS = {
   barricade: { size: [3.2, 1.5, 1.1], boxes: [B(-1.52, 1.5, 0, 1.15, -0.56, 0.12), B(0.15, 1.35, 0.3, 1.47, -0.45, -0.05), B(-1.5, 1.5, 0, 0.95, 0.12, 0.42)], plan: { boxes: [[0, 0.75, 0, 3.2, 1.5, 1.1]] }, desc: 'a barricade of furniture along X: a table on its side, a door, a mattress, chairs and planks jammed together' },
   fallen_sign: { size: [3, 0.35, 1.1], desc: 'the sign board of a shop lying face up where it fell, faded letters, broken glass' },
   pole_down: { size: [9, 0.9, 2.2], desc: 'a power pole lying along X on the ground, its crossarm and insulators, snapped wires trailing' },
-  dumpster_tipped: { size: [1.4, 1.25, 1.9], boxes: [[0, 0.625, 0, 1.4, 1.25, 1.9]], desc: 'a dumpster on its side, mouth to -X, its lids and its rubbish on the ground in front' },
+  dumpster_tipped: { size: [1.4, 1.25, 1.9], boxes: [[0, 0.625, 0, 1.4, 1.25, 1.9]], salvage: true, desc: 'a dumpster on its side, mouth to -X, its lids and its rubbish on the ground in front' },
   semi_truck: {
     size: [5.8, 3.9, 17],
     boxes: [
@@ -377,7 +378,7 @@ export const PROPS = {
   },
   military_tent: { size: [4, 2.6, 6], boxes: [W(2.01, 0, 1.82, -3.07, 2.9), W(1.3, 0.4, 2.15, -3.07, 2.9), W(0.6, 0.5, 2.52, -3.07, 2.9)], plan: { boxes: [[0, 1.3, 0, 4, 2.6, 6]] }, desc: 'olive military field tent, open flap facing -Z' },
   boat: { size: [1.4, 0.7, 4], boxes: [[0, 0.35, 0, 1.3, 0.7, 3.9]], desc: 'old wooden rowboat, peeling paint' },
-  gas_pump: { size: [0.8, 1.9, 0.6], boxes: [[0, 0.95, 0, 0.8, 1.9, 0.6]], desc: '1970s gas pump, faded red, hose' },
+  gas_pump: { size: [0.8, 1.9, 0.6], boxes: [[0, 0.95, 0, 0.8, 1.9, 0.6]], salvage: true, desc: '1970s gas pump, faded red, hose' },
   gravestone: { size: [0.6, 0.9, 0.22], boxes: [[0, 0.45, 0, 0.6, 0.9, 0.22]], desc: 'weathered gravestone (variants: rounded, cross top, broken/leaning)' },
   grave_cross: { size: [0.6, 1.4, 0.1], boxes: [[0, 0.7, 0, 0.12, 1.4, 0.12]], desc: 'wooden grave cross, crooked' },
   fence: { size: [3, 1.1, 0.12], boxes: [[0, 0.55, 0, 3, 1.1, 0.14]], desc: 'weathered post-and-rail wooden fence segment along X (posts at x=+-1.5), a rail may be broken' },
@@ -437,7 +438,7 @@ export const PROPS = {
   power_pole: { size: [0.3, 9, 2], cyls: [[0, 0, 0.18, 9]], desc: 'wooden utility pole with crossbar near the top (crossbar along X), insulators' },
   streetlight: { size: [0.3, 6, 1.6], cyls: [[0, 0, 0.12, 6]], desc: 'broken street lamp, arm points toward -Z, bulb smashed' },
   road_sign: { size: [0.9, 2.4, 0.1], cyls: [[0, 0, 0.06, 2.4]], desc: 'bent road sign on a post, rusty, bullet holes' },
-  dumpster: { size: [1.9, 1.4, 1.2], boxes: [[0, 0.7, 0, 1.9, 1.4, 1.2]], desc: 'green rusty dumpster, lid half open' },
+  dumpster: { size: [1.9, 1.4, 1.2], boxes: [[0, 0.7, 0, 1.9, 1.4, 1.2]], salvage: true, desc: 'green rusty dumpster, lid half open' },
   well: { size: [1.6, 2.2, 1.6], cyls: [[0, 0, 0.8, 0.9]], desc: 'old stone well with a small wooden roof and crank' },
   woodpile: { size: [2.2, 1.1, 1.0], boxes: [[0, 0.55, 0, 2.2, 1.1, 1.0]], desc: 'stacked split firewood logs' },
   scarecrow: { size: [1.4, 2.2, 0.4], cyls: [[0, 0, 0.1, 2.2]], desc: 'creepy scarecrow on a post: burlap sack head with stitched face, tattered clothes, arms on a crossbar' },
@@ -456,7 +457,7 @@ export const PROPS = {
   pumpkin: { size: [0.5, 0.4, 0.5], desc: 'rotting pumpkin (no collision)' },
   bones: { size: [0.8, 0.2, 0.8], desc: 'scattered bones and a skull (no collision)' },
   dock_post: { size: [0.3, 2.5, 0.3], cyls: [[0, 0, 0.15, 2.5]], desc: 'mooring post' },
-  fuel_tank: { size: [2.2, 2.2, 5], boxes: [W(1.03, 0.25, 1.95, -2.6, 2.5), W(0.62, 1.0, 2.45, -2.6, 2.5), W(1.03, 0, 0.5, -2.2, -1.4), W(1.03, 0, 0.5, 0.6, 1.4)], plan: { boxes: [[0, 1.1, 0, 2.2, 2.2, 5]] }, desc: 'cylindrical above-ground fuel tank lying along Z on cradles' },
+  fuel_tank: { size: [2.2, 2.2, 5], boxes: [W(1.03, 0.25, 1.95, -2.6, 2.5), W(0.62, 1.0, 2.45, -2.6, 2.5), W(1.03, 0, 0.5, -2.2, -1.4), W(1.03, 0, 0.5, 0.6, 1.4)], plan: { boxes: [[0, 1.1, 0, 2.2, 2.2, 5]] }, salvage: true, desc: 'cylindrical above-ground fuel tank lying along Z on cradles' },
   radio_mast: { size: [1.2, 16, 1.2], boxes: [[0, 8, 0, 0.8, 16, 0.8]], desc: 'lattice radio antenna mast with red (dead) light on top' },
   generator: { size: [1.4, 1.1, 0.9], boxes: [[0, 0.55, 0, 1.4, 1.1, 0.9]], salvage: true, desc: 'portable generator, rusty' },
   cart: { size: [1.6, 1.2, 2.6], boxes: [B(-0.83, 0.83, 0.45, 1.1, -1.3, 1.05), B(-0.9, -0.7, 0, 0.9, -0.7, 0.45), B(0.7, 0.9, 0, 0.9, -0.7, 0.45)], plan: { boxes: [[0, 0.6, 0, 1.6, 1.2, 2.6]] }, desc: 'old wooden hay cart with two wheels' },
